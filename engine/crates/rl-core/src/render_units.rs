@@ -101,15 +101,14 @@ impl Context<'_> {
         }
         let base_type = matches!(kind, 0 | 2 | 5 | 6 | 7 | 9);
         // AffEngin41591f sends state 13 (walking into a structure or vehicle)
-        // to the common body 412390 for every kind.
+        // to the common body 412390 for every kind. Any +0x99 jitter or +0xa5
+        // move count takes the shared AffDeplaceEngin provider, which reads
+        // both (native differential in the private research repository, 6876/6876).
         if matches!(kind, 0 | 1 | 2 | 5 | 6 | 7 | 8 | 9)
             && state == 13
             && (r[0x99] != 0 || r[0xa5] != if kind == 8 { 10 } else { 8 })
         {
-            return self.stop(
-                0x41591f,
-                "normal state extension outside captured count/effects",
-            );
+            return self.unit_display_extra(x, y, index, r);
         }
         let route = match state {
             1 | 22 | 24 => {

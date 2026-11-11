@@ -798,7 +798,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     func finishPlayStopSmokeWithoutStop(_ output:URL,live:NativeLiveWindow,value:[String:Any]) {
         let metrics=value["native_metrics"] as? [String:Any]
         let frames=metrics?["frames"] as? UInt64 ?? 0
-        guard value["mission"] as? String=="MONDE12.ETA",metrics?["humanEvents"] as? UInt64==0,value["native_running"] as? Bool==true,value["live_stop"] is NSNull,frames>=72_000 else{
+        // Either it is still playing after 72,000 frames, or the original game itself ended
+        // the stage (an original victory/defeat outcome, e.g. MONDE12 with no input loses
+        // once worlds use the zero allocation fill) with no engine stop.
+        let outcome=(value["campaign_outcome"] as? NSNumber)?.intValue ?? 0
+        let playedOn=value["native_running"] as? Bool==true&&frames>=72_000
+        let originalEnd=value["native_running"] as? Bool==false&&outcome != 0&&frames>=1_200
+        guard value["mission"] as? String=="MONDE12.ETA",metrics?["humanEvents"] as? UInt64==0,value["live_stop"] is NSNull,playedOn||originalEnd else{
             writePlayStopSmoke(output,result:["passed":false,"error":"No named engine stop within 110 seconds","snapshot":value]);return
         }
         captureOwnWindow(live.window,to:output.deletingPathExtension().appendingPathExtension("png")){captured in

@@ -407,6 +407,56 @@ fn reset_bag(m: &mut MemoriaJogo, a: u32, cap: u32) -> Result<()> {
     }
     m.sw(a + 2, cap)
 }
+/// CreerBatiment gate branch 0x4200da..0x420253: the first live wall record
+/// (type 9, in pool order, the new record included) whose footprint holds the
+/// gate cell under BatimentCollision is cleared field by field and its terrain
+/// path restored (ResetCheminTerrainModify 0x41b78f). No wall: nothing happens.
+fn gate_replaces_wall(m: &mut MemoriaJogo, cell: u32) -> Result<()> {
+    for s in 0..1000 {
+        let q = structure(s);
+        if m.b(q + 5)? == 0 || m.b(q + 8)? != 9 {
+            continue;
+        }
+        let (w, h) = (m.w(0x495d8c + 52 * 9)?, m.w(0x495d8e + 52 * 9)?);
+        let origin = m.w(q + 2)?;
+        let mut found = false;
+        'scan: for row in 0..h {
+            for col in 0..w {
+                // 0x420166: the 32-bit sum is compared with the zero-extended gate word.
+                if (row << 8) + origin + col == cell
+                    && crate::frame_core::call(
+                        m,
+                        "BatimentCollision",
+                        &[9, (w * row + col) & 65535],
+                    )? & 255
+                        != 0
+                {
+                    found = true;
+                    break 'scan;
+                }
+            }
+        }
+        if !found {
+            continue;
+        }
+        m.sb(q + 5, 0)?;
+        m.sw(q + 0x78, 0xffff)?;
+        m.sw(q + 0x7c, 0)?;
+        m.sw(q + 0x7e, 0)?;
+        m.sw(q + 0x0a, 0)?;
+        m.sw(q + 0x82, 0)?;
+        m.sb(q, 0xff)?;
+        m.sb(q + 0x74, 0)?;
+        m.sb(q + 0x75, 0)?;
+        m.sb(q + 0x76, 0)?;
+        m.sb(q + 0x7b, 0xff)?;
+        m.sw(q + 0x80, 0)?;
+        m.sd(q + 0x8c, 0)?;
+        reset_terrain(m, s)?;
+        return Ok(());
+    }
+    Ok(())
+}
 pub fn create(m: &mut MemoriaJogo, c: u32, t: u32, p: u32) -> Result<u32> {
     let mut s = 0;
     while s < 1000 && m.b(structure(s) + 5)? != 0 {
@@ -436,7 +486,7 @@ pub fn create(m: &mut MemoriaJogo, c: u32, t: u32, p: u32) -> Result<u32> {
         m.sb(r + 4, p)?
     }
     if t == 12 {
-        return stop("CreerBatiment gate scan", 0x4200da);
+        gate_replaces_wall(m, m.w(r + 2)?)?;
     }
     m.sb(r + 8, t)?;
     m.sw(r + 10, 1)?;

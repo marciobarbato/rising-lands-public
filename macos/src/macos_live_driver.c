@@ -276,7 +276,7 @@ if(host){
   const char*names[]={"RISING.EXE","RISING.INI","RISING.RUL","RISING.SBL","TABLEAU.COL","COULEUR.MAP","PLATGAME.PIE","MONSTRE.INI","TEXTES.TXT",mission};
   RlBloco inputs[10]={0};uint8_t*data[10]={0};
   for(unsigned i=0;i<10;i++){data[i]=file(root,names[i],&n);inputs[i]=(RlBloco){0,n,data[i]};if(!data[i]){snprintf(error,capacity,"Dados da missão ausentes: %s",names[i]);c=1;break;}}
-  RlMissaoInicio config={0};config.version=1;config.allocation_fill=0xa7;config.ai_clock_ms=0x123456;
+  RlMissaoInicio config={0};config.version=1;config.allocation_fill=0;config.ai_clock_ms=0x123456;
   config.thread_id=1;config.ticks_per_second=20;config.execution_mode=RL_EXECUCAO_JOGO;
   config.iterations[0]=5;config.iterations[1]=2;config.iterations[2]=1;
   config.input=d->input;config.input.cursor_x=400;config.input.cursor_y=300;
@@ -300,7 +300,7 @@ if(host){
   const char*names[]={"RISING.EXE","RISING.INI","RISING.RUL","RISING.SBL","TABLEAU.COL","COULEUR.MAP","PLATGAME.PIE","MONSTRE.INI","TEXTES.TXT"};
   RlBloco inputs[9]={0};uint8_t*data[9]={0};
   for(unsigned i=0;i<9;i++){data[i]=file(root,names[i],&n);inputs[i]=(RlBloco){0,n,data[i]};if(!data[i]){snprintf(error,capacity,"Dados do menu ausentes: %s",names[i]);c=1;break;}}
-  RlMissaoInicio config={0};config.version=1;config.allocation_fill=0xa7;config.ai_clock_ms=0x123456;
+  RlMissaoInicio config={0};config.version=1;config.allocation_fill=0;config.ai_clock_ms=0x123456;
   config.thread_id=1;config.ticks_per_second=20;config.execution_mode=RL_EXECUCAO_JOGO;
   config.iterations[0]=5;config.iterations[1]=2;config.iterations[2]=1;
   config.input=d->input;config.input.cursor_x=400;config.input.cursor_y=300;
