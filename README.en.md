@@ -8,7 +8,7 @@ This repository holds a reimplementation of the **Rising Lands** (1997, Microïd
 
 ## Download and play
 
-1. Download the `.dmg` of the latest version from **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. The current one is the alpha `v0.1.0-alpha.1`. The app is signed with Developer ID and notarized by Apple.
+1. Download the `.dmg` of the latest version from **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. The current one is the alpha `v0.1.0-alpha.2`. The app is signed with Developer ID and notarized by Apple.
 2. Open the `.dmg` and drag **Rising Lands** to **Applications**.
 3. Get the CD image (see "Where to get the CD").
 4. Open the app. In the **"Rising Lands — importar o CD original"** window, click **Escolher o CD…** and select **RISING_LANDS_BR_.BIN**. The .CUE, an .ISO or the folder with the CD files also work, but music comes only from the .BIN.

@@ -8,7 +8,7 @@ Este repositório contém uma reimplementação do motor do jogo **Rising Lands*
 
 ## Baixar e jogar
 
-1. Baixe o `.dmg` da versão mais recente em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. A versão atual é a alfa `v0.1.0-alpha.1`. O aplicativo é assinado com Developer ID e notarizado pela Apple.
+1. Baixe o `.dmg` da versão mais recente em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. A versão atual é a alfa `v0.1.0-alpha.2`. O aplicativo é assinado com Developer ID e notarizado pela Apple.
 2. Abra o `.dmg` e arraste o **Rising Lands** para **Aplicativos**.
 3. Consiga a imagem do CD (veja "Onde conseguir o CD").
 4. Abra o aplicativo. Na janela **"Rising Lands — importar o CD original"**, clique em **Escolher o CD…** e selecione o arquivo **RISING_LANDS_BR_.BIN**. Também servem o .CUE, um .ISO ou a pasta com os arquivos do CD, mas a música só vem do .BIN.
