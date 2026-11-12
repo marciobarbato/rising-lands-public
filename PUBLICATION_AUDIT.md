@@ -203,3 +203,53 @@ Checked before the push: `cargo fmt --all --check`, `cargo build --release --loc
 `./build-macos.sh`, the portable Windows tests (`test_cd`, `test_menu`, `test_saves`), and `windows/parity.sh` with the
 CD: game 301 identical ticks, menus 358 identical lines, saves 379 identical lines (`end complete`).
 
+
+### 2026-11-12 (third round): private `main` `ca67dbd4`
+
+Previous synchronisation: the second round above (private `main` `44977c47`), not pushed on its own; this round goes
+on top of it. Before starting, the open pull requests and issues of this repository were checked: only PR #2 (an
+outside Windows client) is open; #5 was closed by the owner.
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `589383ea`, `9b072719` "Opções" screen extension v1 (port-only, beside the faithful shell; `rl_opcoes_*`, own version 1) | `engine/crates/rl-core/src/options_screen.rs` (new), `render_text.rs`, `shell_animation.rs`, `lib.rs`; `engine/crates/rl-ffi/src/options_abi.rs`, `options_abi_tests.rs` (new; the real-menu test skips without the CD), `shell_abi.rs`, `lib.rs`; `engine/include/rising_options.h`, `options-screen.md` (new) |
+| `1af7c50b`, `6968c4f9` optional modern unit paths (`RL_REGRA_CAMINHOS_MELHORES`, bit 0 of `regras`; off = the original game byte for byte) | `engine/crates/rl-core/src/modern_path.rs` (new), `frame_movement.rs`, `player_orders.rs`, `memory.rs`, `play.rs`, `state.rs`, `lib.rs`, `save/tests.rs`; `rl-ffi/src/rules_abi_tests.rs`; `rising_engine.h` |
+| `e3cd4861`, `5757159c`, `0368d3d7` macOS Opções screen; `cbca7ad7`, `e94ec9b3`, `ff79ea3b` Jogo > Caminhos melhores and the Opções item driving rule bit 0 | `macos/src/macos_options.inc` (new), `MacOSLiveDriver.h`, `macos_live_driver.c` (options as optional symbols), `macos_campaign_shell.inc`, `NativeLiveWindow.swift`, `NativeModernHotkeys.swift`, `NativePlayerApp.swift`, `main.swift`; `macos/tests/ModernHotkeysTests.swift`. No new Swift file, so `build-macos.sh` is unchanged |
+| `fb3b5fcb` Windows Opções screen (settings in `opcoes.ini`; "Atalhos modernos" turns on the order queue; "Caminhos melhores" stored only) | `windows/src/rlw_options.inc` (new), `rlw_driver.c/.h`, `rlw_main.c`, `rlw_menu*.c/.h`, `rlw_shell.inc`; `windows/tests/parity.c`, `test_menu.c` |
+| `b9650028`, `d2beabae`, `a049d7d2` MSVC x64 and ARM64 builds, CI jobs per toolchain | `windows/build-msvc.ps1`, `windows/ci/smoke.sh` (new), `windows/README.md`; `.github/workflows/windows-client.yml` (jobs `mingw-x64`, `msvc-x64`, `msvc-arm64`, `arm64-run`) |
+
+Public-only changes in this round:
+
+- `.github/workflows/windows-client.yml`: triggers on `main` and pull requests; no signing steps and no signing dry run
+  (the owner decided not to sign); each build uploads its `.exe` with a `.sha256`.
+- `windows/build-msvc.ps1`: the repository root is one level up (`windows/`, not `apps/windows/`), `engine\` paths.
+- `windows/tests/test_menu.c`: one explicit cast (`(uint32_t)RL_SHELL_ENTER | (uint32_t)RL_OPCOES_DIREITA`). Without it
+  MSVC's warning C5287 (operands of different enum types) under `/WX` fails both MSVC jobs; the private CI run of
+  `fb3b5fcb` failed there.
+- `engine/crates/rl-core/src/options_screen.rs`: without the `hd` field of the personal-use renderer context.
+- `docs/MODERN_PATHS.md` (new): what the rule does, its determinism and save rules, how it was checked; written for this
+  repository from the private design and receipt.
+- `docs/WINDOWS_CLIENT.md`: Opções, MSVC/ARM64, the Windows host gaps, section 6 (no code signing). `docs/ROADMAP.md`
+  and the READMEs: Opções and better paths done, MSVC/ARM64 done, testing on a real Windows PC left to the community.
+- Comments that pointed to private notes or private issue numbers say "private research repository".
+
+Left out, and why:
+
+| Left out | Reason |
+|---|---|
+| `motor/research/pathing/` (`DIAGNOSIS.md`, `DESIGN.md`, `RECEIPT.md`, `README.md`) | Internal notes full of private context (machines, local data paths, private tools and commits); summarised in `docs/MODERN_PATHS.md` instead |
+| `motor/research/pathing/evidence/` | Traces and a map of original stage states, which come from the CD |
+| `motor/research/pathing/probe/` | Measurement tool over saves of original stages and a private legacy-save reader |
+| `apps/windows/ci/sign.ps1`, the signing steps and docs | Not signing (owner's decision) |
+| `apps/macos-preview/testes/OptionsWorldTests.swift`, `ModernHotkeysWorldTests.swift`, `test_macos_controls.py` | Private tests over the CD and the private build tools |
+| `motor/testes/options_header_layout.c`, `motor/validate.sh` | Private validation harness (section 2) |
+| `HANDOFF.md` files, `motor/validation/options-screen-2026-11-12/` | Internal notes (section 2) |
+| Personal-use 2x presentation and display filters | Same as the first round |
+
+Checked before the push: `cargo fmt --all --check`, `cargo build --release --locked` and `cargo test --release
+--locked` in `engine/` (99 passed, 0 failed, 11 ignored; with `RL_CD_ROOT`), `sh macos/tests/run.sh`,
+`./build-macos.sh`, the portable Windows tests (`test_cd`, `test_menu` with the options screen, `test_saves`), and
+`windows/parity.sh` with the CD: game 301 identical ticks, menus 386 identical lines (the walk now opens and closes
+the Opções screen), saves 379 identical lines (`end complete`). The MSVC builds run only in CI.

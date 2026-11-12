@@ -8,9 +8,11 @@
 > específico do macOS. Nenhum dado do jogo pode ser incluído: tudo vem do CD original do jogador.
 
 > **Estado (2026-11-12).** O cliente Windows já existe em [`windows/`](../windows/README.md) (Win32 + GDI em C, motor
-> estático, um único `RisingLands.exe`): importa o CD, abre no menu principal original, joga a campanha e salva e
-> carrega no mesmo formato do macOS, com paridade quadro a quadro com o macOS. Faltam áudio e filmes (#4) e a
-> assinatura do código (#5). Este guia continua valendo como mapa da camada de host.
+> estático, um único `RisingLands.exe`): importa o CD, abre no menu principal original, joga a campanha, salva e
+> carrega no mesmo formato do macOS e tem a tela de Opções, com paridade quadro a quadro com o macOS. Compila com
+> mingw-w64 (x64) e com MSVC (x64 e ARM64). Faltam áudio e filmes (#4), os atalhos modernos e os caminhos melhores no
+> host (#7) e um teste num PC com Windows de verdade (#6), que fica com quem tem Windows. Os binários não são
+> assinados, e não há plano de assiná-los. Este guia continua valendo como mapa da camada de host.
 
 This guide is for a contributor who wants to build a Windows host over the same engine. Each statement points to the
 macOS file that implements it. Items not checked against the code are marked **unverified**.
@@ -18,8 +20,10 @@ macOS file that implements it. Items not checked against the code are marked **u
 ## 0. Current state: `windows/`
 
 A Windows client now lives in [`windows/`](../windows/README.md): Win32 + GDI in C11, the engine linked statically, one
-self-contained `RisingLands.exe` that imports only system DLLs. It cross-compiles with mingw-w64 and is built on
-`windows-latest` by `.github/workflows/windows-client.yml`.
+self-contained `RisingLands.exe` that imports only system DLLs. It builds with mingw-w64 (x64, also cross from
+macOS/Linux) and with MSVC (x64 and ARM64); `.github/workflows/windows-client.yml` builds all three, runs the unit
+tests and uploads each `.exe` with its SHA-256. **Nobody has played it on a real Windows PC yet**: CI has no game data,
+and the parity checks run on macOS. Testing on Windows is left to the community (#6).
 
 | Part | macOS reference | Windows |
 |---|---|---|
@@ -31,8 +35,13 @@ self-contained `RisingLands.exe` that imports only system DLLs. It cross-compile
 | Original menus, briefing, pause, result, credits | `macos_campaign_shell.inc`, `NativeLiveWindow.swift` shell paths, `NativeFLC.swift` | `rlw_shell.inc`, `rlw_menu.c`, `rlw_flc.c` — done, menu walk equal to the macOS driver's |
 | Saves and loads: slots + `.view` companion, background write, stage autosave, the original save/load lists, "Partida" menu (F5/F9) | `macos_live_driver.c` (`snapshot_capture`, `macos_live_save*`, `macos_live_load`, `macos_live_autosave`), `macos_campaign_shell.inc`, `NativeLiveWindow.swift`, `main.swift` | `rlw_save.inc`, `rlw_saves.c`, `rlw_fs.c` (durable replace with `FlushFileBuffers`) — done, same files as macOS, saved files equal to the macOS driver's |
 | Sound effects, CD music, event pictures (FLC), movies (AVI) | `NativeAudio.swift`, `NativeCDMusic*.swift`, `NativeEventFLCPlayback.swift`, `NativeDefeatMovie.swift` | **open** (#4): in-game FLC events end at once; movies complete as unavailable |
-| MSVC and ARM64 builds, code signing, DPI awareness | — | **open** (#5) |
-| Modern shortcuts and the Shift+click order queue (`RL_REGRA_FILA_ORDENS`) | `NativeModernHotkeys.swift`, `macos_live_default_rules` | **open**: the Windows host creates worlds with `regras = 0` (the original rules) |
+| "Opções" screen over the main and pause menus, settings kept between runs | `macos_options.inc`, `NativeLiveWindow.swift` | `rlw_options.inc`, `rlw_main.c` (`opcoes.ini` beside `Dados` and `Partidas`) — done; "Configurar teclas" is shown unavailable (no key dialog yet) |
+| MSVC x64 and ARM64 builds | — | `build-msvc.ps1`, CI jobs `msvc-x64`, `msvc-arm64`, `arm64-run` — done (section 1) |
+| Modern shortcuts (N twice, Home, period/comma, H) | `NativeModernHotkeys.swift` | **open** (#7): no modern hotkey layer yet |
+| Shift+click order queue (`RL_REGRA_FILA_ORDENS`, rule bit 1) | `macos_live_default_rules`, `NativeModernHotkeys.swift` | done: "Atalhos modernos" in the Opções screen turns the rule on for worlds created afterwards |
+| Better unit paths (`RL_REGRA_CAMINHOS_MELHORES`, rule bit 0) | `macos_live_default_rules`, menu Jogo > Caminhos melhores | **open** (#7): the Opções item is stored in `opcoes.ini` but the host does not pass the rule yet |
+| DPI awareness, a D3D11 presenter | — | open |
+| Code signing | — | not planned (section 6) |
 
 The rest of this guide is the original contributor map, kept for anyone working on the open parts.
 
@@ -52,8 +61,19 @@ The DLL (`rising_engine.dll`) or the static library is then used with the header
 `module.modulemap` is only for Swift. **Verified (2026-11-11):** the engine builds unchanged as a static library for
 `x86_64-pc-windows-gnu` (`cargo rustc --release --locked -p rl-ffi --lib --crate-type staticlib --target
 x86_64-pc-windows-gnu`; native libraries `kernel32 ntdll userenv ws2_32 dbghelp`), which is what `windows/build.sh`
-does. The MSVC targets are still **unverified**. The engine has no OS calls in its logic: no wall clock, no threads,
-and file I/O only in save and load.
+does. **Verified (2026-11-12):** it also builds unchanged for `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc`
+with `-C target-feature=+crt-static` (native set `kernel32 ntdll userenv ws2_32 dbghelp /defaultlib:libcmt`). The
+engine has no OS calls in its logic: no wall clock, no threads, and file I/O only in save and load.
+
+| Build | Rust target | C compiler | Script | CI job / artifact |
+|---|---|---|---|---|
+| mingw x64 | `x86_64-pc-windows-gnu` | mingw-w64 gcc | `windows/build.sh` | `mingw-x64` / `RisingLands-windows-x86_64-mingw` |
+| MSVC x64 | `x86_64-pc-windows-msvc` | `cl.exe` x64, `/MT` | `windows/build-msvc.ps1` | `msvc-x64` / `RisingLands-windows-x86_64-msvc` |
+| MSVC ARM64 | `aarch64-pc-windows-msvc` | `cl.exe` ARM64 (cross), `/MT` | `windows/build-msvc.ps1 -Arch arm64` | `msvc-arm64` / `RisingLands-windows-arm64-msvc` |
+
+All three are one `RisingLands.exe` importing system DLLs only. The x64 builds run the unit tests, `--selftest` and
+the import refusal in CI. The ARM64 build is cross-compiled on `windows-latest` (PE machine type checked), then the
+`arm64-run` job runs the same unit tests, `--selftest` and refusal natively on a `windows-11-arm` runner.
 
 The engine is deterministic and frame based. The host owns time, input, presentation and audio, and passes everything
 across the ABI.
@@ -123,3 +143,10 @@ functions).
   fonts, caches or tables taken from `RISING.EXE`. Everything comes from the player's CD at first run.
 - Keep the engine logic unchanged. The host only paces frames, maps input, presents and plays audio.
 - No hardcoded paths. The player chooses the CD, and data goes to the user's application data folder.
+
+## 6. Code signing
+
+The Windows binaries are not signed, and the project does not plan to sign them. On the first run of a downloaded
+`.exe`, Windows SmartScreen shows "Windows protected your PC" with "Unknown publisher": click "More info", then "Run
+anyway". To check a download instead, compare its SHA-256 with the `.sha256` file of the CI artifact and with the
+release notes, which name the commit it was built from.
