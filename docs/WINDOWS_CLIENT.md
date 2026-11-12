@@ -7,8 +7,32 @@
 > documento lista o que cada parte faz, onde está no código macOS, as chamadas da ABI em ordem e o que ainda é
 > específico do macOS. Nenhum dado do jogo pode ser incluído: tudo vem do CD original do jogador.
 
+> **Estado (2026-11-12).** O cliente Windows já existe em [`windows/`](../windows/README.md) (Win32 + GDI em C, motor
+> estático, um único `RisingLands.exe`): importa o CD, abre no menu principal original e joga a campanha com paridade
+> quadro a quadro com o macOS. Faltam saves, áudio e filmes. Este guia continua valendo como mapa da camada de host.
+
 This guide is for a contributor who wants to build a Windows host over the same engine. Each statement points to the
 macOS file that implements it. Items not checked against the code are marked **unverified**.
+
+## 0. Current state: `windows/`
+
+A Windows client now lives in [`windows/`](../windows/README.md): Win32 + GDI in C11, the engine linked statically, one
+self-contained `RisingLands.exe` that imports only system DLLs. It cross-compiles with mingw-w64 and is built on
+`windows-latest` by `.github/workflows/windows-client.yml`.
+
+| Part | macOS reference | Windows |
+|---|---|---|
+| Window, 800x600 indexed presentation with palette, aspect-fit, fullscreen | `NativeLiveWindow.swift`, `NativeViewportPolicy.swift` | `rlw_main.c`: 8-bit DIB + `StretchDIBits`, black letterbox bars, borderless fullscreen (F11) — done |
+| Frame pacing, 1x = 30 frames/s, 0.5x/2x/4x, pause | `NativeGameSpeed.swift` (`NativeFramePacer`) | `rlw_main.c`: QPC deadline, debt above 0.25 s forgiven; P/Pause, +/− — done |
+| Mouse and keyboard (the 23 virtual keys, held drags, edge zones, F11 never delivered) | `NativeLiveWindow.swift`, `NativeHotkeyInputRouter.swift`, `macos_live_driver.c` | `rlw_main.c`, `rlw_driver.c` (same queue and click gesture) — done |
+| Mission start, renderer from the CD, per-frame phases | `macos_live_driver.c` | `rlw_driver.c` — done, per-tick frame hashes equal to the macOS driver's |
+| First-run CD import (BIN/CUE/ISO/folder, SHA-256) | `NativeCDImport.swift`, `NativePlayerImport.swift` | `rlw_cd.c` — done (no audio decoding yet) |
+| Original menus, briefing, pause, result, credits | `macos_campaign_shell.inc`, `NativeLiveWindow.swift` shell paths, `NativeFLC.swift` | `rlw_shell.inc`, `rlw_menu.c`, `rlw_flc.c` — done, menu walk equal to the macOS driver's |
+| Saves and loads | `macos_live_driver.c` save functions | **open**: the lists show empty slots |
+| Sound effects, CD music, event pictures (FLC), movies (AVI) | `NativeAudio.swift`, `NativeCDMusic*.swift`, `NativeEventFLCPlayback.swift`, `NativeDefeatMovie.swift` | **open**: in-game FLC events end at once; movies complete as unavailable |
+| MSVC and ARM64 builds, code signing, DPI awareness | — | **open** |
+
+The rest of this guide is the original contributor map, kept for anyone working on the open parts.
 
 ## 1. Build the engine as a Windows library
 
@@ -23,9 +47,11 @@ cargo build --release --locked --manifest-path engine/Cargo.toml --target x86_64
 
 The DLL (`rising_engine.dll`) or the static library is then used with the headers in `engine/include`. The core headers are
 `rising_engine.h`, `rising_shell.h`, `rising_difficulty.h`, `rising_load_tail_input.h` and `game_hud_background_abi.h`;
-`module.modulemap` is only for Swift. **Unverified:** a Windows build has never been run. The engine has no OS calls
-in its logic: no wall clock, no threads, and file I/O only in save and load. It should build, but check `save.rs` (file
-sync) and any `std::os::unix` use.
+`module.modulemap` is only for Swift. **Verified (2026-11-11):** the engine builds unchanged as a static library for
+`x86_64-pc-windows-gnu` (`cargo rustc --release --locked -p rl-ffi --lib --crate-type staticlib --target
+x86_64-pc-windows-gnu`; native libraries `kernel32 ntdll userenv ws2_32 dbghelp`), which is what `windows/build.sh`
+does. The MSVC targets are still **unverified**. The engine has no OS calls in its logic: no wall clock, no threads,
+and file I/O only in save and load.
 
 The engine is deterministic and frame based. The host owns time, input, presentation and audio, and passes everything
 across the ABI.
@@ -57,7 +83,7 @@ functions).
    `rl_game_hud_background_version`, `rl_missao_versao` (1), `rl_shell_version`.
 2. **Start:** either a stage or the original main menu.
    - **A stage:** pass ten blocks to `rl_missao_iniciar_eventos_v1`, with an `RlMissaoInicio` config: `ticks_per_second = 20`,
-     `allocation_fill = 0xa7`, cursor (400, 300), execution mode `RL_EXECUCAO_JOGO`, and an `RlEventsHostV1` for the
+     `allocation_fill = 0` (a non-zero fill makes recruits' level icons blink, issue #4), cursor (400, 300), execution mode `RL_EXECUCAO_JOGO`, and an `RlEventsHostV1` for the
      `EVENTS` folder. The ten blocks are `RISING.EXE`, `RISING.INI`, `RISING.RUL`, `RISING.SBL`, `TABLEAU.COL`, `COULEUR.MAP`,
      `PLATGAME.PIE`, `MONSTRE.INI`, `TEXTES.TXT` and the stage `.ETA`. Without an events host, call `rl_missao_iniciar`.
      Then call `rl_aplicar_dificuldade`, and `rl_carregar_eventos` with `EVENTS.INI`.

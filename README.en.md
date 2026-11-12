@@ -1,12 +1,12 @@
-# Rising Lands — reimplemented engine (macOS)
+# Rising Lands — reimplemented engine (macOS and Windows)
 
 [Versão em português](README.md)
 
-This repository holds a reimplementation of the **Rising Lands** (1997, Microïds) game engine in Rust and a native macOS app that runs the game on top of it. The logic was ported routine by routine from the original executable and compared against it.
+This repository holds a reimplementation of the **Rising Lands** (1997, Microïds) game engine in Rust and native apps that run the game on top of it: the macOS app (alpha) and the Windows client (pre-alpha, in progress). The logic was ported routine by routine from the original executable and compared against it.
 
 **The game is not included.** To play, you need the image of the **original Brazilian CD** of Rising Lands. On first launch the app reads all game data from that CD: graphics, palette, sounds, music, texts, stages and movies. No game data is distributed here, not even inside the app.
 
-## Download and play
+## Download and play (macOS)
 
 1. Download the `.dmg` of the latest version from **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. The current one is the alpha `v0.1.0-alpha.2`. The app is signed with Developer ID and notarized by Apple.
 2. Open the `.dmg` and drag **Rising Lands** to **Applications**.
@@ -16,16 +16,41 @@ This repository holds a reimplementation of the **Rising Lands** (1997, Microïd
 
 Requirements to play: a Mac with **Apple Silicon** and **macOS 13** or later. The app's interface is in Portuguese, like the game.
 
+## Windows (pre-alpha)
+
+The Windows client is in progress, in [`windows/`](windows/README.md). There is a **pre-alpha** for early testers:
+
+1. Download `RisingLands.exe` from the `v0.1.0-prealpha.1-windows` pre-release on **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. Check it against the SHA-256 in the release notes. The `.exe` was built by GitHub Actions from this source (the `windows-client` workflow).
+2. **SmartScreen warning:** the `.exe` is **not signed**, so Windows shows "Windows protected your PC". Click **More info**, then **Run anyway**. If you would rather not, wait for a signed build or build it yourself (see below).
+3. On first launch a window asks for the CD: pick **RISING_LANDS_BR_.BIN** (or the .CUE, or an .ISO). The files are checked by SHA-256 and copied to `%LOCALAPPDATA%\RisingLands-ptbr\Dados`. Then the game opens in the original menu.
+
+Requirements: 64-bit Windows 10 or 11 (x86-64). It is a single `.exe`, with no installer and no extra DLLs.
+
+What works:
+- CD import (.BIN/.CUE, .ISO or the CD folder);
+- the original menus: "Um jogador", "Novo jogo", briefing and objectives, pause (resume, objectives, abandon, restart), the result screen and next stage, credits and "Sair";
+- the campaign, with the macOS host's mouse and keyboard, edge scrolling, fullscreen (**F11**), pause (**P**) and speeds (**+** and **−**: 0.5x, 1x, 2x and 4x).
+- Parity with macOS: with the same input, the Windows driver and the macOS driver produce the same frames, tick by tick, and the same menu walk.
+
+Still missing:
+- **saves** (the save and load lists show empty slots);
+- **audio** (sound effects and CD music), in-game event pictures (FLC) and **movies**;
+- code signing, MSVC and ARM64 builds;
+- the macOS modern shortcuts.
+
+Note: parity was checked on macOS, by building the Windows driver against the same engine. On real Windows, CI only checks the build, the unit tests, the engine self-test and the refusal of a file that is not the CD. **Nobody has played this build on a Windows PC yet.** Reports from testers are very welcome: open an issue and say it is Windows.
+
 ## Where to get the CD
 
 The original Brazilian CD image can be found on the **Internet Archive**. Download **RISING_LANDS_BR_.BIN** and **RISING_LANDS_BR_.CUE**.
 
-## Current state (alpha)
+## Current state
 
 - The campaign runs on all 25 stages. An automated bot played every one of them, each game up to 72,000 frames, with no engine stop. The first missions were also played by hand without problems.
 - Nobody has finished the whole campaign yet. That is where your testing helps.
 - If the game reaches something not ported yet, it does not freeze silently: it shows a **stop panel** with the original routine's address. That text is the most useful part of a report.
-- Only the macOS version exists. There is no Windows client yet (see "Help wanted").
+- macOS: alpha `v0.1.0-alpha.2`. The source already has new fixes for the next release: the monastery clock with the side panel hidden, the balloon leaving the hangar and the modern shortcuts (see "Controls").
+- Windows: pre-alpha, in progress (see "Windows (pre-alpha)").
 - Only the Brazilian Portuguese release of the game is supported.
 
 ## Controls
@@ -34,6 +59,12 @@ The original Brazilian CD image can be found on the **Internet Archive**. Downlo
 - **Fullscreen:** menu **Janela → Tela cheia** (**⌘F**). Fullscreen shows only the game, on black.
 - **Moving around the map:** push the mouse against the edge. In fullscreen, move the mouse to the edge of the screen. In a window, the map scrolls while the mouse is inside the window, at its edge. The arrow keys also scroll.
 - **Keyboard:** Enter, Esc, Space, arrows, Delete, X, Tab (minimap) and the digits 0–9, as in the original. Keys can be remapped in **Jogo → Configurar teclas…**. The original's F11 (switch to 640x480) is not used.
+- **Modern shortcuts** (Age of Empires II style; in the current source, coming in the next macOS release). Each shortcut becomes input the original already accepts (a key or a click), through the same path as the player's own input; nothing changes game state behind the game's back.
+  - **N twice** (groups 1–9): selects the group and centres on it (the original's Shift+N). Ctrl+N, N and Shift+N stay as in the original.
+  - **Home:** last alert (the original's X).
+  - **.** (period): next idle worker. **,** (comma): next idle military unit.
+  - **H:** selects the Sanctuary.
+  - They are on by default. To turn them off, untick **Jogo → Atalhos modernos**. Keys can be remapped in **Jogo → Configurar teclas…**. They do nothing in menus, in the briefing or while paused.
 
 ## Reporting problems
 
@@ -67,11 +98,22 @@ cargo test --locked --manifest-path engine/Cargo.toml
 ./macos/tests/run.sh
 ```
 
+Windows client: from a Mac or Linux with mingw-w64, or on Windows with MSYS2/Git Bash. Details in [windows/README.md](windows/README.md).
+
+```bash
+rustup target add x86_64-pc-windows-gnu
+```
+```bash
+./windows/build.sh test
+```
+
+The `.exe` is written to `windows/build/RisingLands.exe`.
+
 Tests that need the original game files are skipped when the files are absent. With `RL_CD_ROOT` pointing at the CD folder, `cd_derived_assets` checks that the data computed from the CD (palette, tables, menu screens and terrain cache) equals the original's, byte for byte. What is and is not in this repository is listed in [PUBLICATION_AUDIT.md](PUBLICATION_AUDIT.md).
 
 ## Help wanted
 
-- **Windows client:** the engine has a C interface (`engine/include`), and [docs/WINDOWS_CLIENT.md](docs/WINDOWS_CLIENT.md) describes the steps. See issue #1.
+- **Windows client:** a pre-alpha exists (`windows/`). Saves, audio, movies, code signing and the MSVC and ARM64 builds are still open, and it needs people testing on a Windows PC. [docs/WINDOWS_CLIENT.md](docs/WINDOWS_CLIENT.md) lists what is missing and where it lives in the macOS code. See [issue #1](https://github.com/marciobarbato/rising-lands-public/issues/1).
 - **Other languages:** only the Brazilian release is supported today. Other versions, such as the English CD, would need the engine checked against that release's executable and files. If you own another version and want to help, please open an issue.
 
 ## License

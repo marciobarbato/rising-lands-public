@@ -1,11 +1,11 @@
 # Publication audit
 
-Status: **this repository is private and not yet publishable.** Two blockers remain (sections 3 and 5), plus the license
-(section 7). This file records what was copied from the private research repository, what was left out and why, and what
-still needs the owner's review.
+Status: **public** since 2026-11-10 (MIT). This file records what was copied from the private research repository,
+what was left out and why. Section 8 logs each later synchronisation.
 
-Source: private research repository, commit `fc95ba3f` (macOS host with 1x = 30 frames/s and the edge-scroll fix, including its drag-clamp correction). Files
-were copied into a fresh repository with no history.
+First source: private research repository, commit `fc95ba3f` (macOS host with 1x = 30 frames/s and the edge-scroll fix,
+including its drag-clamp correction). Files were copied into a fresh repository with no history. Later synchronisations
+are copied file by file from the private `main` (section 8), never by merging histories.
 
 ## 1. What is included
 
@@ -15,7 +15,9 @@ were copied into a fresh repository with no history.
 | `macos/src/` | Native macOS host: Swift (AppKit, Metal, AVFoundation), C driver and host files, headers |
 | `macos/tests/` | Standalone Swift component tests (hotkeys, viewport, game speed, player options, benchmark arguments), the production view consumer test (`ControlsConsumerTests`, no window, no game data) and `run.sh` |
 | `build-macos.sh` | Builds the engine and the player app from the repository root |
-| `docs/WINDOWS_CLIENT.md` | How to write a Windows host over the same C ABI |
+| `windows/` | Windows client (Win32 + GDI in C, engine linked statically): sources, `build.sh`, `parity.sh`, portable unit tests, README |
+| `.github/workflows/windows-client.yml` | CI on `windows-latest`: builds `RisingLands.exe`, runs the tests, uploads the `.exe` and its SHA-256 |
+| `docs/WINDOWS_CLIENT.md` | How to write a Windows host over the same C ABI, and the Windows client's current state |
 | `README.md`, `README.en.md` | Portuguese and English instructions |
 
 ## 2. What was left out, and why
@@ -114,3 +116,54 @@ In all, 125 files are copied, 551 samples decoded and 2 audio tracks read: about
 5. Release identity: the bundle identifier (`local.risinglands.ptbr.player` is a placeholder, overridable with
    `RISING_BUNDLE_ID`), the Developer ID signature (`RISING_SIGN_IDENTITY`) and notarization.
 6. The app's import dialog still writes "Internet Archive (archive.org)"; the READMEs name only the Internet Archive.
+
+## 8. Synchronisations
+
+Path mapping from the private repository: `motor/` → `engine/`, `apps/macos-preview/src/native/` → `macos/src/`,
+`apps/macos-preview/testes/` (standalone component tests only) → `macos/tests/`, `apps/windows/` → `windows/`,
+`apps/windows/ci/windows-client.yml` → `.github/workflows/windows-client.yml`. Comments that point to private receipts,
+files or tools say "(private research repository)" instead.
+
+### 2026-11-12: private `main` `c2ce3135`
+
+Previous synchronisation: public `19719ff` (private `main` of 2026-11-11, before `fe7b3060`).
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `fe7b3060` AffChrono's hidden-panel width word (monastery clock with the side panel hidden) | `engine/crates/rl-core/src/render.rs`, `render_hud.rs`, `render_scripted.rs` |
+| `dbe0b3d2` balloon flight animation in the hangar (AnimBallonStatic) | `engine/crates/rl-core/src/building_loop_completion.rs` |
+| `6270d411` the app's zero allocation fill leaves unit `+0xba` clear (issue #4; runs with `RL_CD_ROOT`) | `engine/crates/rl-core/tests/app_allocation_fill.rs` |
+| `de84c839` modern (AoE2-style) hotkeys as ordinary original input | `macos/src/NativeModernHotkeys.swift` (new), `MacOSLiveDriver.h`, `macos_live_driver.c` (`macos_live_peek`, `macos_live_pending_input`), `NativeHotkeyBindings.swift`, `NativeHotkeyInputRouter.swift`, `NativeLiveWindow.swift`, `NativePlayerApp.swift`, `main.swift`; tests `ModernHotkeysTests.swift` (new), `HotkeyBindingsTests.swift`, `ControlsConsumerTests.swift`; `NativeModernHotkeys` added to `build-macos.sh` and `macos/tests/run.sh` |
+| `76b00cd3`..`44541cf5` Windows client, milestones 1 and 2 | `windows/src/*`, `windows/tests/test_cd.c`, `test_menu.c`, `parity.c`, `import_cli.c`, `windows/build.sh`, `windows/parity.sh`, `windows/README.md` |
+| `e86d85fb` Windows client CI | `.github/workflows/windows-client.yml`, adapted: public paths, runs on `main` and pull requests, publishes the `.exe` SHA-256 |
+
+Public-only changes in this round:
+
+- `engine/crates/rl-core/src/lib.rs`, `frame_raid.rs`, `frame_units.rs`: removed the two `validation-trace` modules
+  (`building_dismantle_transport`, `dismantle_adoption_observer`) whose `#[path]` points to the private `validation/`
+  folder, and their three hooks. `cargo fmt --all --check` failed on them; it passes now, and `cargo check
+  --features validation-trace` builds.
+- `docs/WINDOWS_CLIENT.md`: a "Current state" section for `windows/`; the Windows GNU build is verified; the stage start
+  uses `allocation_fill = 0`.
+- READMEs (PT and EN): Windows pre-alpha, modern shortcuts, current macOS state.
+
+Left out, and why:
+
+| Left out | Reason |
+|---|---|
+| `render_hd.rs` and every `hd`/scale line in `render*.rs`, `stage_objects.rs`, `shell_*.rs`, `unit_display_extra.rs`, `rl-ffi/src/render_abi.rs`, `rising_engine.h` (`rl_render_criar_cd_escala`, `rl_render_definir_escala`, `rl_render_superficie_escala`, `rl_render_escala2x`) | Personal-use 2x presentation mirror (owner's decision, 2026-11-10) |
+| Display filters (Scale2x, Scale3x, xBRZ, bicubic, "Nítido suavizado"), the 1600x1200 mode and their menus in `NativeLiveWindow.swift`, `NativePlayerOptions.swift`, `NativePlayerApp.swift`, `main.swift`, `macos_live_driver.c`, `MacOSLiveDriver.h` | Personal use (same decision) |
+| `motor/crates/rl-core/src/bin/*` changes (`text_fixtures.rs`), the `[[bin]]` entries and `difficulty/fixtures.rs` | Private fixture tools (section 2) |
+| `motor/validation/*` receipts of these changes (hud-chrono, balloon hangar), `motor/HANDOFF.md`, `apps/*/HANDOFF.md` | Native receipts and internal notes (section 2) |
+| `apps/macos-preview/testes/ModernHotkeysWorldTests.swift` | Needs the private build's CD-derived native inputs; the public build has no step that produces them |
+| `apps/windows/tests/test_windows_host.py` | Wrapper for the private `scripts/check.py`; `windows/build.sh test` runs the same tests |
+| `apps/windows/ci/windows-client.yml` | Template; the active copy is `.github/workflows/windows-client.yml` |
+| `research/modern-pathing`, the order queue and other unmerged branches | Not in the private `main` |
+| `license = "UNLICENSED"` of the private `Cargo.toml` | The public workspace keeps `MIT` |
+
+Checked before the push: `cargo build --release` and `cargo fmt --all --check` in `engine/`, `cargo test --release`
+in `engine/` (with `RL_CD_ROOT`), `sh macos/tests/run.sh`, `./build-macos.sh`, the portable Windows unit tests
+(`test_cd`, `test_menu`) with the host compiler, and `windows/parity.sh` with the CD (Windows driver vs macOS driver
+over the public sources). The Windows `.exe` is built by the workflow on `windows-latest`.
