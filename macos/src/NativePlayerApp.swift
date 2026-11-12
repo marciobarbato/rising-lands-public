@@ -84,6 +84,7 @@ extension AppDelegate {
         }
         gameMenu.addItem(.separator())
         gameMenu.addItem(withTitle: "Configurar teclas…", action: #selector(showHotkeys), keyEquivalent: ",").target = self
+        gameMenu.addItem(withTitle: "Atalhos modernos", action: #selector(toggleModernHotkeys(_:)), keyEquivalent: "").target = self
         gameMenu.addItem(withTitle: "Importar o CD novamente…", action: #selector(reimportCD), keyEquivalent: "").target = self
         refreshSaveMenus()
         let windowItem = NSMenuItem(); main.addItem(windowItem); let windowMenu = NSMenu(title: "Janela"); windowItem.submenu = windowMenu
@@ -119,7 +120,7 @@ extension AppDelegate {
         Compilação: commit \(commit).
 
         RECURSOS DESTE PORT
-        Não existiam no jogo de 1997: velocidade de jogo, dificuldades Fácil e Difícil (Normal é o jogo original), escalas de janela, filtro suave, atalhos configuráveis e o formato de salvamento.
+        Não existiam no jogo de 1997: velocidade de jogo, dificuldades Fácil e Difícil (Normal é o jogo original), escalas de janela, filtro suave, atalhos configuráveis, atalhos modernos e o formato de salvamento.
         """
         return NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.labelColor])
     }

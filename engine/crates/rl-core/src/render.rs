@@ -14,6 +14,8 @@ impl From<EngineError> for Error {
     }
 }
 pub type Result<T> = std::result::Result<T, Error>;
+/// The esp - 52 word AffChrono finds (None: not modeled) and the writes.
+pub type HudChronoFixture = (Option<u16>, Vec<(u32, u8)>);
 #[derive(Clone)]
 pub struct Cache {
     pub keys: Vec<u8>,
@@ -490,7 +492,29 @@ impl Renderer {
     pub fn chrono_fixture(&mut self, m: &MemoriaJogo) -> Result<()> {
         let mut c = self.fixture_context(m)?;
         c.camera = u32::from(m.u8(0x508041)?);
-        c.chrono()
+        c.chrono(None)
+    }
+    /// AffGame 0x417b32..0x417c5b (counters through AffChrono) for the live
+    /// local player: the esp - 52 word AffChrono finds (None: not modeled)
+    /// and the writes, the draw's own plus the AffMarche writes the port
+    /// applies through `market::display_tick`.
+    #[doc(hidden)]
+    pub fn hud_chrono_fixture(&mut self, m: &MemoriaJogo) -> Result<HudChronoFixture> {
+        let mut c = self.fixture_context(m)?;
+        c.camera = u32::from(m.u8(0x508041)?);
+        let slot = c.hud_to_chrono()?;
+        let mut writes = c.overrides;
+        let mut after = m.clone();
+        crate::market::display_tick(&mut after)
+            .map_err(|_| Error::Invalid("market display tick"))?;
+        for ((base, old), (_, new)) in m.blocks().zip(after.blocks()) {
+            for (i, (x, y)) in old.iter().zip(new).enumerate() {
+                if x != y {
+                    writes.insert(base + i as u32, *y);
+                }
+            }
+        }
+        Ok((slot, writes.into_iter().collect()))
     }
     /// AffTrame placement entry0x41721f, including viewport/page exits.
     #[doc(hidden)]

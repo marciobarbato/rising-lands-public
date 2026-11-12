@@ -23,9 +23,22 @@ final class NativeHotkeyInputRouter {
         case handled, unhandled, nativeMenu
     }
 
+    /// "Atalhos modernos" requests. The host turns each into ordinary input the
+    /// original already accepts (NativeModernHotkeys.swift); nothing here emits it.
+    enum ModernCommand: Equatable, Sendable {
+        /// Second tap of digit N: the original's Shift+N (select and centre). vkey 49...57.
+        case centerGroup(Int)
+        case lastAlert, nextIdleWorker, nextIdleMilitary, mainStructure
+    }
+
+    /// Two taps of the same digit within this interval centre on the group.
+    static let doubleTapInterval: TimeInterval = 0.35
+
     private struct Press {
         // Remember unmatched downs too: a modifier change cannot reinterpret one.
         let action: Bindings.Action?
+        /// Consumed by a modern command: its release emits nothing.
+        var modern = false
     }
 
     private(set) var bindings: Bindings
@@ -34,9 +47,16 @@ final class NativeHotkeyInputRouter {
     private var presses: [UInt16: Press] = [:]
     private var references: [Bindings.Action: Int] = [:]
     private let sink: @MainActor (KeyEvent) -> Void
+    /// Off by default in the component; the app sets it from the stored preference.
+    var modernEnabled = false
+    var modernSink: (@MainActor (ModernCommand) -> Void)?
+    private let clock: @MainActor () -> TimeInterval
+    private var lastDigitTap: (key: Int, time: TimeInterval)?
 
-    init(bindings: Bindings = Bindings(), sink: @escaping @MainActor (KeyEvent) -> Void) {
+    init(bindings: Bindings = Bindings(), clock: @escaping @MainActor () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+         sink: @escaping @MainActor (KeyEvent) -> Void) {
         self.bindings = bindings
+        self.clock = clock
         self.sink = sink
     }
 
@@ -54,17 +74,39 @@ final class NativeHotkeyInputRouter {
         guard !modifiers.contains(.command) else { return .nativeMenu }
         guard isActive else { return .unhandled }
         if let press = presses[keyCode] {
-            return press.action == nil ? .unhandled : .handled
+            return press.action == nil && !press.modern ? .unhandled : .handled
         }
         // Includes repeats arriving after focus loss or a successful rebind flush.
         guard !isRepeat else { return .unhandled }
         synchronizeModifiers(modifiers)
         let action = bindings.action(keyCode: keyCode, modifiers: modifiers)
+        if let action, action.isModern {
+            guard modernEnabled, let command = Self.command(for: action) else {
+                presses[keyCode] = Press(action: nil)
+                return .unhandled
+            }
+            lastDigitTap = nil
+            presses[keyCode] = Press(action: nil, modern: true)
+            modernSink?(command)
+            return .handled
+        }
+        if let action, let key = action.virtualKey, modernEnabled, (49...57).contains(key), modifiers.isEmpty {
+            let now = clock()
+            if let last = lastDigitTap, last.key == key, now - last.time <= Self.doubleTapInterval {
+                lastDigitTap = nil
+                presses[keyCode] = Press(action: nil, modern: true)
+                modernSink?(.centerGroup(key))
+                return .handled
+            }
+            lastDigitTap = (key, now)
+        } else if action != nil {
+            lastDigitTap = nil
+        }
         presses[keyCode] = Press(action: action)
-        guard let action else { return .unhandled }
+        guard let action, let key = action.virtualKey else { return .unhandled }
         let count = references[action, default: 0]
         references[action] = count + 1
-        if count == 0 { emit(action.virtualKey, down: true) }
+        if count == 0 { emit(key, down: true) }
         return .handled
     }
 
@@ -76,14 +118,18 @@ final class NativeHotkeyInputRouter {
         // Preserve the committed host's modifier-before-key order. Command must
         // not prevent releasing an earlier gameplay down with a different chord.
         synchronizeModifiers(modifiers)
-        let action = presses.removeValue(forKey: keyCode)?.action
-        if let action {
+        let press = presses.removeValue(forKey: keyCode)
+        if press?.modern == true {
+            return modifiers.contains(.command) ? .nativeMenu : .handled
+        }
+        let action = press?.action
+        if let action, let key = action.virtualKey {
             let count = references[action, default: 0]
             if count > 1 {
                 references[action] = count - 1
             } else {
                 references.removeValue(forKey: action)
-                emit(action.virtualKey, down: false)
+                emit(key, down: false)
             }
         }
         if modifiers.contains(.command) { return .nativeMenu }
@@ -104,6 +150,7 @@ final class NativeHotkeyInputRouter {
     /// Idempotent, deterministic release through the SAME sink as normal keys.
     /// Also clears unmatched physical downs and alias counts. No restore downs.
     func releaseAllHeldKeys() {
+        lastDigitTap = nil
         presses.removeAll(keepingCapacity: true)
         references.removeAll(keepingCapacity: true)
         for key in heldKeys.sorted() { emit(key, down: false) }
@@ -126,6 +173,16 @@ final class NativeHotkeyInputRouter {
             guard self.bindings != candidate else { return }
             self.releaseAllHeldKeys()
             self.bindings = candidate
+        }
+    }
+
+    static func command(for action: Bindings.Action) -> ModernCommand? {
+        switch action {
+        case .lastAlert: return .lastAlert
+        case .nextIdleWorker: return .nextIdleWorker
+        case .nextIdleMilitary: return .nextIdleMilitary
+        case .mainStructure: return .mainStructure
+        default: return nil
         }
     }
 

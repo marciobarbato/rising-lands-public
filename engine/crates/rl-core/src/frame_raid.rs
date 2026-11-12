@@ -375,8 +375,6 @@ fn pending_attack(m: &mut MemoriaJogo) -> Result<u32> {
     Ok(0)
 }
 pub fn advance(m: &mut MemoriaJogo) -> Result<u32> {
-    #[cfg(feature = "validation-trace")]
-    crate::dismantle_adoption_observer::raid_parent(m);
     if m.u8(0x50a9cc)? == 0 {
         m.set_u8(0x50a9cc, 1)?;
         for k in 0..u32::from(m.u16(0x50a9ce)?) {

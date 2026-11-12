@@ -93,8 +93,6 @@ fn next_units(m: &mut MemoriaJogo) -> Result<u32> {
     Ok(0)
 }
 fn next_structures(m: &mut MemoriaJogo) -> Result<u32> {
-    #[cfg(feature = "validation-trace")]
-    crate::dismantle_adoption_observer::parent(m);
     economy(m, "ResetTableauHangar", &[])?;
     let period = m.u16(0x495c02)?;
     if period == 0 {
@@ -155,8 +153,6 @@ fn next_structures(m: &mut MemoriaJogo) -> Result<u32> {
     Ok(0)
 }
 fn next_unit(m: &mut MemoriaJogo, unit: u16) -> Result<u32> {
-    #[cfg(feature = "validation-trace")]
-    crate::dismantle_adoption_observer::attack_parent(m, unit);
     let n = u32::from(unit);
     let r = record(m, n)?;
     let mut owner = 0;

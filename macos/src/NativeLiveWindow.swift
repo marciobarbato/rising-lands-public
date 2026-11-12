@@ -116,7 +116,25 @@ final class NativeMetalGameView: NSView {
     var inputEvent: (([String:Any])->Void)?
     var inputCancelled: (()->Void)?
     var tracking: NSTrackingArea?
-    lazy var hotkeys = NativeHotkeyInputRouter { [weak self] event in self?.inputEvent?(event.payload) }
+    lazy var hotkeys: NativeHotkeyInputRouter = {
+        let router=NativeHotkeyInputRouter { [weak self] event in self?.inputEvent?(event.payload) }
+        router.modernEnabled=NativeModernHotkeys.isEnabled()
+        router.modernSink={ [weak self] command in self?.requestModern(command) }
+        return router
+    }()
+    /// "Atalhos modernos": the window controller turns a command into ordinary input.
+    var modernCommand: ((NativeHotkeyInputRouter.ModernCommand)->Void)?
+    /// Player pointer for the end of a synthetic command (read on the work queue).
+    let pointer=NativeModernPointer()
+    /// While a synthetic mouse command runs, the player's mouse only moves the
+    /// remembered pointer, so no player event interleaves with it. Expires on its own.
+    var syntheticUntil:TimeInterval=0
+    var syntheticActive:Bool { ProcessInfo.processInfo.systemUptime<syntheticUntil }
+    private var pendingModern:NativeHotkeyInputRouter.ModernCommand?
+    /// A command waits for the player's held button to be released.
+    func requestModern(_ command:NativeHotkeyInputRouter.ModernCommand){
+        if leftHeld{pendingModern=command}else{modernCommand?(command)}
+    }
     var heldKeys: Set<Int> { hotkeys.heldKeys }
     var viewport: NativeViewportPolicy? {
         try? NativeViewportPolicy(contentRect: bounds, backingScale: window?.backingScaleFactor ?? 1,
@@ -142,18 +160,20 @@ final class NativeMetalGameView: NSView {
     func mouse(_ event:NSEvent,_ message:Int,held:Bool=false,hover:Bool=false) {
         let p=convert(event.locationInWindow,from:nil)
         guard let pixel=held || hover ? viewport?.clampedOriginalPixel(atWindowPoint:p):viewport?.originalPixel(atWindowPoint:p) else{return}
+        if syntheticActive{lastPixel=pixel;pointer.set(pixel.x,pixel.y);return}
         if message != 0x200{window?.makeFirstResponder(self)}
         activateKeys();synchronizeModifiers(event.modifierFlags)
         if message==0x201 || message==0x203{leftHeld=true}else if message==0x202{leftHeld=false}
-        lastPixel=pixel
+        lastPixel=pixel;pointer.set(pixel.x,pixel.y)
         let w=(event.modifierFlags.contains(.shift) ? 4:0)|(event.modifierFlags.contains(.control) ? 8:0)
         inputEvent?(["kind":"mouse","msg":message,"x":pixel.x,"y":pixel.y,"wParam":w])
+        if message==0x202,let command=pendingModern{pendingModern=nil;modernCommand?(command)}
     }
     /// Focus loss, sheets and window close end a held press at its last pixel,
     /// through the same recorded input path as a physical release.
     func releaseMouse(){
         guard leftHeld else{return}
-        leftHeld=false
+        leftHeld=false;pendingModern=nil
         inputEvent?(["kind":"mouse","msg":0x202,"x":lastPixel.x,"y":lastPixel.y,"wParam":0,"cancel":true])
     }
     func cancelInput(){releaseMouse();inputCancelled?()}
@@ -172,7 +192,7 @@ final class NativeMetalGameView: NSView {
     func leaveScrollEdge(){
         let x=min(797,max(2,lastPixel.x)),y=min(597,max(2,lastPixel.y))
         guard x != lastPixel.x || y != lastPixel.y else{return}
-        lastPixel=NativeViewportPolicy.Pixel(x:x,y:y)
+        lastPixel=NativeViewportPolicy.Pixel(x:x,y:y);pointer.set(x,y)
         inputEvent?(["kind":"mouse","msg":0x200,"x":x,"y":y,"wParam":0])
     }
     override func mouseDragged(with event:NSEvent){mouse(event,0x200,held:leftHeld)}
@@ -601,6 +621,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 DispatchQueue.main.async{if shouldRecord{self.recordedEvent?(["frame":frame,"event":event])}}
             }
         }
+        metal.modernCommand={ [weak self] command in MainActor.assumeIsolated{self?.startModern(command)} }
         modeControl.target=self;modeControl.action=#selector(changeMode);modeControl.selectedSegment=validationMode ? 1:0
         modeControl.frame=NSRect(x:15,y:66,width:190,height:25)
         rateControl.addItems(withTitles:NativeGameSpeed.allCases.map{"Velocidade \($0.menuTitle)"});rateControl.selectItem(at:speed.rawValue)
@@ -917,12 +938,77 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         let now=ProcessInfo.processInfo.systemUptime
         if !validationMode{let wait=pacer.delay(now:now);if wait>0{work.asyncAfter(deadline:.now()+wait){[weak self] in self?.pump(run)};return}}
         advance()
+        stepModern()
         let finished=ProcessInfo.processInfo.systemUptime
         if finished-lastNotify>=0.1 || !running{lastNotify=finished;deliver(periodic:running)}
         if running{work.async{[weak self] in self?.pump(run)}}else{
             if macos_live_shell_mode(driver)==0 || movieActive{presenter?.stop()}
             if stoppedReason != nil && campaignEnd==nil{DispatchQueue.main.async{self.cdMusic?.leaveStage()}}
         }
+    }
+    // MARK: "Atalhos modernos" (NativeModernHotkeys.swift)
+    /// Work queue only.
+    var modernJob:NativeModernJob?
+    var modernPlanner=NativeModernPlanner()
+    /// Ignored in validation, menus/briefing/pause (shell), while stopped or not running.
+    func modernAllowed()->Bool{
+        running && !validationMode && stoppedReason==nil && status().stopped==0 && macos_live_shell_mode(driver)==0
+    }
+    @MainActor func startModern(_ command:NativeHotkeyInputRouter.ModernCommand){
+        let mouse:Bool
+        switch command{case .centerGroup,.lastAlert:mouse=false;default:mouse=true}
+        if mouse{metal.syntheticUntil=ProcessInfo.processInfo.systemUptime+3}
+        work.async{[weak self] in
+            guard let self=self else{return}
+            var job:NativeModernJob?
+            if self.modernJob==nil,self.modernAllowed(){
+                switch command{
+                case .centerGroup(let key):job=NativeModernJob(steps:NativeModernHotkeys.centerGroup(key))
+                case .lastAlert:job=NativeModernJob(steps:NativeModernHotkeys.lastAlert)
+                default:
+                    if let snapshot=self.modernSnapshot(),let target=self.modernPlanner.choose(command,in:snapshot){job=NativeModernJob(target:target)}
+                }
+            }
+            guard let job=job else{if mouse{DispatchQueue.main.async{self.metal.syntheticUntil=0}};return}
+            self.modernJob=job;self.stepModern()
+        }
+    }
+    /// After every advance: deliver the next stage of the running command.
+    func stepModern(){
+        guard let job=modernJob else{return}
+        let allowed=modernAllowed()
+        if allowed{job.pump(modernHost())}
+        // Menus, validation, a stop or a pause end the command; nothing more is delivered.
+        guard !allowed || job.state != .running else{return}
+        modernJob=nil
+        if job.usesMouse{DispatchQueue.main.async{self.metal.syntheticUntil=0}}
+    }
+    func modernHost()->NativeModernJob.Host{
+        NativeModernJob.Host(deliver:{[unowned self] in self.deliverSynthetic($0)},
+                             pendingInput:{[unowned self] in macos_live_pending_input(self.driver)},
+                             frames:{[unowned self] in self.status().frames},
+                             snapshot:{[unowned self] in self.modernSnapshot()},
+                             pointer:{[unowned self] in self.metal.pointer.get()})
+    }
+    /// One read-only projection per call, between frames, on the work queue.
+    func modernSnapshot()->NativeModernSnapshot?{
+        NativeModernSnapshot.read(concatenated:{addresses,sizes in
+            var bytes=[UInt8](repeating:0,count:sizes.reduce(0){$0+Int($1)})
+            guard !bytes.isEmpty,macos_live_peek(self.driver,addresses,sizes,UInt32(addresses.count),&bytes)==0 else{return nil}
+            return bytes
+        })
+    }
+    /// The player's own input path (macos_live_event, then recording), for synthetic input.
+    func deliverSynthetic(_ event:[String:Any])->Bool{
+        guard modernAllowed() else{return false}
+        let frame=max(129,Int(status().frames)+1),kind=event["kind"] as? String
+        let code=macos_live_event(driver,kind=="mouse" ? 1:2,UInt32(event["msg"] as? Int ?? 0),Int32(event["x"] as? Int ?? 0),Int32(event["y"] as? Int ?? 0),UInt32(event["wParam"] as? Int ?? 0),UInt32(event["vkey"] as? Int ?? 0),(event["down"] as? Bool ?? false) ? 1:0)
+        if code != 0{running=false;stoppedReason="Entrada recusada: \(message(status()))";deliver();return false}
+        DispatchQueue.main.async{if self.recording{self.recordedEvent?(["frame":frame,"event":event])}}
+        return true
+    }
+    @MainActor func setModernHotkeys(_ enabled:Bool){
+        NativeModernHotkeys.store(enabled);metal.releaseKeys();metal.hotkeys.modernEnabled=enabled
     }
     @objc func toggle(){perform("live-play",completion:nil)}
     @objc func step(){perform("live-step",completion:nil)}

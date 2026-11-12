@@ -138,12 +138,13 @@ fn step(m: &mut MemoriaJogo, r: u32) -> Result<()> {
 }
 
 /// AnimDeplaceEngin 0x448088, the movement animation step of a flying unit:
-/// +0xa9 counts to +0xa7, then +0xa4 advances modulo +0xa5.
+/// +0xa9 counts to +0xa7, then +0xa4 advances modulo +0xa5. A balloon (kind 17)
+/// only takes AnimBallonStatic 0x447b2f (0x44810e) and keeps its counters.
 fn flight_anim(m: &mut MemoriaJogo, unit: u32) -> Result<()> {
     let u = crate::player::unit(m, unit)?;
     let kind = m.u8(u + 1)?;
     if kind == 17 {
-        return stop("AnimDeplaceEngin kind 17 body", 0x447b2f);
+        return crate::frame_movement::balloon_animation(m, unit & 65535);
     }
     if !(kind <= 15 || (18..=25).contains(&kind)) {
         return Ok(());

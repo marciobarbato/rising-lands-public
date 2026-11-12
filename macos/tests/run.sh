@@ -16,6 +16,7 @@ run() {
 run HotkeyBindingsTests NativeHotkeyBindings
 run HotkeyInputRouterTests NativeHotkeyBindings NativeHotkeyInputRouter
 run HotkeyPreferencesModelTests NativeHotkeyBindings NativeHotkeyPreferences
+run ModernHotkeysTests NativeHotkeyBindings NativeHotkeyInputRouter NativeModernHotkeys
 run ViewportPolicyTests NativeViewportPolicy
 run GameSpeedTests NativeGameSpeed
 run PlayerOptionsTests NativePlayerOptions
@@ -28,7 +29,7 @@ xcrun clang -O3 -dynamiclib -arch arm64 -mmacosx-version-min=13.0 -Wno-deprecate
     -install_name @rpath/librising_macos_live.dylib -o "$TMP/librising_macos_live.dylib"
 consumer=""
 for s in NativeCampaignMenu NativeAudio NativeCDMusicDisc NativeCDMusicPlayer NativeCDMusicHost NativeHotkeyBindings \
-         NativeHotkeyInputRouter NativeHotkeyPreferences NativeHotkeyLabels NativeViewportPolicy NativeGameSpeed \
+         NativeHotkeyInputRouter NativeModernHotkeys NativeHotkeyPreferences NativeHotkeyLabels NativeViewportPolicy NativeGameSpeed \
          NativePlayerOptions NativeDefeatMovie NativePlayerEdition NativeFLC NativeEventFLCPlayback NativeLiveWindow; do
     consumer="$consumer $s.swift"
 done

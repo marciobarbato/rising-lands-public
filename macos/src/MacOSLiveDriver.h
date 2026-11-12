@@ -67,6 +67,12 @@ uint64_t macos_live_renderer(MacOSLiveDriver *);
 const uint8_t *macos_live_pixels(MacOSLiveDriver *);
 const uint8_t *macos_live_palette(MacOSLiveDriver *);
 int32_t macos_live_read(MacOSLiveDriver *,uint32_t,uint32_t,uint8_t *);
+/* "Atalhos modernos" (play only, read-only): copies each (address,size) range of
+ * ONE world projection into out, concatenated. Call between frames on the work
+ * queue. Refused in validation, menus/shell and after a stop. */
+int32_t macos_live_peek(MacOSLiveDriver *,const uint32_t *addresses,const uint32_t *sizes,uint32_t count,uint8_t *out);
+/* Inputs queued by macos_live_event and not yet consumed by a game frame. */
+uint32_t macos_live_pending_input(MacOSLiveDriver *);
 /* Complete-frame play snapshots, using only the engine save extension. Errors
  * are separate from the simulation stop latch. Load publishes world+renderer
  * together; host input and device playback are reset by the shell. */

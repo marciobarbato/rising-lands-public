@@ -55,45 +55,7 @@ impl Context<'_> {
         Ok(())
     }
     pub fn hud(&mut self, event: bool) -> Result<()> {
-        for (k, x) in [492, 540, 588].into_iter().enumerate() {
-            let a = 0x4e2eac + 8 * (4 * self.camera + k as u32);
-            self.counter(self.u16(a)?, self.u8(a + 2)?, x, 557)?;
-        }
-        self.action_icons()?;
-        let mx = self.u16(0x5099a8)?;
-        let my = self.u16(0x5099aa)?;
-        if mx <= self.u16(0x508724)? * 32
-            && my <= self.u16(0x508726)? * 32
-            && self.u16(0x4e05ae)? == 3
-        {
-            self.placement()?;
-        }
-        let cell = self.u16(0x496204)?;
-        if cell != 65535 {
-            let mut id = self.u16(0x4e05ac)?;
-            if !(0x1e03..=0x1e09).contains(&id) {
-                return self.stop(
-                    0x417ba2,
-                    "target marker outside captured animation IDs 0x1e03..0x1e09",
-                );
-            }
-            if self.u8(0x508f7c)? & 1 == 0 {
-                id += 1;
-                self.put16("alvo_animacao_u16", 0x4e05ac, id)?;
-            }
-            let x = (cell as i32 % 256 - self.u16(0x508720)? as i32) * 32 + 12;
-            let y = (cell as i32 / 256 - self.u16(0x508722)? as i32) * 32 + 12;
-            self.bob(i16(x), i16(y), id, true, Some(self.camera))?;
-            if id == 0x1e0a {
-                self.put16("alvo_animacao_u16", 0x4e05ac, 0x1e03)?;
-                self.put16("alvo_celula_u16", 0x496204, 65535)?;
-            }
-        }
-        self.market(self.camera)?;
-        if self.u8(0x497285)? != 0 {
-            self.minimap()?;
-        }
-        self.chrono()?;
+        self.hud_to_chrono()?;
         self.info_zone()?;
         if self.u32(0x4e060c)? != 0 {
             self.tooltip()?;
@@ -134,6 +96,8 @@ impl Context<'_> {
             let cloth = 0x2b14 + (self.u8(0x508f80)? & 7);
             self.bob(x, y, cloth, true, Some(p))?;
         }
+        let mx = self.u16(0x5099a8)?;
+        let my = self.u16(0x5099aa)?;
         self.put16("mouse_x_copia_u16", 0x49a042, mx)?;
         self.put16("mouse_y_copia_u16", 0x49a044, my)?;
         if self.u8(0x49a054)? == 0 {
@@ -161,8 +125,79 @@ impl Context<'_> {
         }
         Ok(())
     }
+    /// AffGame 0x417b32..0x417c56: counters, action icons, placement, target
+    /// marker, market, minimap and AffChrono. AffGame calls them all at one
+    /// esp, so their frames overlap; with the panel hidden AffChrono adds the
+    /// word at that esp - 52 as its BobGetTaille width without calling it
+    /// (0x401e89, 0x402025). That word is what the last of these calls left:
+    /// tracked here as `slot`, low 16 bits (AffChrono uses DI only).
+    pub(crate) fn hud_to_chrono(&mut self) -> Result<Option<u16>> {
+        for (k, x) in [492, 540, 588].into_iter().enumerate() {
+            let a = 0x4e2eac + 8 * (4 * self.camera + k as u32);
+            self.counter(self.u16(a)?, self.u8(a + 2)?, x, 557)?;
+        }
+        // AffCompteurMatiere 0x417f38 pushes EDX (y = 0x22d) at esp - 52.
+        let mut slot = Some(0x22d);
+        if self.u8(0x4e05a2)? != 0 {
+            // 0x416f29 keeps its icon x at [esp+0x10]: 0x20 + 4 * 0x3c at exit.
+            slot = Some(0x110);
+        }
+        self.action_icons()?;
+        let mx = self.u16(0x5099a8)?;
+        let my = self.u16(0x5099aa)?;
+        if mx <= self.u16(0x508724)? * 32
+            && my <= self.u16(0x508726)? * 32
+            && self.u16(0x4e05ae)? == 3
+        {
+            slot = Some(self.placement()?);
+        }
+        let cell = self.u16(0x496204)?;
+        if cell != 65535 {
+            let mut id = self.u16(0x4e05ac)?;
+            if !(0x1e03..=0x1e09).contains(&id) {
+                return self.stop(
+                    0x417ba2,
+                    "target marker outside captured animation IDs 0x1e03..0x1e09",
+                );
+            }
+            if self.u8(0x508f7c)? & 1 == 0 {
+                id += 1;
+                self.put16("alvo_animacao_u16", 0x4e05ac, id)?;
+            }
+            let x = (cell as i32 % 256 - self.u16(0x508720)? as i32) * 32 + 12;
+            let y = (cell as i32 / 256 - self.u16(0x508722)? as i32) * 32 + 12;
+            // PasteImageClip 0x45c455 pushes its EAX (x) at esp - 52.
+            slot = Some(x as u16);
+            self.bob(i16(x), i16(y), id, true, Some(self.camera))?;
+            if id == 0x1e0a {
+                self.put16("alvo_animacao_u16", 0x4e05ac, 0x1e03)?;
+                self.put16("alvo_celula_u16", 0x496204, 65535)?;
+            }
+        }
+        slot = match self.u8(0x4e2e7c + self.camera)? {
+            // 0x46677d ends with PasteImage 0x45b247 (CL = 0): [esp+0x10] = 0x257.
+            1 | 2 => Some(0x257),
+            // AffMarcheProposition 0x465b8c stores the player byte there.
+            3 => slot.map(|w| (w & 0xff00) | self.camera as u16 & 0xff),
+            // 0x46590f's PasteImage pushes EBP there: AffGame's frame
+            // address, a host stack address the port does not model.
+            4 => None,
+            _ => slot,
+        };
+        self.market(self.camera)?;
+        if self.u8(0x497285)? != 0 {
+            self.minimap()?;
+            // AffMiniMap 0x46a70c reuses the slot; AffChrono then takes its
+            // width from BobGetTaille and never reads it.
+            slot = None;
+        }
+        self.chrono(slot)?;
+        Ok(slot)
+    }
     /// AffChrono0x401cc6: live recruitment progress, no simulation writes.
-    pub fn chrono(&mut self) -> Result<()> {
+    /// `slot` is the word at AffGame's esp - 52 when AffChrono is entered
+    /// (see `hud_to_chrono`); None where the port does not model it.
+    pub fn chrono(&mut self, slot: Option<u16>) -> Result<()> {
         let mut selected = self.u16(0x496ac4)?;
         if selected == 65535 {
             selected = self.u16(0x495be0 + 2 * self.camera)?;
@@ -213,13 +248,20 @@ impl Context<'_> {
             }
         }
         if kind == 20 && self.u8(a + 0x104)? == 1 {
-            if self.u8(0x497285)? == 0 {
-                // 0x401e89 skips BobGetTaille, so 0x402025 adds an unset stack word.
-                return self.stop(0x402025, "AffChrono research progress, width local unset");
-            }
-            // 0x402010..0x402085 with the BobGetTaille width of 0x401e2b.
+            // 0x402010..0x402085 with [esp+8]: the BobGetTaille width of
+            // 0x401e2b, or, with the panel hidden (0x401e89 skips the call),
+            // the word AffGame's earlier HUD calls left in that slot.
+            let width = if self.u8(0x497285)? != 0 {
+                self.assets.sprite(0x1e6c)?.width as i32
+            } else if let Some(word) = slot {
+                i32::from(word)
+            } else {
+                return self.stop(
+                    0x402025,
+                    "AffChrono research progress, panel hidden: stack word after AffMarche settlement",
+                );
+            };
             let margin = (self.u8(0x508f90)? as u8 as i8 as i32) << 5;
-            let width = self.assets.sprite(0x1e6c)?.width as i32;
             x = if x & 0xffff == margin {
                 x + width
             } else {

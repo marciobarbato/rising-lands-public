@@ -37,7 +37,18 @@ struct HotkeyBindingsTests {
             (.digit2, 50, [19]), (.digit3, 51, [20]), (.digit4, 52, [21]), (.digit5, 53, [23]),
             (.digit6, 54, [22]), (.digit7, 55, [26]), (.digit8, 56, [28]), (.digit9, 57, [25])
         ]
-        try check(expected.count == Action.allCases.count, "Unexpected default actions")
+        try check(expected.count + Action.modern.count == Action.allCases.count, "Unexpected default actions")
+        // "Atalhos modernos": no channel of their own, exact AoE2-style defaults on keys the original never reads.
+        for (action, code): (Action, UInt16) in [(.lastAlert, 115), (.nextIdleWorker, 47), (.nextIdleMilitary, 43), (.mainStructure, 4)] {
+            try check(action.isModern && action.virtualKey == nil && Action.modern.contains(action), "Modern action emits a channel: \(action)")
+            try check(bindings.chords(for: action).map(\.keyCode) == [code], "Modern default missing: \(action)")
+            try check(action.labelPTBR.contains("moderno"), "Modern label not marked in PT-BR: \(action)")
+            try check(bindings.action(keyCode: code) == action, "Modern default unresolved: \(action)")
+            for bits: UInt8 in 1...7 {
+                try check(bindings.action(keyCode: code, modifiers: Modifiers(rawValue: bits)) == nil, "Modern default not exact: \(action)/\(bits)")
+            }
+            try check(bindings.action(keyCode: code, modifiers: .command) == nil, "Command leaked to a modern action")
+        }
         for (action, virtualKey, codes) in expected {
             try check(action.virtualKey == virtualKey, "Incorrect virtual key for \(action)")
             try check(bindings.chords(for: action).map(\.keyCode) == codes, "Missing aliases for \(action)")
@@ -200,7 +211,18 @@ struct HotkeyBindingsTests {
             try check(bindings == before, "Invalid document partially changed memory")
             try check(Data(contentsOf: url) == encoded, "Invalid document overwritten")
         }
-        try rejectEntries(Array(entries.dropLast()), .incompleteActions)
+        try rejectEntries(entries.filter { $0["action"] as? String != "enter" }, .incompleteActions)
+        // A file saved before the modern actions existed migrates them to their defaults,
+        // except a default whose key the file already uses.
+        let withoutModern = entries.filter { entry in !Action.modern.map(\.rawValue).contains(entry["action"] as? String ?? "") }
+        var beforeModern = withoutModern
+        beforeModern[beforeModern.firstIndex { $0["action"] as? String == "x" }!]["chords"] = [["keyCode": 47, "modifiers": 0, "allowsAdditionalGameplayModifiers": false]]
+        try JSONSerialization.data(withJSONObject: ["version": 1, "bindings": beforeModern]).write(to: url)
+        var upgraded = Bindings()
+        try upgraded.load(from: url)
+        try check(upgraded.chords(for: .nextIdleWorker).isEmpty && upgraded.action(keyCode: 47) == .x
+                  && upgraded.chords(for: .lastAlert).map(\.keyCode) == [115] && upgraded.chords(for: .mainStructure).map(\.keyCode) == [4],
+                  "Pre-modern file migrates without stealing a saved key")
         // A version-1 file saved before Tab existed migrates: saved chords stay,
         // Tab gets its default key, or none when that key is already taken.
         let withoutTab = entries.filter { $0["action"] as? String != "tab" }
@@ -268,7 +290,7 @@ struct HotkeyBindingsTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         do {
             try defaults()
-            print("PASS defaults: 20 actions, 21 physical keys, all gameplay modifiers")
+            print("PASS defaults: 20 channel actions, 21 physical keys, all gameplay modifiers; 4 exact modern actions")
             try rebindingAndConflicts()
             print("PASS rebinding, alias conflicts, exact modifiers, unbind and transactional swap")
             try menuAndInvalidBindings()

@@ -164,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         gameMenu.addItem(withTitle:"Menu original",action:#selector(showOriginalMenu),keyEquivalent:"").target=self
         gameMenu.addItem(withTitle:"Nova partida…",action:#selector(showCampaignChooser),keyEquivalent:"n")
         gameMenu.addItem(withTitle:"Configurar teclas…",action:#selector(showHotkeys),keyEquivalent:",").target=self
+        gameMenu.addItem(withTitle:"Atalhos modernos",action:#selector(toggleModernHotkeys(_:)),keyEquivalent:"").target=self
         gameMenu.addItem(.separator())
         gameMenu.addItem(withTitle:"Pausar",action:#selector(togglePause),keyEquivalent:"p").target=self
         let speedItem=NSMenuItem(title:"Velocidade",action:nil,keyEquivalent:"");let speedMenu=NSMenu(title:"Velocidade")
@@ -230,6 +231,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     @objc func toggleGameFullScreen(){nativeLive?.toggleFullScreen()}
     @objc func fitGame(){nativeLive?.setScaleMode(.continuousFit)}
     @objc func toggleSmoothFilter(){if let live=nativeLive{live.setSmoothFilter(!live.smoothFilter)}}
+    /// AoE2-style shortcuts that become ordinary original input (NativeModernHotkeys.swift).
+    @objc func toggleModernHotkeys(_ item:NSMenuItem){
+        let enabled = !NativeModernHotkeys.isEnabled()
+        if let live=nativeLive{MainActor.assumeIsolated{live.setModernHotkeys(enabled)}}else{NativeModernHotkeys.store(enabled)}
+    }
     @objc func selectDifficulty(_ item:NSMenuItem){if let value=NativeDifficulty(rawValue:UInt32(item.tag)){nativeLive?.setDifficulty(value)}}
     @objc func integerGame(){nativeLive?.setScaleMode(.integerFit)}
     func menuNeedsUpdate(_ menu:NSMenu){refreshSaveMenus()}
@@ -257,6 +263,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             if item.action == #selector(selectSpeed(_:)){item.state=live.speed.rawValue==item.tag && NativeGameSpeed(frameRate:live.gameFPS) != nil ? .on:.off}
             return item.action == #selector(fasterSpeed) ? live.speed != .quadruple : item.action == #selector(slowerSpeed) ? live.speed != .half : true
         }
+        if item.action == #selector(toggleModernHotkeys(_:)) {item.state=NativeModernHotkeys.isEnabled() ? .on:.off;return true}
         if item.action == #selector(selectDifficulty(_:)) {
             item.state=nativeLive?.difficulty.rawValue==UInt32(item.tag) ? .on:.off
             return nativeLive != nil

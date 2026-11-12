@@ -80,6 +80,8 @@ struct MacOSLiveDriver {
   * frozen surface. Inline storage also makes campaign candidates independent. */
  uint8_t game_background[480000];int game_background_ready,game_surface;
  uint8_t *bulk,*surface_hashes,*state_hashes; uint32_t bulk_capacity,surface_count,state_count,audit_limit;
+ /* "Atalhos modernos" read-only snapshot buffer (macos_live_peek), play only. */
+ uint8_t *peek; uint32_t peek_capacity;
  Entry *entries; Span *spans; uint32_t entry_count,span_count;
  /* Play-mode sound request transport (kind10 copies plus Manage ticks). */
  int sound_capture; RlPlayerInputEvent *events; uint32_t event_capacity,sound_count; uint64_t sound_dropped,sound_errors;
@@ -538,6 +540,30 @@ int32_t macos_live_read(MacOSLiveDriver*d,uint32_t address,uint32_t size,uint8_t
  if(!d||!out||!size||!d->validation)return 1;uint32_t n=0;int c=d->rl_projetar_tudo(d->world,d->bulk,d->bulk_capacity,&n);if(c)return c;
  uint32_t off=4;for(uint32_t i=0;i<le(d->bulk)&&off+8<=n;i++){uint32_t base=le(d->bulk+off),len=le(d->bulk+off+4);off+=8;if((uint64_t)off+len>n)return 3;if(address>=base&&(uint64_t)address+size<=(uint64_t)base+len){memcpy(out,d->bulk+off+address-base,size);return 0;}off+=len;}return 3;
 }
+/* "Atalhos modernos": read-only snapshot in play. One complete projection, then
+ * each (address,size) range is copied to out, concatenated in request order. It
+ * never writes the world, its RNG/permutation cursors, input queue or clock; the
+ * app calls it between frames on the engine work queue. 1: bad call/shell/
+ * validation/stopped; 3: a range is outside every projected block; else ABI code. */
+int32_t macos_live_peek(MacOSLiveDriver*d,const uint32_t*addresses,const uint32_t*sizes,uint32_t count,uint8_t*out){
+ if(!d||!addresses||!sizes||!out||!count||d->validation||d->shell||d->status.stopped||!d->world)return 1;
+ uint32_t n=0;int c=d->rl_projetar_tudo(d->world,NULL,0,&n);if(c!=RL_BUFFER_TOO_SMALL)return c?c:3;
+ if(n>d->peek_capacity){uint8_t*grown=realloc(d->peek,n);if(!grown)return 1;d->peek=grown;d->peek_capacity=n;}
+ c=d->rl_projetar_tudo(d->world,d->peek,d->peek_capacity,&n);if(c)return c;
+ uint64_t written=0;
+ for(uint32_t r=0;r<count;r++){
+  uint32_t address=addresses[r],size=sizes[r],off=4,found=0;if(!size)return 1;
+  for(uint32_t i=0;n>=4&&i<le(d->peek)&&off+8<=n;i++){
+   uint32_t base=le(d->peek+off),len=le(d->peek+off+4);off+=8;if((uint64_t)off+len>n)return 3;
+   if(address>=base&&(uint64_t)address+size<=(uint64_t)base+len){memcpy(out+written,d->peek+off+address-base,size);found=1;break;}
+   off+=len;
+  }
+  if(!found)return 3;written+=size;
+ }
+ return 0;
+}
+/* Inputs queued by macos_live_event and not yet delivered to a game frame. */
+uint32_t macos_live_pending_input(MacOSLiveDriver*d){return d?d->pending_count:0;}
 static int save_result(MacOSLiveDriver*d,int code,const char*action){
  d->save_error[0]=0;if(!code)return 0;
  uint32_t n=0;char detail[360]={0};d->rl_erro_mensagem(NULL,0,&n);
@@ -837,7 +863,7 @@ int32_t macos_live_set_difficulty(MacOSLiveDriver*d,uint32_t difficulty){
 int32_t macos_live_selection(MacOSLiveDriver*d,char*mission,uint32_t capacity,uint32_t*difficulty){
  if(!d||!mission||capacity<16||!difficulty)return RL_INVALID_ARGUMENT;snprintf(mission,capacity,"%s",d->mission);*difficulty=d->difficulty;return 0;
 }
-void macos_live_free(MacOSLiveDriver*d){if(!d)return;if(d->shell&&d->rl_shell_free)d->rl_shell_free(d->shell);if(d->renderer&&d->rl_render_liberar)d->rl_render_liberar(d->renderer);if(d->world&&d->rl_liberar_mundo)d->rl_liberar_mundo(d->world);if(d->library)dlclose(d->library);free(d->events_directory);free(d->events_bytes);free(d->root);free(d->stage_presentation);free(d->pause_presentation);free(d->texts);free(d->bulk);free(d->surface_hashes);free(d->state_hashes);free(d->entries);free(d->spans);free(d->events);free(d);}
+void macos_live_free(MacOSLiveDriver*d){if(!d)return;if(d->shell&&d->rl_shell_free)d->rl_shell_free(d->shell);if(d->renderer&&d->rl_render_liberar)d->rl_render_liberar(d->renderer);if(d->world&&d->rl_liberar_mundo)d->rl_liberar_mundo(d->world);if(d->library)dlclose(d->library);free(d->events_directory);free(d->events_bytes);free(d->root);free(d->stage_presentation);free(d->pause_presentation);free(d->texts);free(d->bulk);free(d->peek);free(d->surface_hashes);free(d->state_hashes);free(d->entries);free(d->spans);free(d->events);free(d);}
 
 MacOSLiveDriver *macos_live_create_mission_host_v1(const char*library,const char*root,const char*name,uint32_t difficulty,const uint8_t*logical,uint32_t length,char*error,uint32_t capacity){
  if(!root||!logical||!length){if(error&&capacity)snprintf(error,capacity,"Mapeamento explícito de EVENTS ausente");return NULL;}

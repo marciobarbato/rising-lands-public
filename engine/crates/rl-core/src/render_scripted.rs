@@ -1769,7 +1769,10 @@ impl Context<'_> {
         }
         Ok(())
     }
-    pub fn placement(&mut self) -> Result<()> {
+    /// Returns the word 0x41721f leaves at AffGame's esp - 52: the y0 it
+    /// stages there for the outline call (0x417305), then the x1 of each free
+    /// footprint cell it outlines (0x417413). AffChrono reads it back.
+    pub fn placement(&mut self) -> Result<u16> {
         let kind = self.u8(0x496207)?;
         let width = self.u16(0x495d8c + 52 * kind)? as i32;
         let height = self.u16(0x495d8e + 52 * kind)? as i32;
@@ -1791,9 +1794,11 @@ impl Context<'_> {
             false,
             true,
         )?;
+        let mut slot = y as u16;
         for row in 0..height {
             for col in 0..width {
                 if self.u8(0x4e05b9 + (row * width + col) as u32)? == 0 {
+                    slot = (x + (col + 1) * 32) as u16;
                     self.outline(
                         i16(x + col * 32),
                         i16(y + row * 32),
@@ -1805,7 +1810,7 @@ impl Context<'_> {
                 }
             }
         }
-        Ok(())
+        Ok(slot)
     }
     pub(crate) fn shaded_box(
         &mut self,

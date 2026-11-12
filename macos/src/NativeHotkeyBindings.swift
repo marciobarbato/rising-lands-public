@@ -2,12 +2,17 @@ import Foundation
 
 /// Prepared P5 component; no event hooks, UI, implicit preferences or engine calls.
 struct NativeHotkeyBindings: Equatable, Sendable {
-    /// These are existing input channels, not claims about their in-game meaning.
+    /// The first cases are existing input channels, not claims about their in-game
+    /// meaning. The modern cases emit no channel of their own: with "Atalhos
+    /// modernos" on, the host turns them into ordinary key/mouse input that the
+    /// original already accepts (NativeModernHotkeys.swift).
     enum Action: String, CaseIterable, Codable, Sendable {
         case enter, escape, space, left, up, right, down, delete, x, tab
         case digit0, digit1, digit2, digit3, digit4, digit5, digit6, digit7, digit8, digit9
+        case lastAlert, nextIdleWorker, nextIdleMilitary, mainStructure
 
-        var virtualKey: Int {
+        /// nil for modern actions, which have no channel of their own.
+        var virtualKey: Int? {
             switch self {
             case .enter: return 13
             case .escape: return 27
@@ -29,8 +34,12 @@ struct NativeHotkeyBindings: Equatable, Sendable {
             case .digit7: return 55
             case .digit8: return 56
             case .digit9: return 57
+            case .lastAlert, .nextIdleWorker, .nextIdleMilitary, .mainStructure: return nil
             }
         }
+
+        var isModern: Bool { virtualKey == nil }
+        static let modern: [Action] = [.lastAlert, .nextIdleWorker, .nextIdleMilitary, .mainStructure]
 
         /// Action labels only. Physical-key labels must come from the host's layout.
         var labelPTBR: String {
@@ -55,6 +64,10 @@ struct NativeHotkeyBindings: Equatable, Sendable {
             case .digit7: return "7"
             case .digit8: return "8"
             case .digit9: return "9"
+            case .lastAlert: return "Último alerta (moderno)"
+            case .nextIdleWorker: return "Próximo trabalhador ocioso (moderno)"
+            case .nextIdleMilitary: return "Próximo militar ocioso (moderno)"
+            case .mainStructure: return "Santuário (moderno)"
             }
         }
     }
@@ -135,7 +148,7 @@ struct NativeHotkeyBindings: Equatable, Sendable {
 
     static let fileVersion = 1
     /// Actions added after the first version-1 files; absent entries are migrated.
-    static let addedActions: [Action] = [.tab]
+    static let addedActions: [Action] = [.tab] + Action.modern
     private var bindings: [Action: [Chord]]
 
     init() { bindings = Self.defaults }
@@ -252,8 +265,15 @@ struct NativeHotkeyBindings: Equatable, Sendable {
             (.digit2, [19]), (.digit3, [20]), (.digit4, [21]), (.digit5, [23]),
             (.digit6, [22]), (.digit7, [26]), (.digit8, [28]), (.digit9, [25])
         ]
-        return Dictionary(uniqueKeysWithValues: codes.map { action, keys in
+        var result = Dictionary(uniqueKeysWithValues: codes.map { action, keys in
             (action, keys.map { Chord(keyCode: $0, allowsAdditionalGameplayModifiers: true) })
         })
+        // Modern defaults (AoE2 style on keys the original does not read): Home, ".", ",", H.
+        // Exact chords, so Shift/Control/Option variants stay free.
+        for (action, key): (Action, UInt16) in [(.lastAlert, 115), (.nextIdleWorker, 47),
+                                                (.nextIdleMilitary, 43), (.mainStructure, 4)] {
+            result[action] = [Chord(keyCode: key)]
+        }
+        return result
     }
 }

@@ -86,12 +86,6 @@ pub mod frame_spawn;
 pub mod frame_state;
 pub use frame_state::{FrameGlobals, FrameState, StructureState, UnitState};
 pub mod building_dismantle;
-#[cfg(feature = "validation-trace")]
-#[path = "../../../validation/building-dismantle/transport.rs"]
-pub mod building_dismantle_transport;
-#[cfg(feature = "validation-trace")]
-#[path = "../../../validation/p1-dismantle-adoption/observer.rs"]
-pub mod dismantle_adoption_observer;
 pub mod frame_units;
 mod memory {
     include!("memory.rs");

@@ -44,7 +44,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 SWIFT_SOURCES=""
 for name in NativeCampaignMenu NativeAudio NativeCDMusicDisc NativeCDMusicPlayer NativeCDMusicHost \
-            NativeHotkeyBindings NativeHotkeyInputRouter NativeHotkeyPreferences NativeHotkeyLabels \
+            NativeHotkeyBindings NativeHotkeyInputRouter NativeModernHotkeys NativeHotkeyPreferences NativeHotkeyLabels \
             NativeViewportPolicy NativeGameSpeed NativePlayerOptions NativeBenchmarkArguments NativeDefeatMovie \
             NativeFLC NativeEventFLCPlayback NativeLiveWindow NativePlayerEdition NativeCDImport \
             NativePlayerImport NativePlayerApp SmokeReadiness main; do

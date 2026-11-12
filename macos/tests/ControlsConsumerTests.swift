@@ -91,6 +91,26 @@ struct ControlsConsumerTests {
         check(window.makeFirstResponder(view),"responder restored")
         let settled=events.count
         view.cancelInput();check(cancelled==2 && events.count==settled,"cancel without a held press sends no release")
+        // Atalhos modernos: a command waits for the player's held button, and while a
+        // synthetic mouse command runs the player's mouse only moves the remembered pointer.
+        var modern=[NativeHotkeyInputRouter.ModernCommand]();view.modernCommand={modern.append($0)}
+        view.hotkeys.modernEnabled=true
+        view.mouseDown(with:mouse(.leftMouseDown,start))
+        key(47,true);key(47,false)
+        check(modern.isEmpty,"modern command delivered during a held press")
+        view.mouseUp(with:mouse(.leftMouseUp,start))
+        check(modern==[.nextIdleWorker] && events.last?["msg"] as? Int==0x202,"modern command after the release")
+        key(115,true);key(115,false);check(modern.last == .lastAlert,"Home is the last-alert command")
+        view.syntheticUntil=ProcessInfo.processInfo.systemUptime+30
+        let quiet=events.count
+        let target=view.convert(view.viewport!.windowPoint(forOriginalPixel:.init(x:222,y:111))!,to:nil)
+        view.mouseMoved(with:mouse(.mouseMoved,target,clicks:0));view.mouseDown(with:mouse(.leftMouseDown,target));view.mouseUp(with:mouse(.leftMouseUp,target))
+        check(events.count==quiet && !view.leftHeld && view.pointer.get()==(222,111),"player mouse interleaved with a synthetic command")
+        view.syntheticUntil=0
+        view.mouseMoved(with:mouse(.mouseMoved,target,clicks:0));check(events.count==quiet+1,"mouse returns after the command")
+        view.hotkeys.modernEnabled=false
+        key(47,true);key(47,false);check(modern.count==2,"disabled modern keys still command")
+        view.modernCommand=nil
         // Fullscreen (immersive): only the game, on black; controls return with a stop panel.
         let control=NSButton(title:"Pausar",target:nil,action:nil);control.frame=NSRect(x:15,y:36,width:100,height:27);layout.addSubview(control)
         let panel=NSView(frame:.zero);panel.isHidden=true;layout.addSubview(panel);layout.stopPanel=panel

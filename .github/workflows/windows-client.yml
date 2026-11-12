@@ -1,0 +1,53 @@
+# Windows client CI. It needs no game data: on windows-latest it builds the
+# engine (static library) and the Win32 host with mingw-w64 into one
+# RisingLands.exe, runs the portable unit tests through the Win32 file APIs,
+# the engine ABI self-test and the importer's refusal path, and uploads the
+# .exe with its SHA-256. Pre-release binaries are this artifact, so anyone can
+# match a release to the commit it was built from.
+name: windows-client
+on:
+  push:
+    branches: [main]
+    paths: ["windows/**", "engine/**", ".github/workflows/windows-client.yml"]
+  pull_request:
+    paths: ["windows/**", "engine/**", ".github/workflows/windows-client.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust target
+        run: rustup target add x86_64-pc-windows-gnu
+      - name: Build and unit tests
+        env:
+          CC: gcc
+          HOST_CC: gcc
+        run: windows/build.sh test
+      - name: Engine ABI self-test
+        run: windows/build/RisingLands.exe --selftest
+      - name: Import refuses a non-CD source
+        run: |
+          printf 'not a cd' > nada.bin
+          set +e
+          windows/build/RisingLands.exe --headless --frames 1 --data "$RUNNER_TEMP/rl" --cd nada.bin
+          rc=$?
+          set -e
+          echo "exit $rc"
+          test "$rc" = 2
+      - name: SHA-256
+        run: |
+          cd windows/build
+          sha256sum RisingLands.exe | tee RisingLands.exe.sha256
+          echo "Commit: $GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RisingLands-windows-x86_64
+          path: |
+            windows/build/RisingLands.exe
+            windows/build/RisingLands.exe.sha256
