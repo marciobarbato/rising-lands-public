@@ -3,7 +3,7 @@
 //! No instruction of RISING.EXE writes unit byte `+0xba` (CreerEngin 0x457e6c
 //! sets +0xbc..+0xbe only), so a soldier recruited into a never-used slot keeps
 //! whatever the allocation held. AffDeplaceEngin 0x413655 blinks the level icon
-//! when that byte is non-zero (issue #4: with the gates' 0xa7 fill every
+//! when that byte is non-zero (private research repository issue #4: with the gates' 0xa7 fill every
 //! recruit's icon blinked). This checks the whole unit table after MONDE01
 //! loads: zero everywhere with fill 0, the fill in free slots with 0xa7.
 //! Runs when RL_CD_ROOT names the original CD.

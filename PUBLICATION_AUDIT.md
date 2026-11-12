@@ -134,7 +134,7 @@ Copied:
 |---|---|
 | `fe7b3060` AffChrono's hidden-panel width word (monastery clock with the side panel hidden) | `engine/crates/rl-core/src/render.rs`, `render_hud.rs`, `render_scripted.rs` |
 | `dbe0b3d2` balloon flight animation in the hangar (AnimBallonStatic) | `engine/crates/rl-core/src/building_loop_completion.rs` |
-| `6270d411` the app's zero allocation fill leaves unit `+0xba` clear (issue #4; runs with `RL_CD_ROOT`) | `engine/crates/rl-core/tests/app_allocation_fill.rs` |
+| `6270d411` the app's zero allocation fill leaves unit `+0xba` clear (a private-repository issue; runs with `RL_CD_ROOT`) | `engine/crates/rl-core/tests/app_allocation_fill.rs` |
 | `de84c839` modern (AoE2-style) hotkeys as ordinary original input | `macos/src/NativeModernHotkeys.swift` (new), `MacOSLiveDriver.h`, `macos_live_driver.c` (`macos_live_peek`, `macos_live_pending_input`), `NativeHotkeyBindings.swift`, `NativeHotkeyInputRouter.swift`, `NativeLiveWindow.swift`, `NativePlayerApp.swift`, `main.swift`; tests `ModernHotkeysTests.swift` (new), `HotkeyBindingsTests.swift`, `ControlsConsumerTests.swift`; `NativeModernHotkeys` added to `build-macos.sh` and `macos/tests/run.sh` |
 | `76b00cd3`..`44541cf5` Windows client, milestones 1 and 2 | `windows/src/*`, `windows/tests/test_cd.c`, `test_menu.c`, `parity.c`, `import_cli.c`, `windows/build.sh`, `windows/parity.sh`, `windows/README.md` |
 | `e86d85fb` Windows client CI | `.github/workflows/windows-client.yml`, adapted: public paths, runs on `main` and pull requests, publishes the `.exe` SHA-256 |

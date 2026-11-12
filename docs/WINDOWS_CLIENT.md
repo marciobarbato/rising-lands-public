@@ -83,7 +83,7 @@ functions).
    `rl_game_hud_background_version`, `rl_missao_versao` (1), `rl_shell_version`.
 2. **Start:** either a stage or the original main menu.
    - **A stage:** pass ten blocks to `rl_missao_iniciar_eventos_v1`, with an `RlMissaoInicio` config: `ticks_per_second = 20`,
-     `allocation_fill = 0` (a non-zero fill makes recruits' level icons blink, issue #4), cursor (400, 300), execution mode `RL_EXECUCAO_JOGO`, and an `RlEventsHostV1` for the
+     `allocation_fill = 0` (a non-zero fill makes recruits' level icons blink), cursor (400, 300), execution mode `RL_EXECUCAO_JOGO`, and an `RlEventsHostV1` for the
      `EVENTS` folder. The ten blocks are `RISING.EXE`, `RISING.INI`, `RISING.RUL`, `RISING.SBL`, `TABLEAU.COL`, `COULEUR.MAP`,
      `PLATGAME.PIE`, `MONSTRE.INI`, `TEXTES.TXT` and the stage `.ETA`. Without an events host, call `rl_missao_iniciar`.
      Then call `rl_aplicar_dificuldade`, and `rl_carregar_eventos` with `EVENTS.INI`.
