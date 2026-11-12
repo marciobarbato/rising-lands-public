@@ -396,6 +396,9 @@ pub fn next_case(m: &mut MemoriaJogo, i: u32) -> Result<u32> {
     Ok(0)
 }
 pub fn displace(m: &mut MemoriaJogo, i: u32) -> Result<u32> {
+    if m.modern_paths() && crate::modern_path::handles(m, i)? {
+        return crate::modern_path::displace(m, i);
+    }
     let u = unit(m, i)?;
     let state = m.u8(u + 0x88)?;
     if matches!(state, 0 | 5) || (state == 3 && (m.u8(u + 0x86)? != 0 || m.u8(u + 0x87)? != 0)) {

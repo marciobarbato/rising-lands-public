@@ -45,7 +45,7 @@ static int f_credits_frame(void *d, uint32_t ms, RlShellCredits *o) {
 static int f_credits_present(void *d, const RlShellCredits *fr, const uint8_t *p, const uint8_t *c) { (void)d; (void)fr; (void)p; (void)c; return 0; }
 static void f_error(void *d, char *o, size_t n) { (void)d; snprintf(o, n, "fake"); }
 static const RlwMenuOps OPS = {f_mode, f_state, f_input, f_draw, f_show, f_prepare, f_request, f_load, f_slots, f_zone, f_clock,
- f_credits_frame, f_credits_present, f_error};
+ f_credits_frame, f_credits_present, f_error, NULL, NULL, NULL, NULL};
 
 static void fresh(Fake *f, RlwMenu *m, uint32_t mode) {
  memset(f, 0, sizeof(*f)); f->mode = mode; f->state.version = 1; f->state.clock_7c = 13; f->state.animation_84 = 40;
@@ -114,6 +114,48 @@ static void test_menu(void) {
 static void put16(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
 static void put32(uint8_t *p, uint32_t v) { put16(p, v & 0xffff); put16(p + 2, v >> 16); }
 
+/* ---- simulated options screen (rising_options.h): a button at y >= 548;
+ * open, it takes everything; Enter changes a value, Escape closes. ---- */
+typedef struct { int open, armed; unsigned seen; uint32_t last_keys; } FakeOptions;
+static FakeOptions fo;
+static int f_options_input(void *d, const RlShellInput *in, uint32_t keys, RlOpcoesEvento *o) {
+ (void)d; memset(o, 0, sizeof(*o)); o->item = UINT32_MAX; fo.seen++; fo.last_keys = keys;
+ int on = in->mouse_y >= 548;
+ if (!fo.open) {
+  if (in->mouse_ae && in->mouse_af) { if (fo.armed) { fo.armed = 0; o->consumed = 1; if (on) { fo.open = 1; o->kind = RL_OPCOES_ABRIU; } } }
+  else if (in->mouse_ae && on && !fo.armed) { fo.armed = 1; o->consumed = 1; }
+ } else {
+  o->consumed = 1;
+  if (keys & RL_SHELL_ESCAPE) { fo.open = 0; o->kind = RL_OPCOES_FECHOU; }
+  else if (keys & ((uint32_t)RL_SHELL_ENTER | (uint32_t)RL_OPCOES_DIREITA)) { o->kind = RL_OPCOES_MUDOU; o->item = RL_OPCOES_VELOCIDADE; o->values.velocidade = 2; }
+ }
+ o->open = (uint32_t)fo.open; return 0;
+}
+static uint32_t f_options_open(void *d) { (void)d; return (uint32_t)fo.open; }
+static const RlwMenuOps OPTIONS_OPS = {f_mode, f_state, f_input, f_draw, f_show, f_prepare, f_request, f_load, f_slots, f_zone, f_clock,
+ f_credits_frame, f_credits_present, f_error, f_options_input, f_options_open, NULL, NULL};
+
+static void test_options(void) {
+ Fake f; RlwMenu m; memset(&fo, 0, sizeof(fo));
+ memset(&f, 0, sizeof(f)); f.mode = RL_SHELL_MAIN; f.state.version = 1; f.state.mouse_x = 400; f.state.mouse_y = 300;
+ rlw_menu_init(&m, &OPTIONS_OPS, &f, NULL);
+ /* Closed: keys and clicks away from the button reach the shell. */
+ CHECK(rlw_menu_key(&m, 40, 1, 0) == RLW_MENU_IDLE && rlw_menu_key(&m, 40, 0, 0) == RLW_MENU_REPAINT && f.input_count == 1);
+ /* Left/Right are not mapped while closed (the shell has no such keys). */
+ CHECK(rlw_menu_key(&m, 39, 1, 0) == RLW_MENU_IDLE && rlw_menu_key(&m, 39, 0, 0) == RLW_MENU_IDLE && f.input_count == 1);
+ /* A press and release on the button never reach the shell; the release opens. */
+ CHECK(rlw_menu_mouse(&m, 0x201, 455, 560, 0) == RLW_MENU_REPAINT && f.input_count == 1);
+ CHECK(rlw_menu_mouse(&m, 0x202, 455, 560, 0) == RLW_MENU_REPAINT && f.input_count == 1 && fo.open);
+ /* Open: ticks, keys (Right included) all stay with the screen. */
+ CHECK(rlw_menu_tick(&m, 0) == RLW_MENU_REPAINT && f.input_count == 1);
+ CHECK(rlw_menu_key(&m, 39, 1, 0) == RLW_MENU_IDLE && rlw_menu_key(&m, 39, 0, 0) == RLW_MENU_OPTIONS);
+ CHECK(fo.last_keys == RL_OPCOES_DIREITA && m.options_event.item == RL_OPCOES_VELOCIDADE && m.options_event.values.velocidade == 2);
+ CHECK(rlw_menu_key(&m, 27, 1, 0) == RLW_MENU_IDLE && rlw_menu_key(&m, 27, 0, 0) == RLW_MENU_REPAINT && !fo.open);
+ CHECK(f.input_count == 1 && f.draws == 1);
+ /* Closed again: the shell gets the next tick. */
+ CHECK(rlw_menu_tick(&m, 0) == RLW_MENU_REPAINT && f.input_count == 2);
+}
+
 static void test_flc(void) {
  /* 4x2, two frames: COLOR_256 + BRUN, then LC + SS2-free delta, then ring. */
  uint8_t f[512]; memset(f, 0, sizeof(f)); uint32_t o = 128;
@@ -154,8 +196,9 @@ static void test_flc(void) {
 
 int main(void) {
  test_menu();
+ test_options();
  test_flc();
  if (failures) { fprintf(stderr, "%d falha(s)\n", failures); return 1; }
- printf("test_menu ok: menu routing (keys, coalesced moves, pages, requests, credits) and FLC decoding\n");
+ printf("test_menu ok: menu routing (keys, coalesced moves, pages, requests, credits, options screen) and FLC decoding\n");
  return 0;
 }

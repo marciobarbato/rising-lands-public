@@ -390,6 +390,23 @@ struct ModernHotkeysTests {
         try check(NativeModernHotkeys.orderQueueRule == 0x2, "RL_REGRA_FILA_ORDENS")
     }
 
+    /// "Caminhos melhores": off by default, bit 0, combined with the order queue bit.
+    static func engineRules() throws {
+        let suite = "RisingLandsModernPathsTests-\(ProcessInfo.processInfo.processIdentifier)"
+        guard let defaults = UserDefaults(suiteName: suite) else { throw Failure(message: "defaults suite") }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        try check(NativeModernPaths.preferenceKey == "RisingLandsModernPaths", "Key shared with the Options screen")
+        try check(NativeModernPaths.rule == 0x1, "RL_REGRA_CAMINHOS_MELHORES")
+        try check(!NativeModernPaths.isEnabled(defaults), "Caminhos melhores off by default")
+        try check(NativeEngineRules.current(defaults) == 0x2, "Default: only the order queue (Atalhos modernos on)")
+        NativeModernPaths.store(true, defaults)
+        try check(NativeEngineRules.current(defaults) == 0x3, "Both rules")
+        NativeModernHotkeys.store(false, defaults)
+        try check(NativeEngineRules.current(defaults) == 0x1, "Modern paths alone")
+        NativeModernPaths.store(false, defaults)
+        try check(NativeEngineRules.current(defaults) == 0, "Original game")
+    }
+
     static func main() throws {
         try routerCommands(); print("PASS router: modern keys, exact defaults, double tap only for original groups 1-9")
         try fixedSteps(); print("PASS fixed steps: original Shift+N and X only, foreign channels refused")
@@ -398,6 +415,7 @@ struct ModernHotkeysTests {
         try jobs(); print("PASS jobs: Shift over the consumed digit, staged delivery, cursor return, aborts, budget")
         try snapshotReader(); print("PASS snapshot reader: one concatenated projection per stage")
         try orderQueueMarkers(); print("PASS order queue markers: selected units' waypoints, one snapshot, map region")
+        try engineRules(); print("PASS engine rules: Caminhos melhores off by default, bit 0 with the order queue bit 1")
         print("ModernHotkeysTests: 7 groups passed; no engine, no window")
     }
 }

@@ -54,8 +54,20 @@ static int publish(RlwMenu *m) {
  if (m->publish_slots) m->publish_slots(m->publish_ctx, m->slot_table);
  return m->ops->slots(m->driver, m->slot_table, sizeof(m->slot_table));
 }
-int rlw_menu_send(RlwMenu *m, const RlShellInput *supplied, double now_ms) {
+/* sendShell(input:optionsKeys:): the port's options screen sees the input first. */
+static int send(RlwMenu *m, const RlShellInput *supplied, uint32_t option_keys, double now_ms) {
  if (!m->ops->mode(m->driver)) return RLW_MENU_IDLE;
+ if (m->ops->options_input) {
+  RlOpcoesEvento o; memset(&o, 0, sizeof(o));
+  int c = m->ops->options_input(m->driver, supplied, option_keys, &o);
+  if (c) return failed(m, c, "Tela de opções");
+  if (o.consumed) {
+   if (o.kind == RL_OPCOES_ABRIU || o.kind == RL_OPCOES_FECHOU) rlw_menu_reset(m);
+   if (o.kind == RL_OPCOES_MUDOU || o.kind == RL_OPCOES_CONFIGURAR_TECLAS) { m->options_event = o; return RLW_MENU_OPTIONS; }
+   return RLW_MENU_REPAINT;
+  }
+ }
+ if (supplied->keys == 0 && option_keys != 0) return RLW_MENU_IDLE; /* the screen's keys only */
  RlShellInput input = *supplied; RlShellEvent event; memset(&event, 0, sizeof(event));
  int c = m->ops->input(m->driver, &input, &event);
  if (c) return failed(m, c, "Entrada na tela original");
@@ -103,10 +115,12 @@ int rlw_menu_send(RlwMenu *m, const RlShellInput *supplied, double now_ms) {
  return RLW_MENU_REPAINT;
 }
 
+int rlw_menu_send(RlwMenu *m, const RlShellInput *input, double now_ms) { return send(m, input, input->keys, now_ms); }
+
 int rlw_menu_keys(RlwMenu *m, uint32_t keys, double now_ms) {
  RlShellInput input; if (m->ops->state(m->driver, &input)) return RLW_MENU_IDLE;
- input.keys = keys; input.mouse_ae = 0; input.mouse_af = 0;
- return rlw_menu_send(m, &input, now_ms);
+ input.keys = keys & 15u; input.mouse_ae = 0; input.mouse_af = 0;
+ return send(m, &input, keys, now_ms);
 }
 
 /* flushShellMove() */
@@ -162,6 +176,8 @@ int rlw_menu_key(RlwMenu *m, uint32_t vk, int down, double now_ms) {
  m->held[vk] = 0;
  if (arrow) return RLW_MENU_IDLE;
  uint32_t keys = vk == 13 ? RL_SHELL_ENTER : vk == 38 ? RL_SHELL_UP : vk == 40 ? RL_SHELL_DOWN : vk == 27 ? RL_SHELL_ESCAPE : 0;
+ /* Left/Right exist only on the port's options screen (never for the shell). */
+ if (!keys && m->ops->options_open && m->ops->options_open(m->driver)) keys = vk == 37 ? RL_OPCOES_ESQUERDA : vk == 39 ? RL_OPCOES_DIREITA : 0;
  return keys ? rlw_menu_keys(m, keys, now_ms) : RLW_MENU_IDLE;
 }
 

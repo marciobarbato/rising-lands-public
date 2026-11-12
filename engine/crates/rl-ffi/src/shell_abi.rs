@@ -137,6 +137,21 @@ fn session<T>(
         f(s)
     })
 }
+/// Read-only view of a prepared session for the port's options screen
+/// (options_abi.rs): its memory, renderer and banks, and whether a request is
+/// pending. Never changes the session or its generation.
+pub(crate) fn session_view<T>(
+    handle: u64,
+    f: impl FnOnce(&MemoriaJogo, &Renderer, &Banks, bool) -> Result<T>,
+) -> Result<T> {
+    sessions(|s| {
+        let s = s.entries.get(&handle).ok_or(AbiError::InvalidHandle)?;
+        f(&s.memory, &s.renderer, &s.banks, s.request != Request::None)
+    })
+}
+pub(crate) fn render_error(e: Error) -> AbiError {
+    error(e)
+}
 fn screen(mode: u32) -> Result<Screen> {
     match mode {
         2 => Ok(Screen::Main),

@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "rising_engine.h"
 #include "rising_shell.h"
+#include "rising_options.h"
 #include "MacOSAudioMapper.h"
 typedef struct MacOSLiveDriver MacOSLiveDriver;
 typedef struct {
@@ -144,6 +145,17 @@ int32_t macos_live_shell_credits_frame(MacOSLiveDriver *,uint32_t elapsed_ms,RlS
 int32_t macos_live_shell_credits_present(MacOSLiveDriver *,const RlShellCredits *,const uint8_t *pixels,const uint8_t *palette);
 int32_t macos_live_shell_movie_finish(MacOSLiveDriver *,uint32_t completion);
 int32_t macos_live_shell_draw(MacOSLiveDriver *,uint32_t animation);
+/* Port-only "Opções" screen (engine/include/options-screen.md) over the main
+ * menu and the pause menu. sync: create (first call, from the CD's TITRE.PIE)
+ * or update the host's values; RL_UNSUPPORTED_PATH when the engine has no
+ * options symbols (no button then). input: call BEFORE macos_live_shell_input
+ * with the same input; when out->consumed the shell must not get it, and the
+ * driver's picture (macos_live_pixels/palette) is already the screen to show.
+ * Never touches the shell session; refused (consumed=0) without a session. */
+int32_t macos_live_options_sync(MacOSLiveDriver *,const RlOpcoesValores *);
+int32_t macos_live_options_input(MacOSLiveDriver *,const RlShellInput *,uint32_t keys,RlOpcoesEvento *);
+uint32_t macos_live_options_open(MacOSLiveDriver *);
+int32_t macos_live_options_button(MacOSLiveDriver *,int32_t rect[4]);
 int32_t macos_live_selection(MacOSLiveDriver *,char *mission,uint32_t capacity,uint32_t *difficulty);
 /* Preset (0..2) of the next stage start: New game, Restart or Next stage. */
 int32_t macos_live_set_difficulty(MacOSLiveDriver *,uint32_t difficulty);

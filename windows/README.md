@@ -25,7 +25,8 @@
   comdlg32, winmm…). Nothing to install besides the player's CD.
 - The driver is C, so the production path of `macos/src/macos_live_driver.c` ports almost line for
   line (same constants, call order, input queue and click gesture). That is what keeps the faithful mode byte for byte.
-- It cross-compiles from macOS/Linux with mingw-w64 and builds natively under MSYS2 or on `windows-latest`.
+- It cross-compiles from macOS/Linux with mingw-w64, builds natively under MSYS2 or on `windows-latest`, and builds
+  with MSVC (`cl.exe`) for x64 and ARM64.
 - SDL2 would add a DLL and an input layer to re-map back to Win32 messages the engine already speaks; D3D11 is not
   needed for this frame size. Either remains possible later behind the same driver if fullscreen performance or
   scaling filters call for it.
@@ -37,6 +38,7 @@
 | `src/rlw_main.c` | Win32 window, GDI presentation, frame pacing, mouse/keyboard mapping, pause, speeds, fullscreen, CD selection, menu ticks and host requests, smoke modes |
 | `src/rlw_driver.c/.h` | Engine orchestration: main-menu or mission start with the explicit EVENTS host, renderer from the CD, load tail, per-frame input phases (port of the macOS driver's production path) |
 | `src/rlw_shell.inc` | Original menus on the prepared shell: session over pause 16 / result 19 / main menu, backgrounds decoded from the CD, briefing VFS, "Novo jogo", restart, next stage, resume, credits (port of `macos_campaign_shell.inc` and the driver's campaign continuation) |
+| `src/rlw_options.inc` | The port's "Opções" screen over the main and pause menus (port of `macos_options.inc`): creation from the CD's TITRE.PIE, input before the shell, the button overlay |
 | `src/rlw_menu.c/.h` | Menu input routing, portable: keys on release, coalesced moves, one page per click, request dispatch (port of `NativeLiveWindow.swift`'s shell paths) |
 | `src/rlw_menu_ops.c/.h` | The Windows driver behind that routing |
 | `src/rlw_menu_demo.c/.h` | The fixed scripted walk through the menus (smoke and parity) |
@@ -48,8 +50,10 @@
 | `tests/test_menu.c` | Portable unit tests: menu routing against a simulated driver, FLC decoding of a synthetic file |
 | `tests/parity.c`, `parity.sh` | Driver parity: the Windows driver vs the macOS driver over the same engine, per-tick frame hashes and the scripted menu walk |
 | `tests/import_cli.c` | `rlw-import`, the same importer as a portable CLI |
-| `../.github/workflows/windows-client.yml` | GitHub Actions workflow (`windows-latest`): build, tests and the `.exe` artifact |
-| `build.sh` | Engine static library + host executable (+ `test`) |
+| `../.github/workflows/windows-client.yml` | GitHub Actions workflow: jobs `mingw-x64`, `msvc-x64`, `msvc-arm64` on `windows-latest` and `arm64-run` on `windows-11-arm`; each build uploads its `.exe` with a SHA-256 |
+| `ci/smoke.sh` | `--selftest` and the refusal of a file that is not the CD, for any built `.exe` |
+| `build.sh` | Engine static library + host executable with mingw-w64 (+ `test`) |
+| `build-msvc.ps1` | The same with MSVC, x64 or ARM64 (+ `-Test`) |
 
 ## Build
 
@@ -76,10 +80,28 @@ Variables: `TARGET` (Rust target), `CC` (Windows C compiler), `OUT` (output fold
 `HOST_CC` (compiler for the unit tests). The engine is built with `cargo rustc --release --locked -p rl-ffi --lib
 --crate-type staticlib`, so no Rust linker for Windows is needed; mingw links the final `.exe`.
 
-**MSVC** is not wired yet. The path is `cargo xwin rustc --target x86_64-pc-windows-msvc …` (or native `cargo` on
-Windows) for the engine plus `clang-cl`/`cl` for the five C files, linking `rising_engine.lib` with `gdi32 user32
-comdlg32 shell32 ole32 winmm ntdll userenv ws2_32 bcrypt` (`cargo rustc … -- --print native-static-libs` lists the
-exact set). The C sources need `/utf-8` for their PT-BR messages.
+### MSVC (x64 and ARM64)
+
+On Windows with Visual Studio 2022 or the Build Tools (C++ workload; the ARM64 build tools for ARM64) and rustup,
+from PowerShell:
+
+```powershell
+windows\build-msvc.ps1 -Test            # x64: tests with cl.exe, then -> windows\build\msvc-x64\RisingLands.exe
+windows\build-msvc.ps1 -Arch arm64      # ARM64 cross build (native on an ARM64 machine) -> build\msvc-arm64\
+```
+
+The script finds `vcvarsall.bat` with `vswhere` when `cl.exe` for that architecture is not on `PATH`, adds the Rust
+target (`x86_64-pc-windows-msvc` / `aarch64-pc-windows-msvc`), builds the engine with `-C target-feature=+crt-static`
+and the host with `cl /std:c11 /utf-8 /MT` (the C sources carry PT-BR UTF-8 messages), links `rising_engine.lib` with
+the Win32 libraries and the Rust std's native set (`kernel32 ntdll userenv ws2_32 dbghelp`), and fails if
+`dumpbin /dependents` shows anything besides system DLLs (no vcruntime/UCRT redistributable). With `-Test` it builds
+the three portable test programs with `cl /W3 /WX` (C4244/C4267 off, the gcc build's `-Wall -Wextra` has no
+`-Wconversion` either) and runs them when the target matches the machine. `-Out` changes the output folder.
+
+### Code signing
+
+The binaries are not signed, and the project does not plan to sign them: Windows SmartScreen warns on the first run.
+Each CI artifact carries its SHA-256 and the commit it was built from (`docs/WINDOWS_CLIENT.md`, section 6).
 
 ## Run
 
@@ -127,6 +149,19 @@ completes requests, like the macOS app:
 - Not yet (later milestones): movies (defeat and campaign-end movies complete as unavailable; the introduction
   completes as finished when the CD has it, as the macOS host does) and audio.
 
+### Opções
+
+The port's "Opções" screen (not in the original; `engine/include/options-screen.md`) is drawn by the engine with the
+original menu material (TITRE.PIE, MENU.CMP, the menu fonts), the same screen as on macOS. An "OPÇÕES" caption on the
+wooden floor of the main and pause menus opens it; only a click that starts on it is taken, every other input reaches
+the original shell unchanged. Up/Down/Enter/Escape and Left/Right (only while it is open) or the mouse choose:
+"Atalhos modernos" (here: the Shift+click order queue rule, `RL_REGRA_FILA_ORDENS`, for worlds created afterwards;
+Windows has no modern hotkey layer yet), "Caminhos melhores" (stored; rule bit 0 belongs to the pathing front),
+difficulty (next stage start) and speed (at once, like `+`/`-`). "Configurar teclas" is shown unavailable: Windows has
+no key dialog yet. The settings live in `opcoes.ini` beside `Dados` and `Partidas` (`atalhos`, `caminhos`,
+`dificuldade`, `velocidade`); `--difficulty`/`--speed` override them for one run. Smoke and demo runs neither read
+nor show them, except the menu walk, which opens and closes the screen on both drivers.
+
 ### Saves
 
 Same files, names and checks as the macOS app, so a `Partidas` folder can be copied between the two
@@ -169,7 +204,8 @@ scripted save walk, writing in its own empty folder, never in the player's saves
 | `RisingLands.exe --cd … --frames 300 --screenshot s.bmp` | Windows/wine + CD | presentation (palette, aspect-fit) |
 | `RisingLands.exe --cd … --menu-demo m.txt` | Windows/wine + CD | the menu walk on Windows; must equal `parity.sh`'s `windows-menu.txt` |
 | `RisingLands.exe --cd … --save-demo s.txt` | Windows/wine + CD | the save walk on Windows (real Win32 file writes); must equal `parity.sh`'s `windows-save.txt` |
-| `.github/workflows/windows-client.yml` | GitHub Actions | build, unit tests through the Win32 file APIs, self-test, import refusal |
+| `.github/workflows/windows-client.yml` | GitHub Actions | three builds (mingw x64, MSVC x64, MSVC ARM64), unit tests through the Win32 file APIs with gcc and with cl, self-test and import refusal on both x64 builds and natively on a `windows-11-arm` runner, ARM64 machine type |
+| `build-msvc.ps1 -Test` | Windows + Visual Studio | the portable tests with cl.exe; the MSVC build imports only system DLLs |
 
 Wine on macOS: the Homebrew `wine-stable`/`wine@staging` casks are disabled since 2026-09-01 because they fail
 Gatekeeper, so the client was not tried under wine on macOS; on Linux, `wine RisingLands.exe …` runs the same switches.
@@ -206,4 +242,7 @@ then resumes through `rl_shell_resume`; the save list slots are the exact origin
 - Audio (sound effects, CD music), event pictures (FLC) and movies. An in-game FLC event is ended at once with
   `rl_evento_flc_terminar_v1` (the call the macOS host makes when its picture ends), so play continues without the picture.
 - Position names only for 1–5 in the "Partida" menu (6–10 through the original lists, unnamed), as on macOS.
-- MSVC build, ARM64 Windows, a D3D11 presenter, DPI awareness and a settings UI.
+- A D3D11 presenter and DPI awareness (MSVC x64 and ARM64 builds are done).
+- A key dialog ("Configurar teclas" in the Opções screen) and the modern hotkey layer of macOS.
+- "Caminhos melhores" in the Opções screen is stored but not applied yet: the host does not pass
+  `RL_REGRA_CAMINHOS_MELHORES` (rule bit 0) to new worlds.

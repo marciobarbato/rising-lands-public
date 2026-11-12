@@ -17,6 +17,10 @@ static int op_zone(void *driver, uint32_t z, int32_t r[4]) { return rlw_shell_zo
 static int op_credits_frame(void *driver, uint32_t ms, RlShellCredits *o) { return rlw_shell_credits_frame(D, ms, o); }
 static int op_credits_present(void *driver, const RlShellCredits *f, const uint8_t *p, const uint8_t *c) { return rlw_shell_credits_present(D, f, p, c); }
 static void op_error(void *driver, char *o, size_t n) { rlw_shell_error(D, o, n); }
+static int op_options_input(void *driver, const RlShellInput *i, uint32_t k, RlOpcoesEvento *o) { return rlw_options_input(D, i, k, o); }
+static uint32_t op_options_open(void *driver) { return rlw_options_open(D); }
+static int op_options_sync(void *driver, const RlOpcoesValores *v) { return rlw_options_sync(D, v); }
+static int op_options_button(void *driver, int32_t r[4]) { return rlw_options_button(D, r); }
 static int op_advance(void *driver) { return rlw_driver_advance(D); }
 static int op_event(void *driver, uint32_t k, uint32_t m, int32_t x, int32_t y, uint32_t w, uint32_t v, uint32_t dn) { return rlw_driver_event(D, k, m, x, y, w, v, dn); }
 static int op_begin(void *driver) { return rlw_shell_begin(D); }
@@ -30,6 +34,6 @@ static int op_autosave(void *driver, const char *p) { return rlw_driver_autosave
 static int op_load_file(void *driver, const char *p) { return rlw_driver_load(D, p); }
 static int op_save_slot(void *driver, const char *p, int32_t *saved) { return rlw_shell_save_slot(D, p, saved); }
 const RlwDemoOps RLW_WINDOWS_OPS = {{op_mode, op_state, op_input, op_draw, op_show, op_prepare, op_request, op_load, op_slots, op_zone,
- rlw_shell_click_clock, op_credits_frame, op_credits_present, op_error}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
+ rlw_shell_click_clock, op_credits_frame, op_credits_present, op_error, op_options_input, op_options_open, op_options_sync, op_options_button}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
  op_save, op_autosave, op_load_file, op_save_slot};
 #undef D

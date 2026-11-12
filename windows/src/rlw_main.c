@@ -40,6 +40,7 @@ typedef struct {
  const char *cd, *data, *mission, *hashes, *screenshot, *menu_demo, *save_directory, *save_demo;
  unsigned difficulty, frames, speed;
  int selftest, import_only, headless, fullscreen, no_verify_image, demo_input;
+ int difficulty_given, speed_given; /* explicit --difficulty/--speed win over opcoes.ini */
 } Options;
 
 static struct {
@@ -54,6 +55,9 @@ static struct {
  /* Saves: the player's folder ("" in smoke runs: no autosave), the menu bar,
   * a short notice in the title ("Partida salva"). */
  char saves[4096]; HMENU menubar, save_menu, load_menu; char notice[96]; double notice_until;
+ /* The port's "Opções" screen: settings kept in <user data>/opcoes.ini (players'
+  * runs only; "" in smoke/demo runs, which keep the original defaults). */
+ char options_path[4200]; unsigned atalhos, caminhos;
 } G = {0};
 
 /* ---------- utilities ---------- */
@@ -223,7 +227,29 @@ static int accepted_vk(uint32_t vk) {
  return 0;
 }
 
-static void set_speed(unsigned speed) { G.speed = speed > 3 ? 3 : speed; G.deadline = now_seconds(); update_title(); }
+/* ---------- "Opções" settings (opcoes.ini beside Dados and Partidas) ---------- */
+static void options_store(void) {
+ if (!G.options_path[0]) return;
+ char text[160]; int n = snprintf(text, sizeof(text), "atalhos=%u\r\ncaminhos=%u\r\ndificuldade=%u\r\nvelocidade=%u\r\n",
+                                  G.atalhos, G.caminhos, G.opt.difficulty, G.speed);
+ if (n > 0) (void)rlw_durable_write(G.options_path, (const uint8_t *)text, (size_t)n, NULL, 0);
+}
+/* Missing file or keys keep the defaults (original rules, Normal, 1x). */
+static void options_load(void) {
+ FILE *f = G.options_path[0] ? rlw_fopen(G.options_path, "rb") : NULL; if (!f) return;
+ char line[96];
+ while (fgets(line, sizeof(line), f)) {
+  unsigned v = 0; if (sscanf(line, "%*[^=]=%u", &v) != 1) continue;
+  if (!strncmp(line, "atalhos=", 8) && v <= 1) G.atalhos = v;
+  else if (!strncmp(line, "caminhos=", 9) && v <= 1) G.caminhos = v;
+  else if (!strncmp(line, "dificuldade=", 12) && v <= 2 && !G.opt.difficulty_given) G.opt.difficulty = v;
+  else if (!strncmp(line, "velocidade=", 11) && v <= 3 && !G.opt.speed_given) G.opt.speed = v;
+ }
+ fclose(f);
+}
+static uint32_t options_rules(void) { return G.atalhos ? RL_REGRA_FILA_ORDENS : 0; }
+
+static void set_speed(unsigned speed) { G.speed = speed > 3 ? 3 : speed; G.deadline = now_seconds(); update_title(); options_store(); }
 static void command(unsigned id);
 enum { ID_QUICK_SAVE = 100, ID_QUICK_LOAD, ID_STAGE_LOAD, ID_SAVE_POSITION = 110, ID_LOAD_POSITION = 120 };
 
@@ -259,6 +285,14 @@ static void menu_attach(void) {
  char credits[4200]; snprintf(credits, sizeof(credits), "%s" RLW_SEP "events" RLW_SEP "CREDITS.FLC", G.dados);
  rlw_menu_close(&G.menu); rlw_menu_init(&G.menu, &RLW_WINDOWS_OPS.menu, G.driver, credits);
  G.menu.publish_slots = publish_slots;
+ /* The port's "Opções" button over the main and pause menus (players' runs). */
+ if (G.options_path[0]) {
+  RlOpcoesValores v; memset(&v, 0, sizeof(v));
+  v.version = RL_OPCOES_VERSION; v.atalhos = G.atalhos; v.caminhos = G.caminhos; v.dificuldade = G.opt.difficulty; v.velocidade = G.speed;
+  /* No key dialog on Windows yet: "configurar teclas" is shown unavailable. */
+  v.disponivel = RL_OPCOES_TODOS & ~(1u << RL_OPCOES_TECLAS); v.idioma = 0;
+  (void)rlw_options_sync(G.driver, &v);
+ }
  /* startShell(): the first shellTick comes 50 ms after the session opens. */
  G.menu_tick = now_seconds() + 0.05; G.menu_flush = 0;
 }
@@ -521,6 +555,23 @@ static void menu_result(int r) {
  case RLW_MENU_GAME: back_to_game(); if (G.menu.game_kind == RL_SHELL_START_MISSION) stage_autosave(); break;
  case RLW_MENU_HOST: host_request(&G.menu.host_event); break;
  case RLW_MENU_FAILED: menu_failed(G.menu.error); present_now(); break;
+ case RLW_MENU_OPTIONS: {
+  /* A value changed on the "Opções" screen: apply it like the host's own controls. */
+  const RlOpcoesEvento *e = &G.menu.options_event;
+  if (e->kind == RL_OPCOES_MUDOU) {
+   switch (e->item) {
+   case RL_OPCOES_ATALHOS:
+    /* Rules follow new worlds, and the menu world before its load tail. */
+    G.atalhos = e->values.atalhos; rlw_driver_default_rules(options_rules()); (void)rlw_driver_set_rules(G.driver, options_rules()); break;
+   case RL_OPCOES_CAMINHOS: G.caminhos = e->values.caminhos; break; /* rule bit 0: pathing front */
+   case RL_OPCOES_DIFICULDADE: G.opt.difficulty = e->values.dificuldade; (void)rlw_driver_set_difficulty(G.driver, G.opt.difficulty); break;
+   case RL_OPCOES_VELOCIDADE: set_speed(e->values.velocidade); break;
+   default: break;
+   }
+   options_store();
+  }
+  present_now(); update_title(); break;
+ }
  default: break;
  }
 }
@@ -657,8 +708,8 @@ static int parse(int argc, char **argv, Options *o) {
   if (!strcmp(a, "--cd")) { VALUE(); o->cd = v; }
   else if (!strcmp(a, "--data")) { VALUE(); o->data = v; }
   else if (!strcmp(a, "--mission")) { VALUE(); o->mission = v; }
-  else if (!strcmp(a, "--difficulty")) { VALUE(); o->difficulty = (unsigned)atoi(v); }
-  else if (!strcmp(a, "--speed")) { VALUE(); o->speed = (unsigned)atoi(v); }
+  else if (!strcmp(a, "--difficulty")) { VALUE(); o->difficulty = (unsigned)atoi(v); o->difficulty_given = 1; }
+  else if (!strcmp(a, "--speed")) { VALUE(); o->speed = (unsigned)atoi(v); o->speed_given = 1; }
   else if (!strcmp(a, "--frames")) { VALUE(); o->frames = (unsigned)strtoul(v, NULL, 10); }
   else if (!strcmp(a, "--hashes")) { VALUE(); o->hashes = v; }
   else if (!strcmp(a, "--screenshot")) { VALUE(); o->screenshot = v; }
@@ -775,6 +826,10 @@ int main_utf8(int argc, char **argv) {
  /* The player's saves (none in frame-count smoke runs unless asked). */
  if (G.opt.save_directory) snprintf(G.saves, sizeof(G.saves), "%s", G.opt.save_directory);
  else if (!G.opt.frames && !G.opt.headless) snprintf(G.saves, sizeof(G.saves), "%s" RLW_SEP "Partidas", data_root);
+ if (!G.opt.frames && !G.opt.headless) {
+  snprintf(G.options_path, sizeof(G.options_path), "%s" RLW_SEP "opcoes.ini", data_root);
+  options_load(); G.speed = G.opt.speed; rlw_driver_default_rules(options_rules());
+ }
  G.driver = G.opt.mission ? rlw_driver_create(dados, G.opt.mission, G.opt.difficulty, error, sizeof(error))
                           : rlw_driver_create_menu(dados, G.opt.difficulty, error, sizeof(error));
  if (!G.driver) {

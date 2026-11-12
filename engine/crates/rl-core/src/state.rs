@@ -232,9 +232,12 @@ pub struct World {
     /// Shift+click waypoints (`RULE_ORDER_QUEUE`), Rust-side, never game memory.
     pub(crate) order_queue: crate::OrderQueue,
 }
+/// Optional modern unit paths ("Caminhos melhores", `crate::modern_path`).
+/// Off reproduces the original CheminCalcul movement byte for byte.
+pub const RULE_MODERN_PATHS: u32 = 1;
 /// Every rule bit this engine knows; any other bit is refused. Each optional
 /// feature adds its `RULE_*` bit here.
-pub const RULES_KNOWN: u32 = crate::order_queue::RULE_ORDER_QUEUE;
+pub const RULES_KNOWN: u32 = RULE_MODERN_PATHS | crate::order_queue::RULE_ORDER_QUEUE;
 /// Why a rule change was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RulesError {
@@ -313,6 +316,7 @@ impl World {
         let mut memory = self.state.project(&self.projection)?;
         memory.rules = self.rules;
         memory.order_queue = self.order_queue.clone();
+        memory.path_searches = 0;
         if self.execution_mode != 0 && memory != self.projection.template {
             return Err(EngineError::ExecutionProjectionMismatch);
         }

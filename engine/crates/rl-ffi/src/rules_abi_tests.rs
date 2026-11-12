@@ -123,3 +123,33 @@ fn order_queue_rule_is_set_saved_and_read() {
     assert_eq!(rl_liberar_mundo(loaded), 0);
     assert_eq!(rl_liberar_mundo(handle), 0);
 }
+
+#[test]
+fn modern_paths_rule_combines_with_the_order_queue() {
+    let handle = create();
+    let both = rl_core::RULE_MODERN_PATHS | rl_core::RULE_ORDER_QUEUE;
+    assert_eq!(rl_core::RULES_KNOWN, both);
+    for value in [rl_core::RULE_MODERN_PATHS, both] {
+        assert_eq!(rl_regras_definir(handle, value), 0);
+        assert_eq!(rules(handle), value);
+        let bytes = unsafe { saved(handle) };
+        assert_eq!(
+            u32::from_le_bytes(bytes[12..16].try_into().unwrap()),
+            rl_core::save::RULES_SCHEMA
+        );
+        let mut loaded = 0;
+        let mut input = FrameInput::default();
+        assert_eq!(
+            unsafe {
+                rl_carregar_bytes(bytes.as_ptr(), bytes.len() as u32, &mut loaded, &mut input)
+            },
+            0
+        );
+        assert_eq!(rules(loaded), value);
+        assert_eq!(unsafe { saved(loaded) }, bytes);
+        assert_eq!(rl_liberar_mundo(loaded), 0);
+    }
+    assert_eq!(rl_regras_definir(handle, both | 4), 1);
+    assert_eq!(rules(handle), both);
+    assert_eq!(rl_liberar_mundo(handle), 0);
+}

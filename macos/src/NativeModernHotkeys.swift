@@ -50,6 +50,33 @@ enum NativeModernHotkeys {
     static let lastAlert: [NativeModernStep] = [.key(vkey: 88, down: true), .waitConsumed, .key(vkey: 88, down: false)]
 }
 
+/// "Caminhos melhores": the engine's optional modern unit paths,
+/// `RL_REGRA_CAMINHOS_MELHORES` (bit 0 of regras). Off by default (user
+/// decision): with it off the game moves units exactly as the original.
+/// The Options screen reads and writes the same preference key.
+enum NativeModernPaths {
+    static let preferenceKey = "RisingLandsModernPaths"
+    static let rule: UInt32 = 0x1
+    static func isEnabled(_ defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: preferenceKey)
+    }
+    static func store(_ enabled: Bool, _ defaults: UserDefaults = .standard) {
+        defaults.set(enabled, forKey: preferenceKey)
+    }
+    static func engineRules(_ defaults: UserDefaults = .standard) -> UInt32 {
+        isEnabled(defaults) ? rule : 0
+    }
+}
+
+/// The rule set every production world is created with (menu or stage), and the
+/// one the menu world takes when a preference changes before its load tail.
+/// A running stage keeps its rules; a save loads with the rules it recorded.
+enum NativeEngineRules {
+    static func current(_ defaults: UserDefaults = .standard) -> UInt32 {
+        NativeModernHotkeys.engineRules(defaults) | NativeModernPaths.engineRules(defaults)
+    }
+}
+
 /// One unit of host input, in the exact payload shape the game view produces.
 enum NativeModernStep: Equatable, Sendable {
     case key(vkey: Int, down: Bool)

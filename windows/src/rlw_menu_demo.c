@@ -12,8 +12,8 @@ typedef struct {
 } Walk;
 
 static const char *result_name(int r) {
- static const char *names[] = {"idle", "repaint", "host", "game", "failed"};
- return r >= 0 && r <= 4 ? names[r] : "?";
+ static const char *names[] = {"idle", "repaint", "host", "game", "failed", "options"};
+ return r >= 0 && r <= 5 ? names[r] : "?";
 }
 static void line(Walk *w, const char *action, const char *result) {
  RlwSha256 c; uint8_t digest[32]; char hex[65];
@@ -75,6 +75,35 @@ static int pointer_off_items(Walk *w) {
  return act(w, "move", rlw_menu_mouse(&w->menu, 0x200, 4, 4, 0), RLW_MENU_IDLE) || act(w, "flush", rlw_menu_flush_move(&w->menu, 0), RLW_MENU_REPAINT);
 }
 
+/* The port's "Opções" screen over the current main/pause menu: hover, press and
+ * release on its button (open), a few ticks, Down (over the unavailable
+ * "configurar teclas" to "caminhos melhores"), Right (caminhos on: an options
+ * event the walk does not apply), Escape (closed). Every picture is hashed like
+ * the other steps. Skipped without the extension. */
+static int options_walk(Walk *w) {
+ const RlwMenuOps *m = &w->ops->menu;
+ if (!m->options_sync || !m->options_button || !m->options_input) return 0;
+ RlOpcoesValores v; memset(&v, 0, sizeof(v));
+ v.version = RL_OPCOES_VERSION; v.atalhos = 0; v.caminhos = 0; v.dificuldade = 1; v.velocidade = 1;
+ v.disponivel = RL_OPCOES_TODOS & ~(1u << RL_OPCOES_TECLAS); v.idioma = 0;
+ int c = m->options_sync(w->d, &v);
+ if (c) { line(w, "options-sync", "failed"); return end_walk(w, "options sync"); }
+ line(w, "options-sync", "ok");
+ int32_t r[4]; if (m->options_button(w->d, r)) return end_walk(w, "options button");
+ uint32_t x = (uint32_t)((r[0] + r[2]) / 2), y = (uint32_t)((r[1] + r[3]) / 2);
+ if (act(w, "options-move", rlw_menu_mouse(&w->menu, 0x200, x, y, 0), RLW_MENU_IDLE) ||
+     act(w, "options-flush", rlw_menu_flush_move(&w->menu, 0), RLW_MENU_REPAINT) ||
+     act(w, "options-press", rlw_menu_mouse(&w->menu, 0x201, x, y, 0), RLW_MENU_REPAINT) ||
+     act(w, "options-release", rlw_menu_mouse(&w->menu, 0x202, x, y, 0), RLW_MENU_REPAINT)) return 1;
+ if (!m->options_open(w->d)) return end_walk(w, "options did not open");
+ if (ticks(w, 4) || keys(w, "options-down", RL_SHELL_DOWN, RLW_MENU_REPAINT) ||
+     keys(w, "options-right", RL_OPCOES_DIREITA, RLW_MENU_REPAINT) ||
+     keys(w, "options-escape", RL_SHELL_ESCAPE, RLW_MENU_REPAINT)) return 1;
+ if (m->options_open(w->d)) return end_walk(w, "options did not close");
+ /* The pointer leaves the button (its caption returns to the item font). */
+ return act(w, "move", rlw_menu_mouse(&w->menu, 0x200, 4, 4, 0), RLW_MENU_IDLE) || act(w, "flush", rlw_menu_flush_move(&w->menu, 0), RLW_MENU_REPAINT);
+}
+
 /* Escape down through the event queue, then frames until the original pause opens. */
 static int escape_to_pause(Walk *w) {
  static const RlwDemoEvent escape_down[] = {{0, 2, 0, 0, 0, 0, 27, 1}};
@@ -93,14 +122,14 @@ int rlw_menu_demo_run(const RlwDemoOps *ops, void *driver, FILE *out) {
  if (ops->menu.mode(driver) != RL_SHELL_MAIN) { end_walk(&w, "not in the main menu"); goto done; }
  /* The pointer rests off the items (hover selects, as originally). */
  if (act(&w, "move", rlw_menu_mouse(&w.menu, 0x200, 4, 4, 0), RLW_MENU_IDLE) || act(&w, "flush", rlw_menu_flush_move(&w.menu, 0), RLW_MENU_REPAINT)) goto done;
- if (ticks(&w, 10)) goto done;
+ if (ticks(&w, 10) || options_walk(&w)) goto done;
  if (keys(&w, "enter-single", RL_SHELL_ENTER, RLW_MENU_REPAINT) || ticks(&w, 5)) goto done;          /* Um jogador -> single3 */
  if (keys(&w, "enter-new-game", RL_SHELL_ENTER, RLW_MENU_REPAINT) || ticks(&w, 10)) goto done;       /* Novo jogo -> briefing17 */
  if (act(&w, "page-next", rlw_menu_page(&w.menu, 1, 0), RLW_MENU_REPAINT) || ticks(&w, 10)) goto done;
  if (keys(&w, "enter-start", RL_SHELL_ENTER, RLW_MENU_GAME)) goto done;                              /* START_MISSION -> MONDE01 */
  line(&w, "stage", "loaded");
  if (play(&w, 150, NULL, 0) || escape_to_pause(&w)) goto done;                                       /* pause16 */
- if (pointer_off_items(&w) || ticks(&w, 5)) goto done;
+ if (pointer_off_items(&w) || ticks(&w, 5) || options_walk(&w)) goto done;
  if (keys(&w, "down", RL_SHELL_DOWN, RLW_MENU_REPAINT) || keys(&w, "down", RL_SHELL_DOWN, RLW_MENU_REPAINT)) goto done;
  if (keys(&w, "enter-objectives", RL_SHELL_ENTER, RLW_MENU_REPAINT)) goto done;                      /* objectives23 */
  if (ops->menu.mode(driver) != RL_SHELL_OBJECTIVES) { end_walk(&w, "pause item 2 did not open the objectives"); goto done; }

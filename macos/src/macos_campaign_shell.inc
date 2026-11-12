@@ -2,7 +2,11 @@
 static int shell_copy_picture(MacOSLiveDriver*d){
  uint8_t*p=malloc(480000+768);if(!p)return RL_IO_ERROR;
  int c=d->rl_shell_copy(d->shell,d->shell_generation,p,480000,p+480000,768);
- if(!c){memcpy(d->pixels,p,480000);memcpy(d->palette,p+480000,768);}free(p);return c;
+ if(!c){memcpy(d->pixels,p,480000);memcpy(d->palette,p+480000,768);}free(p);
+ /* Port-only "Opções" button over main 2 / pause 16 (no-op elsewhere). It draws
+  * on this copy only; a failure leaves the original picture as it is. */
+ if(!c&&d->options&&d->rl_opcoes_sobrepor)(void)d->rl_opcoes_sobrepor(d->options,d->shell,d->pixels,480000);
+ return c;
 }
 static int shell_paint(MacOSLiveDriver*d){
  RlShellPlan plan={0};int c=d->rl_shell_plan(d->shell,d->shell_mode,&plan);if(c)return c;
@@ -70,7 +74,7 @@ static int shell_open(MacOSLiveDriver*d,uint32_t mode){
   if(!c)c=shell_word(b,size,0x508f84,4,&input.animation_84);
   if(!c)c=shell_word(b,size,0x5099a8,2,&input.mouse_x);
   if(!c)c=shell_word(b,size,0x5099aa,2,&input.mouse_y);free(b);
-  if(!c){d->shell=shell;d->shell_mode=mode;d->shell_generation=0;d->shell_input=input;d->shell_request=(RlShellEvent){0};c=shell_paint(d);}
+  if(!c){d->shell=shell;d->shell_mode=mode;d->shell_generation=0;d->shell_input=input;d->shell_request=(RlShellEvent){0};if(d->options&&d->rl_opcoes_fechar)(void)d->rl_opcoes_fechar(d->options);d->options_open=0;c=shell_paint(d);}
  }
 done:
  for(unsigned i=0;i<11;i++)free(owned[i]);

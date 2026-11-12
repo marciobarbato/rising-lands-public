@@ -13,6 +13,7 @@
 #define RLW_MENU_H
 #include <stdint.h>
 #include "rising_shell.h"
+#include "rising_options.h"
 #include "rlw_flc.h"
 
 typedef struct {
@@ -30,6 +31,13 @@ typedef struct {
  int (*credits_frame)(void *driver, uint32_t elapsed_ms, RlShellCredits *out);
  int (*credits_present)(void *driver, const RlShellCredits *frame, const uint8_t *pixels, const uint8_t *palette);
  void (*error)(void *driver, char *out, size_t capacity);
+ /* Port-only "Opções" screen (rising_options.h), all optional (NULL = none):
+  * options_input sees every shell input first (keys may carry the screen's
+  * Left/Right bits); a consumed input never reaches `input`. */
+ int (*options_input)(void *driver, const RlShellInput *in, uint32_t keys, RlOpcoesEvento *out);
+ uint32_t (*options_open)(void *driver);
+ int (*options_sync)(void *driver, const RlOpcoesValores *values);
+ int (*options_button)(void *driver, int32_t rect[4]);
 } RlwMenuOps;
 
 enum {
@@ -37,7 +45,9 @@ enum {
  RLW_MENU_REPAINT = 1,   /* the driver's picture changed */
  RLW_MENU_HOST = 2,      /* menu->host_event is a request for the host */
  RLW_MENU_GAME = 3,      /* the session closed: gameplay continues (resume or a stage start) */
- RLW_MENU_FAILED = 4     /* menu->error holds the reason; the world is kept */
+ RLW_MENU_FAILED = 4,    /* menu->error holds the reason; the world is kept */
+ RLW_MENU_OPTIONS = 5    /* repaint; menu->options_event is a value change or
+                            "configurar teclas" for the host to apply */
 };
 
 typedef struct {
@@ -55,6 +65,7 @@ typedef struct {
  /* Credits (mode10): CREDITS.FLC path, decoder and the time of its last frame read. */
  char credits_path[4096]; RlwFlc credits; int credits_open; double credits_read_ms;
  RlShellEvent host_event;
+ RlOpcoesEvento options_event;
  char error[512];
 } RlwMenu;
 

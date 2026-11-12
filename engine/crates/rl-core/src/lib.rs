@@ -84,6 +84,7 @@ pub mod frame_path;
 pub mod frame_raid;
 pub mod frame_spawn;
 pub mod frame_state;
+mod modern_path;
 pub use frame_state::{FrameGlobals, FrameState, StructureState, UnitState};
 pub mod building_dismantle;
 pub mod frame_units;
@@ -143,6 +144,7 @@ impl std::error::Error for EngineError {}
 
 pub mod message_box;
 pub mod messagebox_state;
+pub mod options_screen;
 pub mod player;
 mod player_audio;
 mod player_build;
@@ -238,6 +240,19 @@ pub mod spell_order_acceptance;
 
 pub mod order_queue;
 pub use order_queue::{OrderQueue, RULE_ORDER_QUEUE};
+
+/// SetDeplaceEnginSelect as ProcessInputGame's move order (0x45efd8) issues it:
+/// every live unit of `player`'s current selection list goes to `cell` (and,
+/// under the modern rules, each gets its own goal around it). For tools/tests.
+pub fn order_selection_move(m: &mut MemoriaJogo, player: u8, cell: u16) -> Result<u32> {
+    let p = u32::from(player);
+    player_orders::call(
+        m,
+        "SetDeplaceEnginSelect",
+        [p, u32::from(cell), p << 2, 0],
+        0x45efd8,
+    )
+}
 
 #[cfg(feature = "validation-trace")]
 pub fn spell_order_explicit_input(m: &mut MemoriaJogo, owner: u32, costs: [u16; 3]) -> Result<()> {

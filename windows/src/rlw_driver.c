@@ -38,6 +38,8 @@ struct RlwDriver {
  uint32_t difficulty;
  /* Prepared shell session (macos_campaign_shell.inc): menus, briefing, pause, result. */
  RlShell shell; uint64_t shell_generation; uint32_t shell_mode; RlShellInput shell_input; RlShellEvent shell_request;
+ /* Port-only "Opções" screen (rising_options.h): one handle for the driver's lifetime. */
+ RlOpcoes options; int options_open;
  /* menu_world: started in the original main menu (no frame state, no renderer).
   * new_campaign: START_MISSION loads without a victory: 1 after "Novo jogo", the
   * current stage after the pause menu's "Reiniciar a missão". */
@@ -184,8 +186,15 @@ static int capture_presentation(RlwDriver *d, uint8_t *out) {
  memcpy(out, d->pixels, 480000); memcpy(out + 751360, &cursor, 4); return 0;
 }
 
+/* World rules for worlds created afterwards (macos_live_default_rules). */
+static uint32_t default_rules;
+void rlw_driver_default_rules(uint32_t rules) { default_rules = rules; }
+int rlw_driver_set_rules(RlwDriver *d, uint32_t rules) { return d && d->world ? rl_regras_definir(d->world, rules) : RL_INVALID_ARGUMENT; }
+int rlw_driver_set_difficulty(RlwDriver *d, uint32_t difficulty) {
+ if (!d || difficulty > 2) return RL_INVALID_ARGUMENT; d->difficulty = difficulty; return 0;
+}
 static void base_config(RlwDriver *d, RlMissaoInicio *config) {
- memset(config, 0, sizeof(*config)); config->version = 1; config->allocation_fill = 0; config->ai_clock_ms = 0x123456;
+ memset(config, 0, sizeof(*config)); config->version = 1; config->regras = default_rules; config->allocation_fill = 0; config->ai_clock_ms = 0x123456;
  config->thread_id = 1; config->ticks_per_second = 20; config->execution_mode = RL_EXECUCAO_JOGO;
  config->iterations[0] = 5; config->iterations[1] = 2; config->iterations[2] = 1;
  config->input = d->input; config->input.cursor_x = 400; config->input.cursor_y = 300;
@@ -265,6 +274,7 @@ RlwDriver *rlw_driver_create_menu(const char *root, uint32_t difficulty, char *e
 
 void rlw_driver_free(RlwDriver *d) {
  if (!d) return;
+ if (d->options) rl_opcoes_liberar(d->options);
  if (d->shell) rl_shell_free(d->shell);
  if (d->renderer) rl_render_liberar(d->renderer);
  if (d->world) rl_liberar_mundo(d->world);
@@ -460,3 +470,4 @@ const uint8_t *rlw_driver_palette(const RlwDriver *d) { return d ? d->palette : 
 
 #include "rlw_save.inc"
 #include "rlw_shell.inc"
+#include "rlw_options.inc"

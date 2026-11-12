@@ -41,6 +41,10 @@ static int op_zone(void *driver, uint32_t z, int32_t r[4]) { return macos_live_s
 static int op_credits_frame(void *driver, uint32_t ms, RlShellCredits *o) { return macos_live_shell_credits_frame(D, ms, o); }
 static int op_credits_present(void *driver, const RlShellCredits *f, const uint8_t *p, const uint8_t *c) { return macos_live_shell_credits_present(D, f, p, c); }
 static void op_error(void *driver, char *o, size_t n) { macos_live_save_error(D, o, (uint32_t)n); }
+static int op_options_input(void *driver, const RlShellInput *i, uint32_t k, RlOpcoesEvento *o) { return macos_live_options_input(D, i, k, o); }
+static uint32_t op_options_open(void *driver) { return macos_live_options_open(D); }
+static int op_options_sync(void *driver, const RlOpcoesValores *v) { return macos_live_options_sync(D, v); }
+static int op_options_button(void *driver, int32_t r[4]) { return macos_live_options_button(D, r); }
 static int op_advance(void *driver) { return macos_live_advance(D, NULL, NULL); }
 static int op_event(void *driver, uint32_t k, uint32_t m, int32_t x, int32_t y, uint32_t w, uint32_t v, uint32_t dn) { return macos_live_event(D, k, m, x, y, w, v, dn); }
 static int op_begin(void *driver) { return macos_live_shell_begin(D); }
@@ -54,7 +58,7 @@ static int op_autosave(void *driver, const char *p) { return macos_live_autosave
 static int op_load_file(void *driver, const char *p) { return macos_live_load(D, p); }
 static int op_save_slot(void *driver, const char *p, int32_t *saved) { return macos_live_shell_save_slot(D, p, saved); }
 static const RlwDemoOps OPS = {{op_mode, op_state, op_input, op_draw, op_show, op_prepare, op_request, op_load, op_slots, op_zone,
- macos_live_shell_click_clock, op_credits_frame, op_credits_present, op_error}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
+ macos_live_shell_click_clock, op_credits_frame, op_credits_present, op_error, op_options_input, op_options_open, op_options_sync, op_options_button}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
  op_save, op_autosave, op_load_file, op_save_slot};
 #else
 #define OPS RLW_WINDOWS_OPS

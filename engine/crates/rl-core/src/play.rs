@@ -104,6 +104,7 @@ impl World {
         m.audit = self.execution_mode != 1;
         m.rules = self.rules;
         m.order_queue = self.order_queue.clone();
+        m.path_searches = 0;
         m.begin();
         let attempted = catch_unwind(AssertUnwindSafe(|| {
             if let Some(answers) = answers {

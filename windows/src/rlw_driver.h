@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "rising_shell.h"
+#include "rising_options.h"
 
 typedef struct RlwDriver RlwDriver;
 typedef struct {
@@ -118,4 +119,22 @@ void rlw_save_job_free(RlwSaveJob *job);
  * resume result (play continues even if the save failed). */
 int rlw_shell_save_slot(RlwDriver *d, const char *path, int32_t *saved);
 int rlw_shell_save_slot_begin(RlwDriver *d, const char *path, int32_t *saved, RlwSaveJob **job);
+/* ---- Port-only "Opções" screen (engine/include/options-screen.md) ----
+ * Same contract as MacOSLiveDriver.h's macos_live_options_*: sync creates the
+ * screen (first call, from the CD's TITRE.PIE) or updates the host's values;
+ * input goes BEFORE rlw_shell_input with the same input (keys may add
+ * RL_OPCOES_ESQUERDA/DIREITA); when out->consumed the shell must not get it and
+ * rlw_driver_pixels/palette are already the screen to show. Never touches the
+ * shell session; nothing is consumed without one. */
+int rlw_options_sync(RlwDriver *d, const RlOpcoesValores *values);
+int rlw_options_input(RlwDriver *d, const RlShellInput *input, uint32_t keys, RlOpcoesEvento *out);
+uint32_t rlw_options_open(const RlwDriver *d);
+int rlw_options_button(RlwDriver *d, int32_t rect[4]);
+/* Rule set (RL_REGRA_*) for worlds created afterwards: "Atalhos modernos" turns
+ * on the Shift+click order queue (RL_REGRA_FILA_ORDENS), as on macOS. The menu
+ * world takes it too while its load tail has not run. Default 0 (original). */
+void rlw_driver_default_rules(uint32_t rules);
+int rlw_driver_set_rules(RlwDriver *d, uint32_t rules);
+/* Preset (0..2) of the next stage start: New game, Restart or Next stage. */
+int rlw_driver_set_difficulty(RlwDriver *d, uint32_t difficulty);
 #endif

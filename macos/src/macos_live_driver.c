@@ -30,7 +30,8 @@ extern int32_t macos_projection_sha256(const uint8_t*,uint32_t,const Span*,uint3
 #define FN(name) __typeof__(&name) name
 /* World rule set for new production worlds (RlMissaoInicio.regras): set by the
  * app before creation from its preferences ("Atalhos modernos" = Shift+click
- * order queue, RL_REGRA_FILA_ORDENS). Validation tools always use 0. */
+ * order queue, RL_REGRA_FILA_ORDENS; "Caminhos melhores" = modern unit paths,
+ * RL_REGRA_CAMINHOS_MELHORES). Validation tools always use 0. */
 static uint32_t default_rules;
 struct MacOSLiveDriver {
  void *library;
@@ -56,6 +57,10 @@ struct MacOSLiveDriver {
 #endif
  FN(rl_shell_version);FN(rl_shell_create);FN(rl_shell_plan);FN(rl_shell_enter);FN(rl_shell_paint_prepared);FN(rl_shell_input);FN(rl_shell_draw);FN(rl_shell_copy);FN(rl_shell_free);FN(rl_shell_campaign_prepare);FN(rl_shell_campaign_load);FN(rl_shell_defeat_finish);FN(rl_shell_export_world);
  RlShell shell;uint64_t shell_generation;uint32_t shell_mode;RlShellInput shell_input;RlShellEvent shell_request;
+ /* Port-only "Opções" screen (rising_options.h; optional symbols: an engine
+  * without them shows no button). One handle for the driver's lifetime. */
+ FN(rl_opcoes_versao);FN(rl_opcoes_criar);FN(rl_opcoes_definir);FN(rl_opcoes_entrada);FN(rl_opcoes_sobrepor);FN(rl_opcoes_desenhar);FN(rl_opcoes_botao);FN(rl_opcoes_fechar);FN(rl_opcoes_liberar);
+ RlOpcoes options;int options_open;
  char mission[16];uint32_t difficulty;
  /* menu_world: started in the original main menu (no frame state, no renderer).
   * new_campaign: stage START_MISSION loads without a victory: 1 after RESET_CAMPAIGN
@@ -270,6 +275,7 @@ if(host){
  LOAD(rl_salvar_versao);LOAD(rl_salvar_arquivo);LOAD(rl_salvar_bytes);LOAD(rl_carregar_arquivo);LOAD(rl_render_cache);LOAD(rl_autosalvar_inicio_fase);LOAD(rl_autosalvar_arquivo);LOAD(rl_autosalvar_bytes);
  LOAD(rl_entrada_quantidade_pendente);LOAD(rl_entrada_passo_pendente);
  LOAD_OPTIONAL(rl_regras);LOAD_OPTIONAL(rl_regras_definir);LOAD_OPTIONAL(rl_fila_ordens);
+ LOAD_OPTIONAL(rl_opcoes_versao);LOAD_OPTIONAL(rl_opcoes_criar);LOAD_OPTIONAL(rl_opcoes_definir);LOAD_OPTIONAL(rl_opcoes_entrada);LOAD_OPTIONAL(rl_opcoes_sobrepor);LOAD_OPTIONAL(rl_opcoes_desenhar);LOAD_OPTIONAL(rl_opcoes_botao);LOAD_OPTIONAL(rl_opcoes_fechar);LOAD_OPTIONAL(rl_opcoes_liberar);
  LOAD(rl_shell_version);LOAD(rl_shell_create);LOAD(rl_shell_plan);LOAD(rl_shell_enter);LOAD(rl_shell_paint_prepared);LOAD(rl_shell_input);LOAD(rl_shell_draw);LOAD(rl_shell_copy);LOAD(rl_shell_free);LOAD(rl_shell_campaign_prepare);LOAD(rl_shell_campaign_load);LOAD(rl_shell_defeat_finish);LOAD(rl_shell_export_world);
  if(d->rl_shell_version()!=RL_SHELL_VERSION){snprintf(error,capacity,"Prepared shell v1 required");goto bad;}
  if(d->rl_salvar_versao()!=RL_SAVE_FORMAT_VERSION){snprintf(error,capacity,"Save extension v1 required");goto bad;}
@@ -890,7 +896,7 @@ int32_t macos_live_set_difficulty(MacOSLiveDriver*d,uint32_t difficulty){
 int32_t macos_live_selection(MacOSLiveDriver*d,char*mission,uint32_t capacity,uint32_t*difficulty){
  if(!d||!mission||capacity<16||!difficulty)return RL_INVALID_ARGUMENT;snprintf(mission,capacity,"%s",d->mission);*difficulty=d->difficulty;return 0;
 }
-void macos_live_free(MacOSLiveDriver*d){if(!d)return;if(d->shell&&d->rl_shell_free)d->rl_shell_free(d->shell);if(d->renderer&&d->rl_render_liberar)d->rl_render_liberar(d->renderer);if(d->world&&d->rl_liberar_mundo)d->rl_liberar_mundo(d->world);if(d->library)dlclose(d->library);free(d->events_directory);free(d->events_bytes);free(d->root);free(d->stage_presentation);free(d->pause_presentation);free(d->texts);free(d->bulk);free(d->peek);free(d->surface_hashes);free(d->state_hashes);free(d->entries);free(d->spans);free(d->events);free(d);}
+void macos_live_free(MacOSLiveDriver*d){if(!d)return;if(d->options&&d->rl_opcoes_liberar)d->rl_opcoes_liberar(d->options);if(d->shell&&d->rl_shell_free)d->rl_shell_free(d->shell);if(d->renderer&&d->rl_render_liberar)d->rl_render_liberar(d->renderer);if(d->world&&d->rl_liberar_mundo)d->rl_liberar_mundo(d->world);if(d->library)dlclose(d->library);free(d->events_directory);free(d->events_bytes);free(d->root);free(d->stage_presentation);free(d->pause_presentation);free(d->texts);free(d->bulk);free(d->peek);free(d->surface_hashes);free(d->state_hashes);free(d->entries);free(d->spans);free(d->events);free(d);}
 
 MacOSLiveDriver *macos_live_create_mission_host_v1(const char*library,const char*root,const char*name,uint32_t difficulty,const uint8_t*logical,uint32_t length,char*error,uint32_t capacity){
  if(!root||!logical||!length){if(error&&capacity)snprintf(error,capacity,"Mapeamento explícito de EVENTS ausente");return NULL;}
@@ -922,3 +928,4 @@ int32_t macos_live_cd_events(MacOSLiveDriver*d,RlFrameEvent*out,uint32_t capacit
 
 #include "macos_campaign_shell.inc"
 #include "macos_event_flc.inc"
+#include "macos_options.inc"

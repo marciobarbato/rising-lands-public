@@ -23,6 +23,9 @@ pub struct MemoriaJogo {
     /// Shift+click waypoints (`crate::order_queue`), stamped and collected by
     /// `World` around every phase; never part of projected game bytes or equality.
     pub(crate) order_queue: crate::OrderQueue,
+    /// Modern-path searches already run in the current phase (budget scratch,
+    /// reset with every projection; never game state).
+    pub(crate) path_searches: u32,
     #[cfg(feature = "validation-trace")]
     validation_trace: Option<Vec<(u32, Vec<u8>)>>,
 }
@@ -116,6 +119,7 @@ impl Default for MemoriaJogo {
             audit: true,
             rules: 0,
             order_queue: crate::OrderQueue::default(),
+            path_searches: 0,
             #[cfg(feature = "validation-trace")]
             validation_trace: None,
         }
@@ -128,6 +132,10 @@ impl PartialEq for MemoriaJogo {
 }
 impl Eq for MemoriaJogo {}
 impl MemoriaJogo {
+    /// True when the world plays with the optional modern unit paths.
+    pub fn modern_paths(&self) -> bool {
+        self.rules & crate::RULE_MODERN_PATHS != 0
+    }
     #[cfg(feature = "validation-trace")]
     pub fn start_validation_trace(&mut self) {
         self.validation_trace = Some(Vec::new());

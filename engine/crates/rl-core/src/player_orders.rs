@@ -599,6 +599,9 @@ pub fn call(m: &mut MemoriaJogo, name: &'static str, r: [u32; 4], site: u32) -> 
                     }
                 }
             }
+            if name == "SetDeplaceEnginSelect" && m.modern_paths() {
+                crate::modern_path::spread(m, p, d as u16)?;
+            }
             Ok(eax)
         }
         _ => stop(name, site),

@@ -18,6 +18,7 @@ final class NativePlayPresenter {
     var presentedCount=0,epoch=0
     var measurementStart=0.0
     var uniqueGameFrames=0,lastPresentedFrame:UInt64?
+    var zeroPresented=0
     var latestFrame:UInt64=0
     var smoothFilter:UInt32=0
     init(layer:CAMetalLayer,device:MTLDevice,commands:MTLCommandQueue,pipeline:MTLRenderPipelineState) throws {
@@ -73,6 +74,7 @@ final class NativePlayPresenter {
         encoder.drawPrimitives(type:.triangle,vertexStart:0,vertexCount:3);encoder.endEncoding()
         drawable.addPresentedHandler{[weak self] drawable in
             guard let self=self else{return};self.lock.lock()
+            if drawable.presentedTime==0{self.zeroPresented+=1} // dropped by the compositor (e.g. occluded)
             guard self.epoch==epoch,drawable.presentedTime>=self.measurementStart else{self.lock.unlock();return}
             self.presentedCount+=1;self.presented.append(drawable.presentedTime);if self.presented.count>16384{self.presented.removeFirst(8192)};if self.lastPresentedFrame != frame{self.uniqueGameFrames+=1;self.lastPresentedFrame=frame};self.lock.unlock()
         }
@@ -816,9 +818,10 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 throw NSError(domain:"EVENTSHostContract",code:1,userInfo:[NSLocalizedDescriptionKey:"Mapeamento de EVENTS ausente no aplicativo. Recompile esta versão."])
             }
             let bytes=Array(logical.utf8)
-            // Atalhos modernos also turn on the engine's Shift+click order queue
-            // (RL_REGRA_FILA_ORDENS) for the worlds created from here on.
-            macos_live_default_rules(validationMode ? 0:NativeModernHotkeys.engineRules())
+            // Engine rules for the worlds created from here on: Atalhos modernos
+            // turn on the Shift+click order queue (RL_REGRA_FILA_ORDENS) and
+            // Caminhos melhores the modern unit paths (RL_REGRA_CAMINHOS_MELHORES).
+            macos_live_default_rules(validationMode ? 0:NativeEngineRules.current())
             // The original main menu (MenuInit 2) is the normal start; a stage
             // name starts that stage directly (chooser, saves, diagnostics).
             candidate=bytes.withUnsafeBufferPointer {
@@ -1072,10 +1075,18 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     }
     @MainActor func setModernHotkeys(_ enabled:Bool){
         NativeModernHotkeys.store(enabled);metal.releaseKeys();metal.hotkeys.modernEnabled=enabled
-        // The order queue rule follows: new worlds, and the menu world (before its
-        // load tail, as rl_regras_definir allows). A running stage or a loaded
-        // save keeps its own rules.
-        let rules=validationMode ? 0:NativeModernHotkeys.engineRules()
+        applyEngineRules()
+    }
+    /// "Caminhos melhores": the modern unit paths rule (bit 0 of regras).
+    @MainActor func setModernPaths(_ enabled:Bool){
+        NativeModernPaths.store(enabled)
+        applyEngineRules()
+    }
+    /// The rules follow the preferences: new worlds, and the menu world (before its
+    /// load tail, as rl_regras_definir allows). A running stage or a loaded save
+    /// keeps its own rules.
+    @MainActor func applyEngineRules(){
+        let rules=validationMode ? 0:NativeEngineRules.current()
         macos_live_default_rules(rules)
         work.async{[weak self] in if let driver=self?.driver{_=macos_live_set_rules(driver,rules)}}
     }
@@ -1088,6 +1099,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     // The worker owns the prepared session and host menu counters. Gameplay is
     // suspended; only real shell input/draw APIs can change the research choice.
     func startShell(){
+        syncOptions()
         presenter?.stop();shellHeld.removeAll();shellMouseDown=false;hostRequest=false;shellRun &+= 1;shellPendingMove=nil;shellZones.removeAll()
         let run=shellRun
         DispatchQueue.main.async{self.metal.releaseKeys();self.window.makeFirstResponder(self.metal)}
@@ -1120,6 +1132,8 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     var shellLastMove=0.0
     var shellMovesReceived=0,shellMovesApplied=0
     var shellZones=[UInt32:[Int32]]()
+    /// Last values handed to the options screen (atalhos, caminhos, dificuldade, velocidade).
+    var optionsSynced:[UInt32]?
     func scheduleShellMove(){
         guard !shellMoveScheduled else{return}
         shellMoveScheduled=true
@@ -1190,7 +1204,9 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 return
             }
             guard shellHeld.remove(key) != nil,arrow==nil else{return}
-            let keys:UInt32 = [13:1,38:2,40:4,27:8][key] ?? 0
+            // Left/Right exist only on the port's options screen (never for the shell).
+            let optionsKeys:[Int:UInt32]=macos_live_options_open(driver) != 0 ? [37:UInt32(RL_OPCOES_ESQUERDA),39:UInt32(RL_OPCOES_DIREITA)]:[:]
+            let keys:UInt32 = [13:1,38:2,40:4,27:8][key] ?? optionsKeys[key] ?? 0
             if keys != 0{sendShell(keys:keys)}
         }else{
             let message=event["msg"] as? Int ?? 0
@@ -1278,11 +1294,15 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     }
     func sendShell(keys:UInt32){
         var input=RlShellInput();guard macos_live_shell_state(driver,&input)==0 else{return}
-        input.keys=keys;input.mouse_ae=0;input.mouse_af=0
-        sendShell(input:input)
+        input.keys=keys & 15;input.mouse_ae=0;input.mouse_af=0
+        sendShell(input:input,optionsKeys:keys)
     }
-    func sendShell(input supplied:RlShellInput){
+    func sendShell(input supplied:RlShellInput,optionsKeys:UInt32?=nil){
         guard !movieActive,!hostRequest,macos_live_shell_mode(driver) != 0,stoppedReason==nil else{return}
+        // The port's "Opções" screen sees every shell input first; what it takes
+        // never reaches the original shell (engine/include/options-screen.md).
+        if sendOptions(supplied,keys:optionsKeys ?? supplied.keys){return}
+        if supplied.keys == 0 && (optionsKeys ?? 0) != 0{return}
         var input=supplied,event=RlShellEvent()
         var code=macos_live_shell_input(driver,&input,&event)
         if code==0 && event.kind != UInt32(RL_SHELL_NONE){shellZones.removeAll()}
@@ -1498,6 +1518,18 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
 /// `--ux-menu-trace` support (AppDelegate.startUXMenuTrace in main.swift).
 extension NativeLiveWindow {
     /// Any thread. Presented-drawable timestamps of both presentation paths.
+    /// Main thread. Why no presentation was counted (smoke failure reports only).
+    func uxPresentationDiagnostics(since start:Double)->String{
+        var parts=["window visible \(window.occlusionState.contains(.visible)) key \(window.isKeyWindow) metalHidden \(metal.isHidden)"]
+        metal.testLock.lock();parts.append("oneShot \(metal.testPresented.filter{$0>=start}.count)/\(metal.testPresented.count)");metal.testLock.unlock()
+        if let presenter{
+            presenter.lock.lock()
+            parts.append("presenter running \(presenter.timer != nil) published \(presenter.published) submitted \(presenter.submitted) dropped \(presenter.dropped) presented \(presenter.presented.filter{$0>=start}.count)/\(presenter.presentedCount) zeroTimes \(presenter.zeroPresented) failure \(presenter.failure ?? "-")")
+            presenter.lock.unlock()
+        }else{parts.append("presenter nil")}
+        parts.append("shellPictures \(shellPicture) stop \(stoppedReason ?? "-")")
+        return parts.joined(separator:" · ")
+    }
     func uxPresentedTimes(since start:Double)->[Double]{
         metal.testLock.lock();var times=metal.testPresented.filter{$0>=start};metal.testLock.unlock()
         if let presenter{presenter.lock.lock();times+=presenter.presented.filter{$0>=start};presenter.lock.unlock()}
@@ -1514,3 +1546,64 @@ extension NativeLiveWindow {
     static let menuTrace=CommandLine.arguments.contains("--ux-menu-trace")
 }
 
+// MARK: "Opções" (port-only screen drawn by the engine; rising_options.h)
+extension NativeLiveWindow {
+    /// "Caminhos melhores" (rule bit 0): the same preference as Jogo > Caminhos melhores.
+    static var modernPathsEnabled:Bool{NativeModernPaths.isEnabled()}
+
+    /// Worker. The host's current preferences, in the engine's value layout.
+    func optionsValues()->RlOpcoesValores{
+        var v=RlOpcoesValores()
+        v.version=1
+        v.atalhos=NativeModernHotkeys.isEnabled() ? 1:0
+        v.caminhos=Self.modernPathsEnabled ? 1:0
+        v.dificuldade=min(campaignSelection.difficulty,2)
+        v.velocidade=UInt32(NativeGameSpeed(frameRate:gameFPS)?.rawValue ?? speed.rawValue)
+        v.disponivel=UInt32(RL_OPCOES_TODOS)
+        v.idioma=0
+        return v
+    }
+    /// Worker. Creates the screen on the first shell, then keeps its values in
+    /// step with the menu bar. An engine without the extension shows no button.
+    func syncOptions(){
+        guard !validationMode else{return}
+        let v=optionsValues()
+        let key=[v.atalhos,v.caminhos,v.dificuldade,v.velocidade]
+        guard key != optionsSynced else{return}
+        if macos_live_options_sync(driver,[v])==0{optionsSynced=key}
+    }
+    /// Worker. true when the options screen took this input (its picture is
+    /// already in the driver; the shell must not see the input).
+    func sendOptions(_ input:RlShellInput,keys:UInt32)->Bool{
+        guard !validationMode else{return false}
+        syncOptions()
+        var input=input,event=RlOpcoesEvento()
+        let code=macos_live_options_input(driver,&input,keys,&event)
+        if code != 0{stoppedReason=saveError(code).localizedDescription;showShellPicture();deliver();return true}
+        guard event.consumed != 0 else{return false}
+        if event.kind==UInt32(RL_OPCOES_ABRIU) || event.kind==UInt32(RL_OPCOES_FECHOU){shellMouseDown=false;shellHeld.removeAll();shellZones.removeAll()}
+        optionsApply(event)
+        showShellPicture()
+        return true
+    }
+    /// Worker. A changed value goes to the same setters as the menu bar.
+    func optionsApply(_ event:RlOpcoesEvento){
+        let v=event.values
+        if event.kind==UInt32(RL_OPCOES_CONFIGURAR_TECLAS){DispatchQueue.main.async{self.showHotkeys()};return}
+        guard event.kind==UInt32(RL_OPCOES_MUDOU) else{return}
+        optionsSynced=[v.atalhos,v.caminhos,v.dificuldade,v.velocidade]
+        let item=event.item
+        DispatchQueue.main.async{ [weak self] in
+            guard let self else{return}
+            MainActor.assumeIsolated{
+                switch item{
+                case UInt32(RL_OPCOES_ATALHOS):self.setModernHotkeys(v.atalhos != 0)
+                case UInt32(RL_OPCOES_CAMINHOS):if !Self.diagnosticRun{self.setModernPaths(v.caminhos != 0)}
+                case UInt32(RL_OPCOES_DIFICULDADE):if let d=NativeDifficulty(rawValue:v.dificuldade){self.setDifficulty(d)}
+                case UInt32(RL_OPCOES_VELOCIDADE):if let speed=NativeGameSpeed(rawValue:Int(v.velocidade)){self.setSpeed(speed)}
+                default:break
+                }
+            }
+        }
+    }
+}

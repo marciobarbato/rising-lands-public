@@ -202,6 +202,35 @@ fn rules_round_trip_and_unknown_bits_are_refused() {
     let (mut w, _) = sample();
     w.frame_phase = 0;
     assert_eq!(w.set_rules(crate::RULE_ORDER_QUEUE), Ok(()));
-    assert_eq!(w.set_rules(1), Err(RulesError::Unknown(1)));
+    assert_eq!(w.set_rules(4), Err(RulesError::Unknown(4)));
     assert_eq!(w.rules(), crate::RULE_ORDER_QUEUE);
+}
+#[test]
+fn modern_paths_rule_writes_schema_3_alone_and_with_the_order_queue() {
+    let (mut w, resume) = sample();
+    w.frame_phase = 0;
+    let both = crate::RULE_MODERN_PATHS | crate::RULE_ORDER_QUEUE;
+    for rules in [crate::RULE_MODERN_PATHS, both] {
+        assert_eq!(w.set_rules(rules), Ok(()));
+        let ruled = encode(&w, &resume).unwrap();
+        assert_eq!(&ruled[12..16], &RULES_SCHEMA.to_le_bytes());
+        assert_eq!(&ruled[28..32], &8u32.to_le_bytes());
+        let (loaded, again) = decode(&ruled).unwrap();
+        assert_eq!(loaded.rules(), rules);
+        assert_eq!(encode(&loaded, &again).unwrap(), ruled);
+    }
+    // The order queue keeps its own section with the modern paths on.
+    w.order_queue = crate::OrderQueue::from_entries([(
+        4,
+        crate::order_queue::Waypoints {
+            player: 1,
+            cells: vec![0x0a0b],
+        },
+    )])
+    .unwrap();
+    let queued = encode(&w, &resume).unwrap();
+    assert_eq!(&queued[28..32], &9u32.to_le_bytes());
+    let (loaded, _) = decode(&queued).unwrap();
+    assert_eq!(loaded.rules(), both);
+    assert_eq!(loaded.order_queue().cells(4), &[0x0a0b]);
 }

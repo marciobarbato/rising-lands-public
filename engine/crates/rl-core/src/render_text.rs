@@ -57,3 +57,62 @@ impl Context<'_> {
         Ok(())
     }
 }
+
+/// AffText's measured width of one line (same metrics pairs and space rule),
+/// for port-only layouts that centre or hit-test original captions.
+pub(crate) fn text_width(
+    assets: &crate::render_assets::Assets,
+    text: &[u8],
+    font: u32,
+) -> Result<i32> {
+    if !(1..=6).contains(&font) {
+        return Err(crate::render::Error::Invalid(
+            "text width font outside banks 1..6",
+        ));
+    }
+    let metrics = BASES[((font - 1) & !1) as usize];
+    let mut width = 0i32;
+    for &c in text.split(|&c| c == 0 || c == 10).next().unwrap_or(&[]) {
+        if c < 32 {
+            return Err(crate::render::Error::Invalid("text width control byte"));
+        }
+        let id = metrics + if c == b' ' { b'l' as u32 } else { c as u32 } - 32;
+        width += assets.sprite(id)?.width as i32;
+    }
+    Ok(width)
+}
+
+impl Context<'_> {
+    /// AffText's layout with PasteOmbreCmp's raster: the glyph shapes darken the
+    /// picture through the original shadow table instead of painting it. A
+    /// port-only "unavailable" caption style (the original menus have none).
+    pub(crate) fn afftext_shadow(
+        &mut self,
+        text: &[u8],
+        rectangle: [i32; 4],
+        font: u32,
+    ) -> Result<()> {
+        let width = text_width(self.assets, text, font)?;
+        let metrics = BASES[((font - 1) & !1) as usize];
+        let height = self.assets.sprite(metrics + b'j' as u32 - 32)?.height as i32;
+        let [mut x, mut y, right, bottom] = rectangle.map(i16);
+        if i16(width) <= right - x {
+            x += (right - x - i16(width)) / 2;
+        }
+        y += (bottom - y - i16(height)) / 2;
+        for &c in text.split(|&c| c == 0 || c == 10).next().unwrap_or(&[]) {
+            let advance = self
+                .assets
+                .sprite(metrics + if c == b' ' { b'l' as u32 } else { c as u32 } - 32)?
+                .width as i32;
+            if c != b' ' {
+                // Twice: one pass of the table is too faint on TITRE.PIE's wall.
+                for _ in 0..2 {
+                    self.shadow(x, y, BASES[font as usize - 1] + c as u32 - 32, false)?;
+                }
+            }
+            x = i16(x + advance);
+        }
+        Ok(())
+    }
+}

@@ -12,6 +12,10 @@ pub struct Bank {
     assets: Assets,
 }
 impl Bank {
+    /// The decoded original sprites (port-only screens draw with them).
+    pub fn assets(&self) -> &Assets {
+        &self.assets
+    }
     pub fn load(raw: &[u8], base: &Assets) -> Result<Self> {
         let digest = crate::render_assets::sha256(raw);
         let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();

@@ -165,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         gameMenu.addItem(withTitle:"Nova partida…",action:#selector(showCampaignChooser),keyEquivalent:"n")
         gameMenu.addItem(withTitle:"Configurar teclas…",action:#selector(showHotkeys),keyEquivalent:",").target=self
         gameMenu.addItem(withTitle:"Atalhos modernos",action:#selector(toggleModernHotkeys(_:)),keyEquivalent:"").target=self
+        gameMenu.addItem(withTitle:"Caminhos melhores",action:#selector(toggleModernPaths(_:)),keyEquivalent:"").target=self
         gameMenu.addItem(.separator())
         gameMenu.addItem(withTitle:"Pausar",action:#selector(togglePause),keyEquivalent:"p").target=self
         let speedItem=NSMenuItem(title:"Velocidade",action:nil,keyEquivalent:"");let speedMenu=NSMenu(title:"Velocidade")
@@ -236,6 +237,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         let enabled = !NativeModernHotkeys.isEnabled()
         if let live=nativeLive{MainActor.assumeIsolated{live.setModernHotkeys(enabled)}}else{NativeModernHotkeys.store(enabled)}
     }
+    /// Optional modern unit paths (engine rule bit 0). Applies to the menu world
+    /// and to worlds created afterwards; a running stage or a save keeps its rules.
+    @objc func toggleModernPaths(_ item:NSMenuItem){
+        let enabled = !NativeModernPaths.isEnabled()
+        if let live=nativeLive{MainActor.assumeIsolated{live.setModernPaths(enabled)}}else{NativeModernPaths.store(enabled)}
+    }
     @objc func selectDifficulty(_ item:NSMenuItem){if let value=NativeDifficulty(rawValue:UInt32(item.tag)){nativeLive?.setDifficulty(value)}}
     @objc func integerGame(){nativeLive?.setScaleMode(.integerFit)}
     func menuNeedsUpdate(_ menu:NSMenu){refreshSaveMenus()}
@@ -264,6 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             return item.action == #selector(fasterSpeed) ? live.speed != .quadruple : item.action == #selector(slowerSpeed) ? live.speed != .half : true
         }
         if item.action == #selector(toggleModernHotkeys(_:)) {item.state=NativeModernHotkeys.isEnabled() ? .on:.off;return true}
+        if item.action == #selector(toggleModernPaths(_:)) {item.state=NativeModernPaths.isEnabled() ? .on:.off;return true}
         if item.action == #selector(selectDifficulty(_:)) {
             item.state=nativeLive?.difficulty.rawValue==UInt32(item.tag) ? .on:.off
             return nativeLive != nil
@@ -744,7 +752,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                                                         }
                                                     }else if attempts>0{
                                                         DispatchQueue.main.asyncAfter(deadline:.now()+0.05){presented(attempts-1)}
-                                                    }else{finish("Original SinglePlayer drawables were not presented")}
+                                                    }else{finish("Original SinglePlayer drawables were not presented · "+live.uxPresentationDiagnostics(since:started))}
                                                 }
                                                 presented(40)
                                             }else if remaining>0 && state["live_stop"] is NSNull{

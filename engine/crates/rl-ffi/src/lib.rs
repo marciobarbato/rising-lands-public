@@ -660,6 +660,8 @@ mod difficulty_abi;
 
 mod shell_abi;
 
+mod options_abi;
+
 mod load_tail_input_abi;
 #[cfg(test)]
 #[path = "rules_abi_tests.rs"]

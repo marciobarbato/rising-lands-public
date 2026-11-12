@@ -81,10 +81,15 @@ typedef struct {
  * Each optional feature defines one RL_REGRA_* bit; an unknown bit is refused
  * with RL_INVALID_ARGUMENT. regras replaces the former reserved word with the
  * same offset and size, so hosts that wrote reserved=0 stay original.
+ * Bit 0 = optional modern unit paths ("Caminhos melhores"): a deterministic
+ * integer A* (no RNG) for the units a move order or the AI walks, spread goals
+ * for group moves, wait-and-replan instead of giving up. Without the bit the
+ * original CheminCalcul movement runs unchanged.
  * Bit 1 = optional Shift+click order queue (part of the modern shortcuts): a
  * Shift+click on open ground with units selected, a no-op in the original,
  * queues a move waypoint per unit (player order 40); idle units walk them in
  * order; a plain order replaces them. Without the bit, order 40 is refused. */
+#define RL_REGRA_CAMINHOS_MELHORES 0x1u
 #define RL_REGRA_FILA_ORDENS 0x2u
 /* config.version=1, regras=0 or known RL_REGRA_* bits, fill=0..255 (explicit host allocator bytes),
  * execution_mode=0/1/2, rate>0. ai_clock_ms is the original GetTickCount input

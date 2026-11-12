@@ -1,9 +1,15 @@
-# Windows client CI. It needs no game data: on windows-latest it builds the
-# engine (static library) and the Win32 host with mingw-w64 into one
-# RisingLands.exe, runs the portable unit tests through the Win32 file APIs,
-# the engine ABI self-test and the importer's refusal path, and uploads the
-# .exe with its SHA-256. Pre-release binaries are this artifact, so anyone can
-# match a release to the commit it was built from.
+# Windows client CI. No game data is needed. Three builds, one artifact each:
+#   mingw-x64   x86_64-pc-windows-gnu, mingw-w64 gcc (windows/build.sh)
+#   msvc-x64    x86_64-pc-windows-msvc, cl.exe (windows/build-msvc.ps1)
+#   msvc-arm64  aarch64-pc-windows-msvc, cl.exe ARM64 cross build on windows-latest,
+#               then run by arm64-run on a windows-11-arm runner
+# Both x64 builds run the portable unit tests through the Win32 file APIs, the
+# engine ABI self-test and the importer's refusal of a file that is not the CD.
+# Each artifact carries the .exe and its SHA-256, so anyone can match a
+# pre-release binary to the commit it was built from. The builds are not signed
+# (docs/WINDOWS_CLIENT.md, section 6).
+# arm64-run (unit tests, --selftest, import refusal on ARM64) runs on every push;
+# a manual run can turn it off with the arm64_run input.
 name: windows-client
 on:
   push:
@@ -12,10 +18,15 @@ on:
   pull_request:
     paths: ["windows/**", "engine/**", ".github/workflows/windows-client.yml"]
   workflow_dispatch:
+    inputs:
+      arm64_run:
+        description: "Also run the ARM64 build (--selftest, unit tests) on a windows-11-arm runner"
+        type: boolean
+        default: true
 permissions:
   contents: read
 jobs:
-  build:
+  mingw-x64:
     runs-on: windows-latest
     defaults:
       run:
@@ -24,30 +35,105 @@ jobs:
       - uses: actions/checkout@v4
       - name: Rust target
         run: rustup target add x86_64-pc-windows-gnu
-      - name: Build and unit tests
+      - name: Build and unit tests (mingw-w64 gcc)
         env:
           CC: gcc
           HOST_CC: gcc
         run: windows/build.sh test
-      - name: Engine ABI self-test
-        run: windows/build/RisingLands.exe --selftest
-      - name: Import refuses a non-CD source
-        run: |
-          printf 'not a cd' > nada.bin
-          set +e
-          windows/build/RisingLands.exe --headless --frames 1 --data "$RUNNER_TEMP/rl" --cd nada.bin
-          rc=$?
-          set -e
-          echo "exit $rc"
-          test "$rc" = 2
+      - name: Self-test and import refusal
+        run: windows/ci/smoke.sh windows/build/RisingLands.exe
       - name: SHA-256
+        shell: bash
         run: |
           cd windows/build
           sha256sum RisingLands.exe | tee RisingLands.exe.sha256
           echo "Commit: $GITHUB_SHA"
       - uses: actions/upload-artifact@v4
         with:
-          name: RisingLands-windows-x86_64
+          name: RisingLands-windows-x86_64-mingw
           path: |
             windows/build/RisingLands.exe
             windows/build/RisingLands.exe.sha256
+
+  msvc-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and unit tests (MSVC x64)
+        shell: pwsh
+        run: windows/build-msvc.ps1 -Arch x64 -Test
+      - name: Self-test and import refusal
+        shell: bash
+        run: windows/ci/smoke.sh windows/build/msvc-x64/RisingLands.exe
+      - name: SHA-256
+        shell: bash
+        run: |
+          cd windows/build/msvc-x64
+          sha256sum RisingLands.exe | tee RisingLands.exe.sha256
+          echo "Commit: $GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RisingLands-windows-x86_64-msvc
+          path: |
+            windows/build/msvc-x64/RisingLands.exe
+            windows/build/msvc-x64/RisingLands.exe.sha256
+
+  msvc-arm64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, unit tests built for arm64-run (MSVC ARM64 cross)
+        shell: pwsh
+        run: windows/build-msvc.ps1 -Arch arm64 -Test
+      - name: Machine type is ARM64
+        shell: bash
+        run: |
+          # PE header: "PE\0\0" at e_lfanew, then IMAGE_FILE_MACHINE_ARM64 = 0xAA64.
+          exe=windows/build/msvc-arm64/RisingLands.exe
+          off=$(od -An -tu4 -j60 -N4 "$exe" | tr -d ' ')
+          machine=$(od -An -tx2 -j$((off + 4)) -N2 "$exe" | tr -d ' ')
+          echo "machine 0x$machine"
+          test "$machine" = aa64
+      - name: SHA-256
+        shell: bash
+        run: |
+          cd windows/build/msvc-arm64
+          sha256sum RisingLands.exe | tee RisingLands.exe.sha256
+          echo "Commit: $GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RisingLands-windows-arm64-msvc
+          path: |
+            windows/build/msvc-arm64/RisingLands.exe
+            windows/build/msvc-arm64/RisingLands.exe.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tests-windows-arm64-msvc
+          path: windows/build/msvc-arm64/tests/*.exe
+          retention-days: 3
+
+  arm64-run:
+    if: github.event_name != 'workflow_dispatch' || inputs.arm64_run
+    needs: msvc-arm64
+    runs-on: windows-11-arm
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: RisingLands-windows-arm64-msvc
+          path: arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: tests-windows-arm64-msvc
+          path: arm64/tests
+      - name: Unit tests (ARM64)
+        run: |
+          arm64/tests/test_cd.exe "$RUNNER_TEMP/test-work"
+          arm64/tests/test_menu.exe
+          arm64/tests/test_saves.exe "$RUNNER_TEMP"
+      - name: Self-test and import refusal (ARM64)
+        run: windows/ci/smoke.sh arm64/RisingLands.exe
