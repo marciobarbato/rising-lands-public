@@ -94,7 +94,8 @@ impl From<EngineError> for AbiError {
             }
             EngineError::InvalidTickRate
             | EngineError::InvalidFramePhase(_)
-            | EngineError::InvalidExecutionMode(_) => Self::InvalidArgument,
+            | EngineError::InvalidExecutionMode(_)
+            | EngineError::InvalidRules(_) => Self::InvalidArgument,
             _ => Self::Memory(e),
         }
     }
@@ -577,6 +578,64 @@ pub unsafe extern "C" fn rl_executar_rotina_quadro(
 mod player_abi;
 
 /// ABI1.6 execution policy. Modes change audit work, never the game routine chain.
+/// # Safety
+/// Output is a writable aligned u32. Queries do not change world generation.
+#[no_mangle]
+pub unsafe extern "C" fn rl_regras(handle: u64, output: *mut u32) -> i32 {
+    status(|| {
+        if output.is_null() {
+            return Err(AbiError::InvalidArgument);
+        }
+        let rules = with_world(handle, |world| Ok(world.rules()))?;
+        unsafe {
+            output.write(rules);
+        }
+        Ok(())
+    })
+}
+/// Rules change only before the load tail (a menu world, or a stage world that
+/// has not run phase 1); the next stage inherits them. Unknown bits or a world
+/// past its load tail: RL_INVALID_ARGUMENT, world unchanged.
+#[no_mangle]
+pub extern "C" fn rl_regras_definir(handle: u64, rules: u32) -> i32 {
+    status(|| {
+        with_world(handle, |world| {
+            world
+                .set_rules(rules)
+                .map_err(|_| AbiError::InvalidArgument)
+        })
+    })
+}
+/// Pending Shift+click waypoints of one unit (`RL_REGRA_FILA_ORDENS`), oldest
+/// first. `count` receives the total; at most `capacity` cells are written.
+/// Without the rule, or for a unit with no waypoints, the count is 0.
+/// # Safety
+/// `count` is a writable aligned u32; `cells` holds `capacity` u16 (may be null
+/// when `capacity` is 0). Queries do not change world generation.
+#[no_mangle]
+pub unsafe extern "C" fn rl_fila_ordens(
+    handle: u64,
+    unit: u32,
+    cells: *mut u16,
+    capacity: u32,
+    count: *mut u32,
+) -> i32 {
+    status(|| {
+        if count.is_null() || (cells.is_null() && capacity != 0) || unit > u32::from(u16::MAX) {
+            return Err(AbiError::InvalidArgument);
+        }
+        let queued = with_world(handle, |world| {
+            Ok(world.order_queue().cells(unit as u16).to_vec())
+        })?;
+        unsafe {
+            for (i, cell) in queued.iter().take(capacity as usize).enumerate() {
+                cells.add(i).write(*cell);
+            }
+            count.write(queued.len() as u32);
+        }
+        Ok(())
+    })
+}
 #[no_mangle]
 pub extern "C" fn rl_execucao_definir(handle: u64, mode: u32) -> i32 {
     status(|| with_world(handle, |world| Ok(world.set_execution_mode(mode)?)))
@@ -602,3 +661,6 @@ mod difficulty_abi;
 mod shell_abi;
 
 mod load_tail_input_abi;
+#[cfg(test)]
+#[path = "rules_abi_tests.rs"]
+mod rules_abi_tests;

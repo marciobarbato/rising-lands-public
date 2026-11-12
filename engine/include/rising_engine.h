@@ -74,10 +74,19 @@ typedef struct {
 uint32_t rl_missao_versao(void);
 typedef struct {
  uint32_t version,allocation_fill,ai_clock_ms,thread_id,ticks_per_second,epoch_ms,
-  execution_mode,reserved;
+  execution_mode,regras;
  uint32_t iterations[3]; RlFrameInput input;
 } RlMissaoInicio;
-/* config.version=1, reserved=0, fill=0..255 (explicit host allocator bytes),
+/* Rule set of a world (RlMissaoInicio.regras, rl_regras). 0 is the original game.
+ * Each optional feature defines one RL_REGRA_* bit; an unknown bit is refused
+ * with RL_INVALID_ARGUMENT. regras replaces the former reserved word with the
+ * same offset and size, so hosts that wrote reserved=0 stay original.
+ * Bit 1 = optional Shift+click order queue (part of the modern shortcuts): a
+ * Shift+click on open ground with units selected, a no-op in the original,
+ * queues a move waypoint per unit (player order 40); idle units walk them in
+ * order; a plain order replaces them. Without the bit, order 40 is refused. */
+#define RL_REGRA_FILA_ORDENS 0x2u
+/* config.version=1, regras=0 or known RL_REGRA_* bits, fill=0..255 (explicit host allocator bytes),
  * execution_mode=0/1/2, rate>0. ai_clock_ms is the original GetTickCount input
  * for AI Randomize; it is NOT replaced with a wall clock or bot seed.
  * input is the explicit WinMain call context (including virtual ESP). Its
@@ -341,6 +350,20 @@ int32_t rl_eventos_entrada(RlMundo world,RlPlayerInputEvent *buffer,uint32_t cap
 enum { RL_EXECUCAO_AUDITORIA=0, RL_EXECUCAO_JOGO=1, RL_EXECUCAO_JOGO_AUDITADO=2 };
 int32_t rl_execucao_definir(RlMundo world,uint32_t mode);
 int32_t rl_execucao_modo(RlMundo world,uint32_t *mode);
+/* Rules follow the world: rl_missao_iniciar/_menu take config.regras, the next
+ * stage (MissionNext, campaign continuation, rl_shell_campaign_load from a shell
+ * created on the menu world) inherits them, and saves record them (schema3 only
+ * when regras!=0; a schema2 save loads with regras=0). rl_regras reads them.
+ * rl_regras_definir changes them only before the load tail: a menu world, or a
+ * stage world that has not run phase1. Afterwards, or with an unknown bit, it
+ * returns RL_INVALID_ARGUMENT and the world is unchanged. */
+int32_t rl_regras(RlMundo world,uint32_t *regras);
+int32_t rl_regras_definir(RlMundo world,uint32_t regras);
+/* Pending Shift+click waypoints of one unit, oldest first (cells y*256+x).
+ * *count = total; at most capacity cells written (cells may be NULL when
+ * capacity==0). Always 0 without RL_REGRA_FILA_ORDENS. Saves record the queue
+ * as schema3 section 9, only when it is not empty. */
+int32_t rl_fila_ordens(RlMundo world,uint32_t unit,uint16_t *cells,uint32_t capacity,uint32_t *count);
 /* P4 save extension v1 to ABI1.6; independent container/state versions.
  * These saves serialize Rust state, not the original GameSave format.
  * At a public-call boundary pass the CURRENT carried RlFrameInput (the exact

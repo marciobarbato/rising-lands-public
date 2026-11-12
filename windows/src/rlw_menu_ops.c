@@ -25,6 +25,11 @@ static uint64_t op_frames(void *driver) { RlwStatus s; rlw_driver_status(D, &s);
 static const uint8_t *op_pixels(void *driver) { return rlw_driver_pixels(D); }
 static const uint8_t *op_palette(void *driver) { return rlw_driver_palette(D); }
 static void op_stop(void *driver, char *o, size_t n) { RlwStatus s; rlw_driver_status(D, &s); snprintf(o, n, "%s", s.message); }
+static int op_save(void *driver, const char *p) { return rlw_driver_save(D, p); }
+static int op_autosave(void *driver, const char *p) { return rlw_driver_autosave(D, p); }
+static int op_load_file(void *driver, const char *p) { return rlw_driver_load(D, p); }
+static int op_save_slot(void *driver, const char *p, int32_t *saved) { return rlw_shell_save_slot(D, p, saved); }
 const RlwDemoOps RLW_WINDOWS_OPS = {{op_mode, op_state, op_input, op_draw, op_show, op_prepare, op_request, op_load, op_slots, op_zone,
- rlw_shell_click_clock, op_credits_frame, op_credits_present, op_error}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop};
+ rlw_shell_click_clock, op_credits_frame, op_credits_present, op_error}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
+ op_save, op_autosave, op_load_file, op_save_slot};
 #undef D

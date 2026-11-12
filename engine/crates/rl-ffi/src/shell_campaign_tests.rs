@@ -588,7 +588,7 @@ fn menu_preparation_rejects_invalid_handles_and_arguments_without_outputs() {
             ticks_per_second: 20,
             epoch_ms: 0,
             execution_mode: 0,
-            reserved: 0,
+            regras: 0,
             iterations: [0; 3],
             input: FrameInput::default(),
         };
@@ -664,7 +664,7 @@ fn menu_boot_new_game_reaches_monde01_like_direct_entry() {
         ticks_per_second: 20,
         epoch_ms: 0,
         execution_mode: 0,
-        reserved: 0,
+        regras: 0,
         iterations: [0; 3],
         input: host_input,
     };
@@ -943,7 +943,7 @@ fn p4_introduction_credits_and_difficulty_load_through_the_shell() {
         ticks_per_second: 20,
         epoch_ms: 0,
         execution_mode: 0,
-        reserved: 0,
+        regras: 0,
         iterations: [0; 3],
         input: rl_core::mission_files::frame_input(&inputs.join("input1.bin")).unwrap(),
     };

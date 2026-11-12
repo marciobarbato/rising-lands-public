@@ -315,6 +315,8 @@ fn body(m: &mut MemoriaJogo, input: &FrameInput, events: &mut EventLog, ebx: u32
                 call(m, name, &[])?;
             }
         }
+        // Optional Shift+click order queue: idle units start their next waypoint.
+        crate::order_queue::tick(m)?;
         let p = u32::from(m.u8(0x508041)?);
         call(m, "CalculCompteurMarche", &[p])?;
         let p = u32::from(m.u8(0x508041)?);

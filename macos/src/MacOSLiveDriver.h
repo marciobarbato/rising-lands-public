@@ -73,6 +73,15 @@ int32_t macos_live_read(MacOSLiveDriver *,uint32_t,uint32_t,uint8_t *);
 int32_t macos_live_peek(MacOSLiveDriver *,const uint32_t *addresses,const uint32_t *sizes,uint32_t count,uint8_t *out);
 /* Inputs queued by macos_live_event and not yet consumed by a game frame. */
 uint32_t macos_live_pending_input(MacOSLiveDriver *);
+/* World rules (RL_REGRA_*). default_rules: production worlds created afterwards
+ * (0 when the engine lacks rl_regras_definir). set_rules: the current world,
+ * only before its load tail (the menu world); 0 or the ABI error. rules: the
+ * current world's set. order_queue: one unit's pending Shift+click waypoints
+ * (rl_fila_ordens), play only; 0 or an error. */
+void macos_live_default_rules(uint32_t rules);
+int32_t macos_live_set_rules(MacOSLiveDriver *,uint32_t rules);
+uint32_t macos_live_rules(MacOSLiveDriver *);
+int32_t macos_live_order_queue(MacOSLiveDriver *,uint32_t unit,uint16_t *cells,uint32_t capacity,uint32_t *count);
 /* Complete-frame play snapshots, using only the engine save extension. Errors
  * are separate from the simulation stop latch. Load publishes world+renderer
  * together; host input and device playback are reset by the shell. */

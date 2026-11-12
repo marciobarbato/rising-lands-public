@@ -249,6 +249,7 @@ pub fn continue_victory(
     mission_boot::prepare_load_frame(&mut m)?;
     mission_load::load(&mut m, Some(eta), &MissionIni::parse(monsters))?;
     let mut next = World::load(m, world.clock.clone())?;
+    next.rules = world.rules;
     next.difficulty_setup = Some(next.clock.tick());
     next.player_cursor = world.player_cursor;
     next.set_execution_mode(world.execution_mode)?;
@@ -282,6 +283,7 @@ pub fn load_prepared(
     mission_boot::prepare_load_frame(&mut m)?;
     mission_load::load(&mut m, Some(eta), &MissionIni::parse(monsters))?;
     let mut next = World::load(m, world.clock.clone())?;
+    next.rules = world.rules;
     // Fresh MissionLoad boundary: one stage-start difficulty application is allowed.
     next.difficulty_setup = Some(next.clock.tick());
     next.player_cursor = (input.cursor_x, input.cursor_y);

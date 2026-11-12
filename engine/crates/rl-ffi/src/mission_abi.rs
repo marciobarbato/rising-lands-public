@@ -15,7 +15,8 @@ pub struct RlMissaoInicio {
     pub ticks_per_second: u32,
     pub epoch_ms: u32,
     pub execution_mode: u32,
-    pub reserved: u32,
+    /// Rule set (`RL_REGRA_*`), formerly `reserved`: 0 is the original game.
+    pub regras: u32,
     pub iterations: [u32; 3],
     pub input: FrameInput,
 }
@@ -137,7 +138,8 @@ unsafe fn mission_start(
         if c.version != 1 {
             return Err(AbiError::VersionMismatch);
         }
-        if c.allocation_fill > 255 || c.reserved != 0 || c.execution_mode > 2 {
+        if c.allocation_fill > 255 || c.regras & !rl_core::RULES_KNOWN != 0 || c.execution_mode > 2
+        {
             return Err(AbiError::InvalidArgument);
         }
         let name = std::str::from_utf8(unsafe { bytes(name, name_len) }?)
@@ -199,6 +201,9 @@ unsafe fn mission_start(
         )?;
         world.player_cursor = (c.input.cursor_x, c.input.cursor_y);
         world.set_execution_mode(c.execution_mode)?;
+        world
+            .set_rules(c.regras)
+            .map_err(|_| AbiError::InvalidArgument)?;
         let input = c.input;
         let handle = publish(world)?;
         unsafe {
@@ -263,7 +268,8 @@ unsafe fn menu_start(
         if c.version != 1 {
             return Err(AbiError::VersionMismatch);
         }
-        if c.allocation_fill > 255 || c.reserved != 0 || c.execution_mode > 2 {
+        if c.allocation_fill > 255 || c.regras & !rl_core::RULES_KNOWN != 0 || c.execution_mode > 2
+        {
             return Err(AbiError::InvalidArgument);
         }
         let blocks = unsafe { slice::from_raw_parts(assets, 9) };
@@ -300,7 +306,11 @@ unsafe fn menu_start(
         mission_entry::bind_frame_context(&mut memory, c.input, c.iterations)?;
         // A menu world has no frame state: the requested execution mode applies
         // to the stage world the host loads from it (rl_execucao_definir).
-        let mut world = World::load(memory, TickClock::new(c.ticks_per_second, c.epoch_ms)?)?;
+        let mut world = World::load_with_rules(
+            memory,
+            TickClock::new(c.ticks_per_second, c.epoch_ms)?,
+            c.regras,
+        )?;
         world.player_cursor = (c.input.cursor_x, c.input.cursor_y);
         let input = c.input;
         let handle = publish(world)?;

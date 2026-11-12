@@ -366,6 +366,30 @@ struct ModernHotkeysTests {
         try check(menu?.inMission == false, "Non-mission state read as a mission")
     }
 
+    /// Order queue markers: selected units' waypoints in view pixels, one read.
+    static func orderQueueMarkers() throws {
+        var bytes = [UInt8](repeating: 0, count: 1 + 1 + 8 + 2048)
+        bytes[0] = 0x12; bytes[1] = 2
+        for (o, v) in [(2, 10), (4, 20), (6, 25), (8, 17)] { bytes[o] = UInt8(v) }
+        let list = 10 + 512 * 2
+        bytes[list] = 3; bytes[list + 2] = 7; bytes[list + 4] = 9; bytes[list + 6] = 0x10; bytes[list + 7] = 0x01
+        var reads = 0
+        let queues: [Int: [UInt16]] = [7: [21 << 8 | 11, 30 << 8 | 40], 0x110: [21 << 8 | 10]]
+        let peek: ([UInt32], [UInt32]) -> [UInt8]? = { addresses, sizes in
+            reads += 1
+            return addresses == NativeOrderQueueMarkers.addresses && sizes == NativeOrderQueueMarkers.sizes ? bytes : nil
+        }
+        let m = NativeOrderQueueMarkers.read(peek: peek, queue: { queues[$0] ?? [] })
+        try check(reads == 1, "One snapshot per refresh")
+        try check(m?.mapWidth == 800 && m?.mapHeight == 544, "Map region from the view size")
+        try check(m?.paths == [[.init(x: 48, y: 48), .init(x: 976, y: 336)], [.init(x: 16, y: 48)]],
+                  "Waypoint pixels per selected unit (unit 9 has none)")
+        bytes[0] = 0x16
+        try check(NativeOrderQueueMarkers.read(peek: peek, queue: { queues[$0] ?? [] }) == .empty, "No markers outside a mission")
+        try check(NativeOrderQueueMarkers.read(peek: { _, _ in nil }, queue: { _ in [] }) == nil, "Refused peek")
+        try check(NativeModernHotkeys.orderQueueRule == 0x2, "RL_REGRA_FILA_ORDENS")
+    }
+
     static func main() throws {
         try routerCommands(); print("PASS router: modern keys, exact defaults, double tap only for original groups 1-9")
         try fixedSteps(); print("PASS fixed steps: original Shift+N and X only, foreign channels refused")
@@ -373,6 +397,7 @@ struct ModernHotkeysTests {
         try planner(); print("PASS planner: idle worker/army/sanctuary cycle, verified deselect, single recentre")
         try jobs(); print("PASS jobs: Shift over the consumed digit, staged delivery, cursor return, aborts, budget")
         try snapshotReader(); print("PASS snapshot reader: one concatenated projection per stage")
-        print("ModernHotkeysTests: 6 groups passed; no engine, no window")
+        try orderQueueMarkers(); print("PASS order queue markers: selected units' waypoints, one snapshot, map region")
+        print("ModernHotkeysTests: 7 groups passed; no engine, no window")
     }
 }

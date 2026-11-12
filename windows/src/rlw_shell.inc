@@ -3,8 +3,8 @@
  * and of macos_live_driver.c's campaign_byte/next_path/campaign_end/
  * continue_stage(prepared): same engine calls, order, addresses and VFS paths.
  * No game rules live here; every comment names the macOS function mirrored.
- * Saves (lists 12/13/14) show the host captions; the modern save/load itself
- * is milestone 3, so SAVE_SLOT resumes without writing (rlw_shell_save_slot). */
+ * The save lists (12/13/14) show the host captions; SAVE_SLOT writes the
+ * host's modern save (rlw_save.inc) and LOAD_SLOT is the host's rlw_driver_load. */
 
 static uint32_t le32(const uint8_t *p) { return p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24); }
 
@@ -249,7 +249,7 @@ static int continue_stage(RlwDriver *d, uint32_t difficulty) {
  uint32_t eta_length = 0, monsters_length = 0; uint8_t *eta = file(d->root, name, &eta_length), *monsters = file(d->root, "MONSTRE.INI", &monsters_length);
  if (!eta || !monsters) { free(eta); free(monsters); snprintf(d->save_error, sizeof(d->save_error), "Dados originais da próxima fase ausentes: %s / MONSTRE.INI", name); return RL_IO_ERROR; }
  RlwDriver *candidate = malloc(sizeof(*candidate)); if (!candidate) { free(eta); free(monsters); return save_result(d, RL_IO_ERROR, "Próxima fase"); }
- *candidate = *d; snprintf(candidate->mission, 16, "%s", name); candidate->difficulty = difficulty; candidate->world = 0; candidate->renderer = 0;
+ *candidate = *d; snprintf(candidate->mission, 16, "%s", name); candidate->difficulty = difficulty; candidate->world = 0; candidate->renderer = 0; candidate->stage_presentation = NULL;
  candidate->menu_world = 0; candidate->new_campaign = 0; candidate->pause_presentation = NULL;
  candidate->shell = 0; candidate->shell_generation = 0; candidate->shell_mode = 0; memset(&candidate->shell_request, 0, sizeof(candidate->shell_request));
  candidate->save_error[0] = 0;
@@ -278,15 +278,16 @@ static int continue_stage(RlwDriver *d, uint32_t difficulty) {
  if (!c && (rendered.abi_status || rendered.disposition == 2)) {
   snprintf(d->save_error, sizeof(d->save_error), "Próxima fase: %.48s at 0x%08x: %.192s", rendered.stop_callee, rendered.stop_address, rendered.stop_reason); c = RL_UNSUPPORTED_PATH; render_error = 1;
  }
+ else if (!c) c = capture_presentation(candidate, candidate->stage_presentation);
  if (!c) c = refresh_screen(candidate);
  if (c) {
   if (candidate->status.stopped) snprintf(d->save_error, sizeof(d->save_error), "%s", candidate->status.message);
   else if (!render_error) { if (candidate->save_error[0]) snprintf(d->save_error, sizeof(d->save_error), "%s", candidate->save_error); else save_result(d, c, "Não foi possível continuar a campanha"); }
-  if (candidate->renderer) rl_render_liberar(candidate->renderer); if (candidate->world) rl_liberar_mundo(candidate->world); free(candidate); return c;
+  if (candidate->renderer) rl_render_liberar(candidate->renderer); if (candidate->world) rl_liberar_mundo(candidate->world); free(candidate->stage_presentation); free(candidate); return c;
  }
  candidate->status.generation = generation;
  if (d->shell) rl_shell_free(d->shell);
- if (d->renderer) rl_render_liberar(d->renderer); rl_liberar_mundo(d->world); free(d->pause_presentation);
+ if (d->renderer) rl_render_liberar(d->renderer); rl_liberar_mundo(d->world); free(d->pause_presentation); free(d->stage_presentation);
  *d = *candidate; free(candidate); d->save_error[0] = 0; return 0;
 }
 int rlw_shell_load(RlwDriver *d) {
@@ -350,15 +351,27 @@ static int shell_resume(RlwDriver *d) {
  memset(d->held, 0, sizeof(d->held)); d->pending_count = 0; d->left_held = 0;
  return refresh_screen(d);
 }
-/* SAVE_SLOT from the in-game list 14 (macos_live_shell_save_slot): the modern
- * save comes in milestone 3, so *saved reports it as unavailable; the original
- * final 0x42c570 (MenuInit 18 + HUD latch) still runs through rl_shell_resume. */
-int rlw_shell_save_slot(RlwDriver *d, int32_t *saved) {
- if (!d || !d->shell || !saved || d->shell_request.kind != RL_SHELL_SAVE_SLOT || !d->pause_presentation) return RL_INVALID_ARGUMENT;
- *saved = RL_UNSUPPORTED_PATH;
+/* shell_save_slot(): SAVE_SLOT from the in-game list 14. The host's modern save
+ * of the paused game FIRST (its retained gameplay picture, no AffGame draw of
+ * mode16), then the original final 0x42c570 (MenuInit 18 + HUD latch) through
+ * rl_shell_resume. *saved receives the save result; play resumes even when the
+ * save failed (its error stays readable). With `job` only the capture runs here
+ * and the files are written later by rlw_save_commit. */
+static int shell_save_slot(RlwDriver *d, const char *path, int32_t *saved, RlwSaveJob **job) {
+ if (!d || !d->shell || !path || !saved || d->shell_request.kind != RL_SHELL_SAVE_SLOT || !d->pause_presentation) return RL_INVALID_ARGUMENT;
+ uint8_t *shown = malloc(480000 + 768); if (!shown) return save_result(d, RL_IO_ERROR, "Salvar pela lista original");
+ memcpy(shown, d->pixels, 480000); memcpy(shown + 480000, d->palette, 768);
+ memcpy(d->pixels, d->pause_presentation, 480000); memcpy(d->palette, d->pause_palette, 768);
+ *saved = job ? snapshot_capture(d, path, 0, job) : snapshot_file(d, path, 0);
+ char error[512]; snprintf(error, sizeof(error), "%s", d->save_error);
  int c = shell_resume(d);
- if (!c) snprintf(d->save_error, sizeof(d->save_error), "Salvar partidas chega no próximo marco do cliente Windows; o jogo continua sem salvar.");
- return c;
+ if (c) { memcpy(d->pixels, shown, 480000); memcpy(d->palette, shown + 480000, 768); if (job) { rlw_save_job_free(*job); *job = NULL; } }
+ else if (*saved) snprintf(d->save_error, sizeof(d->save_error), "%s", error);
+ free(shown); return c;
+}
+int rlw_shell_save_slot(RlwDriver *d, const char *path, int32_t *saved) { return shell_save_slot(d, path, saved, NULL); }
+int rlw_shell_save_slot_begin(RlwDriver *d, const char *path, int32_t *saved, RlwSaveJob **job) {
+ if (!job) return RL_INVALID_ARGUMENT; *job = NULL; return shell_save_slot(d, path, saved, job);
 }
 /* Read-only view of the open session's memory (exported copy). */
 int rlw_shell_peek(RlwDriver *d, uint32_t address, uint32_t size, uint8_t *out) {

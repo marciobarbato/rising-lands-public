@@ -103,17 +103,32 @@ pub enum EngineError {
     EmptyRegion,
     AddressOverflow,
     OverlappingRegions,
-    UndeclaredAccess { address: u32, size: usize },
-    IncompleteField { address: u32 },
-    ProjectionFieldMismatch { address: u32 },
-    UnsupportedThreadGetter { address: u32, value: u32 },
+    UndeclaredAccess {
+        address: u32,
+        size: usize,
+    },
+    IncompleteField {
+        address: u32,
+    },
+    ProjectionFieldMismatch {
+        address: u32,
+    },
+    UnsupportedThreadGetter {
+        address: u32,
+        value: u32,
+    },
     UnknownRoutine(u32),
     InvalidTickRate,
-    UnportedCallee { name: &'static str, address: u32 },
+    UnportedCallee {
+        name: &'static str,
+        address: u32,
+    },
     InvalidFramePhase(u32),
     InvalidExecutionMode(u32),
     ExecutionReplayMismatch,
     ExecutionProjectionMismatch,
+    /// A rule bit outside `RULES_KNOWN`.
+    InvalidRules(u32),
 }
 pub type Result<T> = std::result::Result<T, EngineError>;
 impl std::fmt::Display for EngineError {
@@ -220,6 +235,9 @@ pub mod ai_war_enemy;
 pub mod ai_war_position;
 
 pub mod spell_order_acceptance;
+
+pub mod order_queue;
+pub use order_queue::{OrderQueue, RULE_ORDER_QUEUE};
 
 #[cfg(feature = "validation-trace")]
 pub fn spell_order_explicit_input(m: &mut MemoriaJogo, owner: u32, costs: [u16; 3]) -> Result<()> {

@@ -3,7 +3,10 @@
  * palette, map mouse/keyboard to the same Win32-style messages as the macOS host,
  * pace 1x = 30 frames/s, pause. The original menus (main, single player, briefing,
  * pause 16, result 19, objectives, credits) run on the engine's prepared shell
- * through rlw_menu.c. Win32 + GDI only. The host never writes game state. */
+ * through rlw_menu.c. Saves (milestone 3): the "Partida" menu (quick save F5,
+ * quick load F9, named positions, the stage-start autosave), the original save
+ * and load lists, files in the macOS app's format (rlw_saves.h). Win32 + GDI
+ * only. The host never writes game state. */
 #define WIN32_LEAN_AND_MEAN
 #ifndef UNICODE
 #define UNICODE
@@ -25,6 +28,7 @@
 #include "rlw_fs.h"
 #include "rlw_menu.h"
 #include "rlw_menu_ops.h"
+#include "rlw_saves.h"
 #include "rlw_sha256.h"
 #include "rising_engine.h"
 
@@ -33,7 +37,7 @@ static const double SPEEDS[4] = {0.5, 1, 2, 4};
 static const double NORMAL_FRAME_RATE = 30.0, MAXIMUM_BACKLOG = 0.25;
 
 typedef struct {
- const char *cd, *data, *mission, *hashes, *screenshot, *menu_demo;
+ const char *cd, *data, *mission, *hashes, *screenshot, *menu_demo, *save_directory, *save_demo;
  unsigned difficulty, frames, speed;
  int selftest, import_only, headless, fullscreen, no_verify_image, demo_input;
 } Options;
@@ -47,6 +51,9 @@ static struct {
  BITMAPINFO *bmi; char status_line[256];
  /* Original menus: routing state, next 20 Hz tick, last coalesced move. */
  char dados[4096]; RlwMenu menu; double menu_tick, menu_flush; int menu_failed, quit;
+ /* Saves: the player's folder ("" in smoke runs: no autosave), the menu bar,
+  * a short notice in the title ("Partida salva"). */
+ char saves[4096]; HMENU menubar, save_menu, load_menu; char notice[96]; double notice_until;
 } G = {0};
 
 /* ---------- utilities ---------- */
@@ -126,6 +133,7 @@ static void update_title(void) {
           G.opt.mission ? G.opt.mission : "campanha", labels[G.speed], G.paused ? " · pausado (P)" : "",
           (unsigned long long)s.frames);
  if (s.stopped || G.menu_failed) snprintf(title, sizeof(title), "Rising Lands — parado");
+ else if (G.notice[0] && now_seconds() < G.notice_until) { size_t n = strlen(title); snprintf(title + n, sizeof(title) - n, " · %s", G.notice); }
  wchar_t *w = widen(title); SetWindowTextW(G.hwnd, w); free(w);
 }
 
@@ -134,13 +142,13 @@ static void set_fullscreen(int on) {
  if (on && !G.fullscreen) {
   MONITORINFO mi; memset(&mi, 0, sizeof(mi)); mi.cbSize = sizeof(mi);
   if (GetWindowPlacement(G.hwnd, &G.placement) && GetMonitorInfoW(MonitorFromWindow(G.hwnd, MONITOR_DEFAULTTOPRIMARY), &mi)) {
-   SetWindowLongPtrW(G.hwnd, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
+   SetWindowLongPtrW(G.hwnd, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW); SetMenu(G.hwnd, NULL);
    SetWindowPos(G.hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
                 mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
    G.fullscreen = 1;
   }
  } else if (!on && G.fullscreen) {
-  SetWindowLongPtrW(G.hwnd, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+  SetWindowLongPtrW(G.hwnd, GWL_STYLE, style | WS_OVERLAPPEDWINDOW); SetMenu(G.hwnd, G.menubar);
   SetWindowPlacement(G.hwnd, &G.placement);
   SetWindowPos(G.hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
   G.fullscreen = 0;
@@ -216,14 +224,18 @@ static int accepted_vk(uint32_t vk) {
 }
 
 static void set_speed(unsigned speed) { G.speed = speed > 3 ? 3 : speed; G.deadline = now_seconds(); update_title(); }
+static void command(unsigned id);
+enum { ID_QUICK_SAVE = 100, ID_QUICK_LOAD, ID_STAGE_LOAD, ID_SAVE_POSITION = 110, ID_LOAD_POSITION = 120 };
 
 /* Host keys never reach the game: F11 (fullscreen; also never delivered per the
- * host contract), P/Pause (pause), +/- (speed). Everything outside the 23
- * accepted keys is dropped. Returns 1 when handled. */
+ * host contract), P/Pause (pause), +/- (speed), F5/F9 (quick save/load, the
+ * macOS app's Cmd+S/Cmd+L). Everything outside the 23 accepted keys is
+ * dropped. Returns 1 when handled. */
 static int key(WPARAM wp, LPARAM lp, int down) {
  uint32_t vk = (uint32_t)wp;
- if (down && (lp & (1 << 30))) return accepted_vk(vk == VK_LSHIFT || vk == VK_RSHIFT ? 16 : vk) || vk == VK_F11; /* auto-repeat */
+ if (down && (lp & (1 << 30))) return accepted_vk(vk == VK_LSHIFT || vk == VK_RSHIFT ? 16 : vk) || vk == VK_F11 || vk == VK_F5 || vk == VK_F9; /* auto-repeat */
  if (vk == VK_F11) { if (down) set_fullscreen(!G.fullscreen); return 1; }
+ if (vk == VK_F5 || vk == VK_F9) { if (down) command(vk == VK_F5 ? ID_QUICK_SAVE : ID_QUICK_LOAD); return 1; }
  if (vk == VK_PAUSE || vk == 'P') { if (down) { G.paused = !G.paused; G.deadline = now_seconds(); update_title(); } return 1; }
  if (vk == VK_ADD || vk == VK_OEM_PLUS) { if (down && G.speed < 3) set_speed(G.speed + 1); return 1; }
  if (vk == VK_SUBTRACT || vk == VK_OEM_MINUS) { if (down && G.speed > 0) set_speed(G.speed - 1); return 1; }
@@ -240,10 +252,13 @@ static int key(WPARAM wp, LPARAM lp, int down) {
 /* ---------- original menus (NativeLiveWindow shell paths) ---------- */
 
 static int in_menu(void) { return G.driver && !G.menu_failed && rlw_shell_mode(G.driver) != 0; }
+/* publishSlots(): captions of posicao-1..10 for the original save lists. */
+static void publish_slots(void *ctx, uint8_t table[330]) { (void)ctx; if (G.saves[0]) rlw_saves_caption_table(G.saves, table); else memset(table, 0, 330); }
 
 static void menu_attach(void) {
  char credits[4200]; snprintf(credits, sizeof(credits), "%s" RLW_SEP "events" RLW_SEP "CREDITS.FLC", G.dados);
  rlw_menu_close(&G.menu); rlw_menu_init(&G.menu, &RLW_WINDOWS_OPS.menu, G.driver, credits);
+ G.menu.publish_slots = publish_slots;
  /* startShell(): the first shellTick comes 50 ms after the session opens. */
  G.menu_tick = now_seconds() + 0.05; G.menu_flush = 0;
 }
@@ -282,6 +297,182 @@ static void back_to_game(void) {
 
 static void menu_result(int r);
 
+/* ---------- saves (NativeLiveWindow saveSlot/commitSave/loadSlot, main.swift menus) ---------- */
+
+static struct {
+ HANDLE thread; RlwSaveJob *job; volatile LONG code;    /* one background write at a time */
+ unsigned named; char name[RLW_SAVE_NAME_CAPACITY];      /* position named after its write */
+ char retry_slot[32]; unsigned retry_named; char retry_name[RLW_SAVE_NAME_CAPACITY]; int retries; double retry_at;
+} SV;
+
+static void notice(const char *text) { snprintf(G.notice, sizeof(G.notice), "%s", text); G.notice_until = now_seconds() + 4; update_title(); }
+static int game_running(void) { RlwStatus s; rlw_driver_status(G.driver, &s); return !in_menu() && !G.menu_failed && !G.paused && !s.stopped; }
+
+static void commit_finished(int code, RlwSaveJob *job) {
+ char error[512]; rlw_save_job_error(job, error, sizeof(error)); rlw_save_job_free(job);
+ if (code) { message_box(error, "Não foi possível salvar a partida", MB_ICONWARNING | MB_OK); SV.named = 0; return; }
+ if (SV.named) {
+  RlwSaveNames names; rlw_saves_names_read(G.saves, &names);
+  snprintf(names.name[SV.named], sizeof(names.name[SV.named]), "%s", SV.name); SV.named = 0;
+  if (rlw_saves_names_write(G.saves, &names)) message_box("A partida foi salva, mas o nome da posição não pôde ser gravado.", "Salvar partida", MB_ICONWARNING | MB_OK);
+ }
+ notice("Partida salva");
+}
+static DWORD WINAPI commit_thread(LPVOID unused) { (void)unused; InterlockedExchange(&SV.code, rlw_save_commit(SV.job)); return 0; }
+/* The captured job is written off the game loop; success only after flush and
+ * replace. wait = 1 before a load or quit (never leave a captured save unwritten). */
+static void save_poll(int wait) {
+ if (!SV.thread || WaitForSingleObject(SV.thread, wait ? INFINITE : 0) != WAIT_OBJECT_0) return;
+ CloseHandle(SV.thread); SV.thread = NULL; RlwSaveJob *job = SV.job; SV.job = NULL;
+ commit_finished((int)SV.code, job);
+}
+static void start_commit(RlwSaveJob *job, unsigned named, const char *name) {
+ SV.job = job; SV.code = 0; SV.named = named; snprintf(SV.name, sizeof(SV.name), "%s", name ? name : "");
+ SV.thread = CreateThread(NULL, 0, commit_thread, NULL, 0, NULL);
+ if (!SV.thread) { SV.job = NULL; commit_finished(rlw_save_commit(job), job); }
+}
+static void save_failed(const char *title) {
+ char why[512]; rlw_driver_save_error(G.driver, why, sizeof(why));
+ message_box(why[0] ? why : "Erro desconhecido", title, MB_ICONWARNING | MB_OK);
+}
+/* saveSlot(): releases the held keys first (their releases are queued input,
+ * so the save is busy until a frame took them); a busy save is retried every
+ * 80 ms while the game runs, 30 times at most. */
+static void save_attempt(const char *slot, unsigned named, const char *name, int retries) {
+ SV.retry_slot[0] = 0;
+ save_poll(1);
+ if (!G.saves[0] || rlw_mkdirs(G.saves)) { message_box("A pasta das partidas salvas está indisponível.", "Não foi possível salvar a partida", MB_ICONWARNING | MB_OK); return; }
+ char path[4200]; if (rlw_saves_path(G.saves, slot, path, sizeof(path))) return;
+ RlwSaveJob *job = NULL; int c = rlw_driver_save_begin(G.driver, path, &job);
+ if (c == RL_SAVE_BUSY && game_running() && retries > 0) {
+  snprintf(SV.retry_slot, sizeof(SV.retry_slot), "%s", slot); SV.retry_named = named;
+  snprintf(SV.retry_name, sizeof(SV.retry_name), "%s", name ? name : ""); SV.retries = retries - 1; SV.retry_at = now_seconds() + 0.08;
+  return;
+ }
+ if (c) { save_failed("Não foi possível concluir a operação"); return; }
+ start_commit(job, named, name);
+}
+static void save_now(const char *slot, unsigned named, const char *name) {
+ if (!in_menu()) release_all();
+ save_attempt(slot, named, name, 30);
+}
+/* loadSlot(): waits for a save still being written, then replaces world,
+ * renderer and picture together; a failure leaves the current game as it was.
+ * A save made from the pause list reopens the pause at the next host tick. */
+static int load_slot(const char *slot, int report) {
+ char path[4200];
+ if (!G.saves[0] || rlw_saves_path(G.saves, slot, path, sizeof(path))) return RL_INVALID_ARGUMENT;
+ SV.retry_slot[0] = 0; save_poll(1);
+ if (!in_menu()) release_all();
+ int c = rlw_driver_load(G.driver, path);
+ if (c) { if (report) save_failed("Não foi possível carregar a partida"); return c; }
+ rlw_menu_reset(&G.menu); G.menu_failed = 0; G.stopped_reported = 0; G.left_held = 0;
+ if (GetCapture() == G.hwnd) ReleaseCapture();
+ G.deadline = now_seconds(); notice("Partida carregada"); present_now(); update_title();
+ return 0;
+}
+/* The stage-start autosave (advance stageStart / finishShellCampaign). */
+static void stage_autosave(void) {
+ if (!G.saves[0]) return;
+ char path[4200]; int c = rlw_mkdirs(G.saves) || rlw_saves_path(G.saves, "inicio-fase", path, sizeof(path)) ? RL_IO_ERROR : rlw_driver_autosave(G.driver, path);
+ if (c) { G.paused = 1; update_title(); if (G.opt.frames) { attach_console(); fprintf(stderr, "autosave: %d\n", c); } else save_failed("Falha ao salvar automaticamente"); }
+}
+
+/* Position name (namedSave): the macOS app's alert with a text field, as an
+ * in-memory dialog template (no resource file). */
+static wchar_t name_prompt[160], name_value[96];
+static INT_PTR CALLBACK name_dialog(HWND dialog, UINT msg, WPARAM wp, LPARAM lp) {
+ (void)lp;
+ switch (msg) {
+ case WM_INITDIALOG:
+  SetDlgItemTextW(dialog, 100, name_prompt); SetDlgItemTextW(dialog, 101, name_value);
+  SendDlgItemMessageW(dialog, 101, EM_LIMITTEXT, 80, 0); SendDlgItemMessageW(dialog, 101, EM_SETSEL, 0, -1);
+  SetFocus(GetDlgItem(dialog, 101)); return FALSE;
+ case WM_COMMAND:
+  if (LOWORD(wp) == IDOK) { GetDlgItemTextW(dialog, 101, name_value, 96); EndDialog(dialog, 1); return TRUE; }
+  if (LOWORD(wp) == IDCANCEL) { EndDialog(dialog, 0); return TRUE; }
+  break;
+ }
+ return FALSE;
+}
+static WORD *dialog_text(WORD *p, const wchar_t *text) { do { *p++ = (WORD)*text; } while (*text++); return p; }
+static WORD *dialog_item(WORD *p, DWORD style, short x, short y, short cx, short cy, WORD id, WORD atom, const wchar_t *text) {
+ p = (WORD *)(((uintptr_t)p + 3) & ~(uintptr_t)3);
+ DLGITEMTEMPLATE *item = (DLGITEMTEMPLATE *)p; item->style = style | WS_CHILD | WS_VISIBLE; item->dwExtendedStyle = 0;
+ item->x = x; item->y = y; item->cx = cx; item->cy = cy; item->id = id;
+ p = (WORD *)(item + 1); *p++ = 0xffff; *p++ = atom; p = dialog_text(p, text); *p++ = 0; return p;
+}
+static int ask_name(unsigned n, char *out, size_t capacity) {
+ char path[4200], slot[32]; snprintf(slot, sizeof(slot), "posicao-%u", n);
+ int exists = !rlw_saves_path(G.saves, slot, path, sizeof(path)) && rlw_exists(path);
+ swprintf(name_prompt, 160, exists ? L"O salvamento desta posição será substituído. Dê um nome à partida:" : L"Dê um nome à partida:");
+ RlwSaveNames names; rlw_saves_names_read(G.saves, &names);
+ if (names.name[n][0]) { wchar_t *w = widen(names.name[n]); swprintf(name_value, 96, L"%ls", w ? w : L""); free(w); }
+ else {
+  char mission[16]; snprintf(mission, sizeof(mission), "%s", rlw_driver_mission(G.driver)); char *dot = strchr(mission, '.'); if (dot) *dot = 0;
+  wchar_t *w = widen(mission); swprintf(name_value, 96, L"%ls · posição %u", w ? w : L"", n); free(w);
+ }
+ static DWORD buffer[1024]; memset(buffer, 0, sizeof(buffer));
+ DLGTEMPLATE *t = (DLGTEMPLATE *)buffer;
+ t->style = DS_MODALFRAME | DS_CENTER | DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU; t->cdit = 4; t->cx = 240; t->cy = 74;
+ WORD *p = (WORD *)(t + 1); *p++ = 0; *p++ = 0;
+ wchar_t title[64]; swprintf(title, 64, L"Salvar partida · posição %u", n); p = dialog_text(p, title);
+ *p++ = 9; p = dialog_text(p, L"Segoe UI");
+ p = dialog_item(p, SS_LEFT, 8, 8, 224, 18, 100, 0x0082, L"");
+ p = dialog_item(p, WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL, 8, 28, 224, 13, 101, 0x0081, L"");
+ p = dialog_item(p, WS_TABSTOP | BS_DEFPUSHBUTTON, 128, 52, 50, 14, IDOK, 0x0080, L"Salvar");
+ dialog_item(p, WS_TABSTOP | BS_PUSHBUTTON, 182, 52, 50, 14, IDCANCEL, 0x0080, L"Cancelar");
+ if (DialogBoxIndirectParamW(GetModuleHandleW(NULL), t, G.hwnd, name_dialog, 0) != 1) return 0;
+ char *name = narrow(name_value); if (!name) return 0;
+ char *b = name; while (*b == ' ' || *b == '\t') b++;
+ size_t len = strlen(b); while (len && (b[len - 1] == ' ' || b[len - 1] == '\t')) b[--len] = 0;
+ if (*b) snprintf(out, capacity, "%s", b); else snprintf(out, capacity, "Posição %u", n);
+ free(name); return 1;
+}
+
+/* refreshSaveMenus(): positions 1..5 with their names and times; loads only of
+ * existing files; the stage-start autosave below the load positions. */
+static void refresh_save_menus(void) {
+ while (GetMenuItemCount(G.save_menu) > 0) DeleteMenu(G.save_menu, 0, MF_BYPOSITION);
+ while (GetMenuItemCount(G.load_menu) > 0) DeleteMenu(G.load_menu, 0, MF_BYPOSITION);
+ int usable = G.saves[0] && !SV.thread && !G.menu_failed;
+ for (unsigned n = 1; n <= 5; n++) {
+  char title[400], slot[32], path[4200]; rlw_saves_title(G.saves, n, title, sizeof(title)); snprintf(slot, sizeof(slot), "posicao-%u", n);
+  int exists = !rlw_saves_path(G.saves, slot, path, sizeof(path)) && rlw_exists(path);
+  wchar_t *w = widen(title);
+  AppendMenuW(G.save_menu, MF_STRING | (usable && !in_menu() ? 0 : MF_GRAYED), ID_SAVE_POSITION + n, w);
+  AppendMenuW(G.load_menu, MF_STRING | (usable && exists ? 0 : MF_GRAYED), ID_LOAD_POSITION + n, w);
+  free(w);
+ }
+ char path[4200]; int stage = G.saves[0] && !rlw_saves_path(G.saves, "inicio-fase", path, sizeof(path)) && rlw_exists(path);
+ AppendMenuW(G.load_menu, MF_SEPARATOR, 0, NULL);
+ AppendMenuW(G.load_menu, MF_STRING | (usable && stage ? 0 : MF_GRAYED), ID_STAGE_LOAD, L"Início da fase · salvamento automático");
+ int quick = G.saves[0] && !rlw_saves_path(G.saves, "rapido", path, sizeof(path)) && rlw_exists(path);
+ EnableMenuItem(G.menubar, ID_QUICK_SAVE, MF_BYCOMMAND | (usable ? MF_ENABLED : MF_GRAYED));
+ EnableMenuItem(G.menubar, ID_QUICK_LOAD, MF_BYCOMMAND | (usable && quick ? MF_ENABLED : MF_GRAYED));
+}
+static void build_menu(void) {
+ G.menubar = CreateMenu(); HMENU game = CreatePopupMenu(); G.save_menu = CreatePopupMenu(); G.load_menu = CreatePopupMenu();
+ AppendMenuW(game, MF_STRING, ID_QUICK_SAVE, L"Salvar rápido\tF5");
+ AppendMenuW(game, MF_STRING, ID_QUICK_LOAD, L"Carregar rápido\tF9");
+ AppendMenuW(game, MF_POPUP, (UINT_PTR)G.save_menu, L"Salvar partida…");
+ AppendMenuW(game, MF_POPUP, (UINT_PTR)G.load_menu, L"Carregar partida");
+ AppendMenuW(G.menubar, MF_POPUP, (UINT_PTR)game, L"Partida");
+ SetMenu(G.hwnd, G.menubar); refresh_save_menus();
+}
+static void command(unsigned id) {
+ if (!G.driver || !G.saves[0]) return;
+ char slot[32];
+ if (id == ID_QUICK_SAVE) save_now("rapido", 0, NULL);
+ else if (id == ID_QUICK_LOAD) { char path[4200]; if (!rlw_saves_path(G.saves, "rapido", path, sizeof(path)) && rlw_exists(path)) load_slot("rapido", 1); }
+ else if (id == ID_STAGE_LOAD) load_slot("inicio-fase", 1);
+ else if (id > ID_SAVE_POSITION && id <= ID_SAVE_POSITION + 5) {
+  unsigned n = id - ID_SAVE_POSITION; char name[RLW_SAVE_NAME_CAPACITY];
+  if (in_menu()) { message_box("Salve durante o jogo, entre quadros completos e antes de uma parada do motor.", "Não foi possível concluir a operação", MB_ICONINFORMATION | MB_OK); return; }
+  if (ask_name(n, name, sizeof(name))) { snprintf(slot, sizeof(slot), "posicao-%u", n); save_now(slot, n, name); }
+ } else if (id > ID_LOAD_POSITION && id <= ID_LOAD_POSITION + 5) { snprintf(slot, sizeof(slot), "posicao-%u", id - ID_LOAD_POSITION); load_slot(slot, 1); }
+}
+
 /* Requests the driver cannot complete by itself (sendShell's host cases). */
 static void host_request(const RlShellEvent *e) {
  int code = 0;
@@ -296,11 +487,26 @@ static void host_request(const RlShellEvent *e) {
   /* movieCompletion(): FINISHED whenever the file exists, played or not (the
    * original would have called PlayVideo); UNAVAILABLE only for an absent file. */
   code = rlw_shell_movie_finish(G.driver, movie_exists(e) ? RL_SHELL_MOVIE_FINISHED : RL_SHELL_MOVIE_UNAVAILABLE); break;
- case RL_SHELL_LOAD_SLOT:
-  reopen_menu("Carregar partidas", "Carregar partidas salvas chega no próximo marco do cliente Windows. O menu principal será reaberto do início."); return;
+ case RL_SHELL_LOAD_SLOT: {
+  /* beginSlotLoad(): the modern load replaces the world (and the session); a
+   * failure reopens the original main menu. */
+  char slot[32]; snprintf(slot, sizeof(slot), "posicao-%u", e->reserved + 1);
+  if (load_slot(slot, 0)) { char why[512]; rlw_driver_save_error(G.driver, why, sizeof(why)); reopen_menu("Não foi possível carregar a partida", why[0] ? why : slot); }
+  return;
+ }
  case RL_SHELL_SAVE_SLOT: {
-  int32_t saved = 0; code = rlw_shell_save_slot(G.driver, &saved);
-  if (!code) { back_to_game(); message_box("Salvar partidas chega no próximo marco do cliente Windows. O jogo continua sem salvar.", "Salvar partida", MB_ICONINFORMATION | MB_OK); G.deadline = now_seconds(); return; }
+  /* The modern save of the paused game first (captured now, written off the
+   * loop), then the original MenuInit(18) resume: play continues directly. */
+  save_poll(1); SV.retry_slot[0] = 0;
+  char slot[32], path[4200] = ""; snprintf(slot, sizeof(slot), "posicao-%u", e->reserved + 1);
+  if (G.saves[0]) { rlw_mkdirs(G.saves); rlw_saves_path(G.saves, slot, path, sizeof(path)); }
+  int32_t saved = 0; RlwSaveJob *job = NULL;
+  code = rlw_shell_save_slot_begin(G.driver, path, &saved, &job);
+  if (!code) {
+   back_to_game();
+   if (!saved && job) start_commit(job, 0, NULL); else save_failed("Não foi possível salvar a partida");
+   G.deadline = now_seconds(); return;
+  }
   break;
  }
  default: break;
@@ -312,7 +518,7 @@ static void host_request(const RlShellEvent *e) {
 static void menu_result(int r) {
  switch (r) {
  case RLW_MENU_REPAINT: present_now(); update_title(); break;
- case RLW_MENU_GAME: back_to_game(); break;
+ case RLW_MENU_GAME: back_to_game(); if (G.menu.game_kind == RL_SHELL_START_MISSION) stage_autosave(); break;
  case RLW_MENU_HOST: host_request(&G.menu.host_event); break;
  case RLW_MENU_FAILED: menu_failed(G.menu.error); present_now(); break;
  default: break;
@@ -368,6 +574,7 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
   if (msg == WM_SYSKEYDOWN && wp == VK_F4) break; /* Alt+F4 closes */
   if (in_menu()) {
    if (wp == VK_F11) { if (!(lp & (1 << 30))) set_fullscreen(!G.fullscreen); return 0; }
+   if (wp == VK_F5 || wp == VK_F9) { if (!(lp & (1 << 30))) command(wp == VK_F5 ? ID_QUICK_SAVE : ID_QUICK_LOAD); return 0; }
    if (!(lp & (1 << 30))) menu_result(rlw_menu_key(&G.menu, (uint32_t)wp, 1, now_seconds() * 1000));
    return 0;
   }
@@ -378,6 +585,11 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
   if (key(wp, lp, 0)) return 0;
   break;
  case WM_SYSCOMMAND: if ((wp & 0xfff0) == SC_KEYMENU) return 0; break; /* Alt/F10 stay game keys */
+ case WM_COMMAND: if (!lp && HIWORD(wp) == 0) { command(LOWORD(wp)); return 0; } break;
+ case WM_INITMENUPOPUP: refresh_save_menus(); break;
+ /* The menu bar takes the input like a focus change does. */
+ case WM_ENTERMENULOOP: if (in_menu()) { rlw_menu_reset(&G.menu); G.left_held = 0; } else release_all(); return 0;
+ case WM_EXITMENULOOP: G.deadline = now_seconds(); return 0;
  case WM_SETFOCUS: G.focused = 1; G.deadline = now_seconds(); return 0;
  case WM_KILLFOCUS: G.focused = 0; if (in_menu()) { rlw_menu_reset(&G.menu); G.left_held = 0; } else release_all(); return 0;
  case WM_DESTROY: PostQuitMessage(0); return 0;
@@ -430,8 +642,11 @@ static void usage(void) {
         "  Sem --mission o jogo abre no menu principal original.\n"
         "  testes: --selftest | --import-only | --frames N [--headless] [--hashes ARQ] [--screenshot ARQ.bmp] [--demo-input]\n"
         "          --menu-demo ARQ (percurso fixo pelos menus, sem janela; igual ao parity.sh)\n"
+        "          --save-demo ARQ [--save-directory PASTA_VAZIA] (percurso fixo de salvar/carregar; igual ao parity.sh)\n"
+        "  --save-directory PASTA: partidas salvas (padrão: Partidas na pasta de dados do usuário).\n"
         "  --cd: RISING_LANDS_BR_.BIN, .CUE, .ISO ou a pasta do CD (importa na primeira execução).\n"
-        "  Teclas do host: P/Pause pausa, +/- velocidade, F11 tela cheia. As demais 23 teclas vão ao jogo.\n");
+        "  Teclas do host: P/Pause pausa, +/- velocidade, F5 salvar rápido, F9 carregar rápido, F11 tela cheia.\n"
+        "  As demais 23 teclas vão ao jogo.\n");
 }
 
 static int parse(int argc, char **argv, Options *o) {
@@ -448,6 +663,8 @@ static int parse(int argc, char **argv, Options *o) {
   else if (!strcmp(a, "--hashes")) { VALUE(); o->hashes = v; }
   else if (!strcmp(a, "--screenshot")) { VALUE(); o->screenshot = v; }
   else if (!strcmp(a, "--menu-demo")) { VALUE(); o->menu_demo = v; }
+  else if (!strcmp(a, "--save-demo")) { VALUE(); o->save_demo = v; }
+  else if (!strcmp(a, "--save-directory")) { VALUE(); o->save_directory = v; }
   else if (!strcmp(a, "--selftest")) o->selftest = 1;
   else if (!strcmp(a, "--import-only")) o->import_only = 1;
   else if (!strcmp(a, "--headless")) o->headless = 1;
@@ -458,7 +675,7 @@ static int parse(int argc, char **argv, Options *o) {
 #undef VALUE
  }
  /* Frame-count smoke runs keep milestone 1's stage start (MONDE01) unless told otherwise. */
- if (!o->mission && (o->frames || o->headless) && !o->menu_demo) o->mission = "MONDE01.ETA";
+ if (!o->mission && (o->frames || o->headless) && !o->menu_demo && !o->save_demo) o->mission = "MONDE01.ETA";
  return o->difficulty > 2 || o->speed > 3 ? -1 : 0;
 }
 
@@ -497,6 +714,8 @@ static int ensure_import(const char *data_root) {
  }
  return rc;
 }
+
+static int any_entry(const char *name, int is_dir, void *ctx) { (void)name; (void)is_dir; (void)ctx; return 1; }
 
 static int run_headless(FILE *hashes) {
  for (unsigned i = 0; i < G.opt.frames + 1; i++) {
@@ -538,6 +757,24 @@ int main_utf8(int argc, char **argv) {
   printf("menu demo %s: %s\n", walk ? "terminou antes do fim" : "completo", G.opt.menu_demo);
   return 0;
  }
+ if (G.opt.save_demo) {
+  /* Never the player's saves: an empty folder of its own (recreated) or the
+   * given one, which must be empty. */
+  char folder[4200]; attach_console();
+  if (G.opt.save_directory) snprintf(folder, sizeof(folder), "%s", G.opt.save_directory);
+  else { snprintf(folder, sizeof(folder), "%s" RLW_SEP "teste-saves", data_root); rlw_remove_tree(folder); }
+  int empty = !rlw_mkdirs(folder) && rlw_list_dir(folder, any_entry, NULL) == 0;
+  if (!empty) { fprintf(stderr, "a pasta do teste precisa estar vazia: %s\n", folder); return 4; }
+  RlwDriver *d = rlw_driver_create(dados, "MONDE01.ETA", 1, error, sizeof(error));
+  if (!d) { fprintf(stderr, "início: %s\n", error); return 3; }
+  FILE *out = rlw_fopen(G.opt.save_demo, "wb"); if (!out) { fprintf(stderr, "não foi possível criar %s\n", G.opt.save_demo); rlw_driver_free(d); return 4; }
+  int walk = rlw_save_demo_run(&RLW_WINDOWS_OPS, d, folder, out); fclose(out); rlw_driver_free(d);
+  printf("save demo %s: %s\n", walk ? "terminou antes do fim" : "completo", G.opt.save_demo);
+  return 0;
+ }
+ /* The player's saves (none in frame-count smoke runs unless asked). */
+ if (G.opt.save_directory) snprintf(G.saves, sizeof(G.saves), "%s", G.opt.save_directory);
+ else if (!G.opt.frames && !G.opt.headless) snprintf(G.saves, sizeof(G.saves), "%s" RLW_SEP "Partidas", data_root);
  G.driver = G.opt.mission ? rlw_driver_create(dados, G.opt.mission, G.opt.difficulty, error, sizeof(error))
                           : rlw_driver_create_menu(dados, G.opt.difficulty, error, sizeof(error));
  if (!G.driver) {
@@ -566,11 +803,12 @@ int main_utf8(int argc, char **argv) {
  wc.hCursor = LoadCursor(NULL, IDC_ARROW); wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
  wc.lpszClassName = L"RisingLandsWindow";
  RegisterClassExW(&wc);
- RECT r = {0, 0, 800, 600}; AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
+ RECT r = {0, 0, 800, 600}; AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, TRUE);
  G.hwnd = CreateWindowExW(0, wc.lpszClassName, L"Rising Lands", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                           r.right - r.left, r.bottom - r.top, NULL, NULL, instance, NULL);
  if (!G.hwnd) { message_box("Não foi possível criar a janela.", "Rising Lands", MB_ICONERROR); return 5; }
  G.placement.length = sizeof(G.placement);
+ build_menu();
  ShowWindow(G.hwnd, SW_SHOW); update_viewport();
  if (G.opt.fullscreen) set_fullscreen(1);
  SetForegroundWindow(G.hwnd); SetFocus(G.hwnd);
@@ -587,6 +825,8 @@ int main_utf8(int argc, char **argv) {
   }
   if (!running) break;
   if (G.quit) break;
+  save_poll(0);
+  if (SV.retry_slot[0] && now_seconds() >= SV.retry_at) { char slot[32], name[RLW_SAVE_NAME_CAPACITY]; snprintf(slot, sizeof(slot), "%s", SV.retry_slot); snprintf(name, sizeof(name), "%s", SV.retry_name); save_attempt(slot, SV.retry_named, name, SV.retries); }
   if (G.menu_failed) { MsgWaitForMultipleObjects(0, NULL, FALSE, 50, QS_ALLINPUT); if (G.opt.frames) { rc = 2; break; } continue; }
   if (in_menu()) {
    /* shellTick at 20 Hz (100 Hz in the credits); moves coalesced to 60 Hz. */
@@ -612,7 +852,9 @@ int main_utf8(int argc, char **argv) {
   }
   if (rate > 0) { if (t - G.deadline > MAXIMUM_BACKLOG) G.deadline = t; G.deadline += 1 / rate; }
   if (smoke && G.opt.demo_input) demo_input(s.frames + 1);
+  int stage_start = rlw_driver_stage_start(G.driver);
   if (rlw_driver_advance(G.driver)) { report_stop(); present_now(); continue; }
+  if (stage_start) stage_autosave();
   present_now();
   rlw_driver_status(G.driver, &s);
   if (!smoke && open_shell_if_needed()) continue;
@@ -626,6 +868,7 @@ int main_utf8(int argc, char **argv) {
   }
  }
  timeEndPeriod(1);
+ save_poll(1); /* flushSaves(): never leave a captured save unwritten */
  if (hashes) fclose(hashes);
  rlw_menu_close(&G.menu);
  rlw_driver_free(G.driver); G.driver = NULL;

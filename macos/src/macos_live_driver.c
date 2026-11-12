@@ -28,6 +28,10 @@ typedef struct {uint32_t offset,length,zero;} Span;
 extern int32_t macos_projection_validate(const uint8_t*,uint32_t,const Entry*,uint32_t);
 extern int32_t macos_projection_sha256(const uint8_t*,uint32_t,const Span*,uint32_t,uint8_t*);
 #define FN(name) __typeof__(&name) name
+/* World rule set for new production worlds (RlMissaoInicio.regras): set by the
+ * app before creation from its preferences ("Atalhos modernos" = Shift+click
+ * order queue, RL_REGRA_FILA_ORDENS). Validation tools always use 0. */
+static uint32_t default_rules;
 struct MacOSLiveDriver {
  void *library;
  RlEventsHostV1 events_host;uint8_t *events_directory,*events_bytes;
@@ -45,6 +49,8 @@ struct MacOSLiveDriver {
  FN(rl_salvar_versao);FN(rl_salvar_arquivo);FN(rl_salvar_bytes);FN(rl_carregar_arquivo);FN(rl_render_cache);
  FN(rl_autosalvar_inicio_fase);FN(rl_autosalvar_arquivo);FN(rl_autosalvar_bytes);
  FN(rl_entrada_quantidade_pendente);FN(rl_entrada_passo_pendente);
+ /* World rules and the Shift+click order queue (optional symbols; absent = original rules only). */
+ FN(rl_regras);FN(rl_regras_definir);FN(rl_fila_ordens);
 #ifdef MACOS_EVENT_FLC
  FN(rl_eventos_flc_v1);FN(rl_evento_flc_estado_v1);FN(rl_evento_flc_terminar_v1);
 #endif
@@ -229,8 +235,10 @@ static int first_game_draw(MacOSLiveDriver*d){
 }
 #ifdef MACOS_STATIC_ENGINE
 #define LOAD(name) do {d->name=&name;} while(0)
+#define LOAD_OPTIONAL(name) do {d->name=&name;} while(0)
 #else
 #define LOAD(name) do { d->name=(__typeof__(d->name))dlsym(d->library,#name);if(!d->name){snprintf(error,capacity,"Missing ABI symbol %s",#name);goto bad;} } while(0)
+#define LOAD_OPTIONAL(name) do { d->name=(__typeof__(d->name))dlsym(d->library,#name); } while(0)
 #endif
 static int shell_open(MacOSLiveDriver*d,uint32_t mode);
 static MacOSLiveDriver *create(const char*library,const char*root,const char*mission,uint32_t difficulty,const RlEventsHostV1*host,char*error,uint32_t capacity,int menu){
@@ -261,6 +269,7 @@ if(host){
  LOAD(rl_render_criar_cd);LOAD(rl_render_reset_cd);LOAD(rl_mundo_paleta_jogo);LOAD(rl_shell_imagem_cd);LOAD(rl_mundo_tabelas_sombra_luz);
  LOAD(rl_salvar_versao);LOAD(rl_salvar_arquivo);LOAD(rl_salvar_bytes);LOAD(rl_carregar_arquivo);LOAD(rl_render_cache);LOAD(rl_autosalvar_inicio_fase);LOAD(rl_autosalvar_arquivo);LOAD(rl_autosalvar_bytes);
  LOAD(rl_entrada_quantidade_pendente);LOAD(rl_entrada_passo_pendente);
+ LOAD_OPTIONAL(rl_regras);LOAD_OPTIONAL(rl_regras_definir);LOAD_OPTIONAL(rl_fila_ordens);
  LOAD(rl_shell_version);LOAD(rl_shell_create);LOAD(rl_shell_plan);LOAD(rl_shell_enter);LOAD(rl_shell_paint_prepared);LOAD(rl_shell_input);LOAD(rl_shell_draw);LOAD(rl_shell_copy);LOAD(rl_shell_free);LOAD(rl_shell_campaign_prepare);LOAD(rl_shell_campaign_load);LOAD(rl_shell_defeat_finish);LOAD(rl_shell_export_world);
  if(d->rl_shell_version()!=RL_SHELL_VERSION){snprintf(error,capacity,"Prepared shell v1 required");goto bad;}
  if(d->rl_salvar_versao()!=RL_SAVE_FORMAT_VERSION){snprintf(error,capacity,"Save extension v1 required");goto bad;}
@@ -282,6 +291,7 @@ if(host){
   config.thread_id=1;config.ticks_per_second=20;config.execution_mode=RL_EXECUCAO_JOGO;
   config.iterations[0]=5;config.iterations[1]=2;config.iterations[2]=1;
   config.input=d->input;config.input.cursor_x=400;config.input.cursor_y=300;
+  config.regras=d->rl_regras_definir?default_rules:0;
   if(!c&&host)c=d->rl_missao_iniciar_eventos_v1(inputs,10,(const uint8_t*)mission,(uint32_t)strlen(mission),&config,&d->events_host,&d->world,&d->input);
   if(!c&&!host)c=d->rl_missao_iniciar(inputs,10,(const uint8_t*)mission,(uint32_t)strlen(mission),&config,&d->world,&d->input);
   /* Keep the original menu cursor through load_tail. The separately retained
@@ -306,6 +316,7 @@ if(host){
   config.thread_id=1;config.ticks_per_second=20;config.execution_mode=RL_EXECUCAO_JOGO;
   config.iterations[0]=5;config.iterations[1]=2;config.iterations[2]=1;
   config.input=d->input;config.input.cursor_x=400;config.input.cursor_y=300;
+  config.regras=d->rl_regras_definir?default_rules:0;
   if(!c)c=d->rl_missao_iniciar_menu_eventos_v1(inputs,9,&config,&d->events_host,&d->world,&d->input);
   for(unsigned i=0;i<9;i++)free(data[i]);
   if(c){if(!error[0]){fail(d,c,"MenuInit 0x4682bb");snprintf(error,capacity,"%s",d->status.message);}goto bad;}
@@ -561,6 +572,22 @@ int32_t macos_live_peek(MacOSLiveDriver*d,const uint32_t*addresses,const uint32_
   if(!found)return 3;written+=size;
  }
  return 0;
+}
+/* World rules. default_rules applies to production worlds created afterwards;
+ * set_rules changes the current world only before its load tail (the menu
+ * world), as rl_regras_definir does; saves and later stages keep their own. */
+void macos_live_default_rules(uint32_t rules){default_rules=rules;}
+int32_t macos_live_set_rules(MacOSLiveDriver*d,uint32_t rules){
+ if(!d||!d->world||!d->rl_regras_definir||d->validation)return 1;
+ return d->rl_regras_definir(d->world,rules);
+}
+uint32_t macos_live_rules(MacOSLiveDriver*d){
+ uint32_t rules=0;if(d&&d->world&&d->rl_regras&&d->rl_regras(d->world,&rules)==0)return rules;return 0;
+}
+/* Pending Shift+click waypoints of one unit (rl_fila_ordens), play only. */
+int32_t macos_live_order_queue(MacOSLiveDriver*d,uint32_t unit,uint16_t*cells,uint32_t capacity,uint32_t*count){
+ if(!d||!count||!d->world||!d->rl_fila_ordens||d->validation||d->shell)return 1;
+ return d->rl_fila_ordens(d->world,unit,cells,capacity,count);
 }
 /* Inputs queued by macos_live_event and not yet delivered to a game frame. */
 uint32_t macos_live_pending_input(MacOSLiveDriver*d){return d?d->pending_count:0;}

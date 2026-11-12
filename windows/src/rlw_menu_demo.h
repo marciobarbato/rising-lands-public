@@ -23,7 +23,22 @@ typedef struct {
  const uint8_t *(*pixels)(void *driver);
  const uint8_t *(*palette)(void *driver);
  void (*stop_message)(void *driver, char *out, size_t capacity);
+ /* Saves (milestone 3): the driver's own save, stage autosave, load and the
+  * pause list's SAVE_SLOT completion; errors through menu.error. */
+ int (*save)(void *driver, const char *path);
+ int (*autosave)(void *driver, const char *path);
+ int (*load)(void *driver, const char *path);
+ int (*shell_save_slot)(void *driver, const char *path, int32_t *saved);
 } RlwDemoOps;
 /* Returns 0 when the whole walk ran, 1 when it ended early (reason on stderr). */
 int rlw_menu_demo_run(const RlwDemoOps *ops, void *driver, FILE *out);
+/* Save walk (milestone 3), from a fresh MONDE01 driver in play mode, writing in
+ * the empty folder `directory`: the stage autosave after the load tail, 120
+ * frames with the fixed input, a save, 60 more frames; the save loaded and the
+ * same 60 frames replayed (compared), the autosave loaded and its first 30
+ * frames replayed (compared); the pause menu's Salvar list (SAVE_SLOT over the
+ * same slot), 20 frames, the pause menu's Carregar list (LOAD_SLOT of that
+ * paused save), the reopened pause and "continuar", 20 frames. Lines as in the
+ * menu walk, plus the SHA-256 of each slot file and of its .view companion. */
+int rlw_save_demo_run(const RlwDemoOps *ops, void *driver, const char *directory, FILE *out);
 #endif

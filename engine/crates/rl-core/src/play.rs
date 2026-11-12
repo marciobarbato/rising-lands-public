@@ -102,6 +102,8 @@ impl World {
         }
         let m = &mut self.projection.template;
         m.audit = self.execution_mode != 1;
+        m.rules = self.rules;
+        m.order_queue = self.order_queue.clone();
         m.begin();
         let attempted = catch_unwind(AssertUnwindSafe(|| {
             if let Some(answers) = answers {
@@ -127,6 +129,7 @@ impl World {
                     return Err(error);
                 }
                 self.projection.template.commit();
+                self.order_queue = self.projection.template.order_queue.clone();
                 self.generation = self.generation.wrapping_add(1);
                 self.render_receipt = None;
                 self.frame_phase = phase;

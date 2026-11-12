@@ -135,6 +135,38 @@ final class NativeMetalGameView: NSView {
     func requestModern(_ command:NativeHotkeyInputRouter.ModernCommand){
         if leftHeld{pendingModern=command}else{modernCommand?(command)}
     }
+    /// Shift+click order queue markers, drawn by the host over the map part of
+    /// the picture (never into the game image).
+    private lazy var waypointLayer: CAShapeLayer = {
+        let shape=CAShapeLayer()
+        shape.fillColor=NSColor(calibratedRed:1,green:0.85,blue:0.2,alpha:0.95).cgColor
+        shape.strokeColor=NSColor(calibratedRed:1,green:0.85,blue:0.2,alpha:0.8).cgColor
+        shape.lineWidth=1.5;shape.lineDashPattern=[4,3];shape.masksToBounds=true;shape.zPosition=10
+        layer?.addSublayer(shape);return shape
+    }()
+    private var waypoints=NativeOrderQueueMarkers.empty
+    func showWaypoints(_ markers:NativeOrderQueueMarkers){waypoints=markers;layoutWaypoints()}
+    func layoutWaypoints(){
+        guard !waypoints.paths.isEmpty || layer?.sublayers?.contains(waypointLayer) == true else{return}
+        guard let rect=viewport?.viewportInWindow,rect.width>0 else{return}
+        let sx=rect.width/800,sy=rect.height/600
+        // The map region only (the HUD keeps its own pixels).
+        let map=CGRect(x:rect.minX,y:rect.maxY-CGFloat(waypoints.mapHeight)*sy,width:CGFloat(waypoints.mapWidth)*sx,height:CGFloat(waypoints.mapHeight)*sy)
+        CATransaction.begin();CATransaction.setDisableActions(true)
+        waypointLayer.frame=map
+        let path=CGMutablePath(),flag=max(3,5*sx)
+        for unit in waypoints.paths{
+            let points=unit.map{CGPoint(x:CGFloat($0.x)*sx,y:map.height-CGFloat($0.y)*sy)}
+            if points.count>1{path.addLines(between:points)}
+            for p in points{
+                path.move(to:p);path.addLine(to:CGPoint(x:p.x,y:p.y+2.2*flag))
+                path.addRect(CGRect(x:p.x,y:p.y+1.2*flag,width:1.2*flag,height:flag))
+                path.addEllipse(in:CGRect(x:p.x-flag/2,y:p.y-flag/2,width:flag,height:flag))
+            }
+        }
+        waypointLayer.path=path
+        CATransaction.commit()
+    }
     var heldKeys: Set<Int> { hotkeys.heldKeys }
     var viewport: NativeViewportPolicy? {
         try? NativeViewportPolicy(contentRect: bounds, backingScale: window?.backingScaleFactor ?? 1,
@@ -286,7 +318,7 @@ final class NativeMetalGameView: NSView {
     }
     override func layout(){super.layout();updateDrawableSize()}
     override func viewDidChangeBackingProperties(){super.viewDidChangeBackingProperties();updateDrawableSize()}
-    func updateDrawableSize(){guard let metal=layer as? CAMetalLayer else{return};let scale=window?.backingScaleFactor ?? 1;metal.drawableSize=CGSize(width:max(1,bounds.width*scale),height:max(1,bounds.height*scale))}
+    func updateDrawableSize(){guard let metal=layer as? CAMetalLayer else{return};let scale=window?.backingScaleFactor ?? 1;metal.drawableSize=CGSize(width:max(1,bounds.width*scale),height:max(1,bounds.height*scale));layoutWaypoints()}
     func makePlayPresenter() throws -> NativePlayPresenter {
         if let presenter=playPresenter{return presenter}
         guard let layer=layer as? CAMetalLayer else{throw NSError(domain:"MetalLayerUnavailable",code:1)}
@@ -784,6 +816,9 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 throw NSError(domain:"EVENTSHostContract",code:1,userInfo:[NSLocalizedDescriptionKey:"Mapeamento de EVENTS ausente no aplicativo. Recompile esta versão."])
             }
             let bytes=Array(logical.utf8)
+            // Atalhos modernos also turn on the engine's Shift+click order queue
+            // (RL_REGRA_FILA_ORDENS) for the worlds created from here on.
+            macos_live_default_rules(validationMode ? 0:NativeModernHotkeys.engineRules())
             // The original main menu (MenuInit 2) is the normal start; a stage
             // name starts that stage directly (chooser, saves, diagnostics).
             candidate=bytes.withUnsafeBufferPointer {
@@ -939,6 +974,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         if !validationMode{let wait=pacer.delay(now:now);if wait>0{work.asyncAfter(deadline:.now()+wait){[weak self] in self?.pump(run)};return}}
         advance()
         stepModern()
+        stepOrderQueueMarkers()
         let finished=ProcessInfo.processInfo.systemUptime
         if finished-lastNotify>=0.1 || !running{lastNotify=finished;deliver(periodic:running)}
         if running{work.async{[weak self] in self?.pump(run)}}else{
@@ -991,6 +1027,33 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                              pointer:{[unowned self] in self.metal.pointer.get()})
     }
     /// One read-only projection per call, between frames, on the work queue.
+    /// Shift+click order queue markers (work queue only): refreshed every 4 frames,
+    /// and read from the game only while some unit has waypoints.
+    var markerTick=0
+    var shownMarkers=NativeOrderQueueMarkers.empty
+    func stepOrderQueueMarkers(){
+        markerTick &+= 1;guard markerTick%4==0 else{return}
+        var markers=NativeOrderQueueMarkers.empty
+        if modernAllowed() && macos_live_rules(driver) & NativeModernHotkeys.orderQueueRule != 0 && anyOrderQueued(){
+            markers=NativeOrderQueueMarkers.read(peek:{addresses,sizes in
+                var bytes=[UInt8](repeating:0,count:sizes.reduce(0){$0+Int($1)})
+                return macos_live_peek(self.driver,addresses,sizes,UInt32(addresses.count),&bytes)==0 ? bytes:nil
+            },queue:{self.orderQueue($0)}) ?? .empty
+        }
+        guard markers != shownMarkers else{return}
+        shownMarkers=markers
+        DispatchQueue.main.async{self.metal.showWaypoints(markers)}
+    }
+    func anyOrderQueued()->Bool{
+        var count:UInt32=0
+        for unit in 0..<800 where macos_live_order_queue(driver,UInt32(unit),nil,0,&count)==0 && count>0 {return true}
+        return false
+    }
+    func orderQueue(_ unit:Int)->[UInt16]{
+        var count:UInt32=0,cells=[UInt16](repeating:0,count:8)
+        guard unit>=0,unit<800,macos_live_order_queue(driver,UInt32(unit),&cells,8,&count)==0 else{return []}
+        return Array(cells.prefix(Int(min(count,8))))
+    }
     func modernSnapshot()->NativeModernSnapshot?{
         NativeModernSnapshot.read(concatenated:{addresses,sizes in
             var bytes=[UInt8](repeating:0,count:sizes.reduce(0){$0+Int($1)})
@@ -1009,6 +1072,12 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     }
     @MainActor func setModernHotkeys(_ enabled:Bool){
         NativeModernHotkeys.store(enabled);metal.releaseKeys();metal.hotkeys.modernEnabled=enabled
+        // The order queue rule follows: new worlds, and the menu world (before its
+        // load tail, as rl_regras_definir allows). A running stage or a loaded
+        // save keeps its own rules.
+        let rules=validationMode ? 0:NativeModernHotkeys.engineRules()
+        macos_live_default_rules(rules)
+        work.async{[weak self] in if let driver=self?.driver{_=macos_live_set_rules(driver,rules)}}
     }
     @objc func toggle(){perform("live-play",completion:nil)}
     @objc func step(){perform("live-step",completion:nil)}

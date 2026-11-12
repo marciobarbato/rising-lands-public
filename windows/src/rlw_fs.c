@@ -1,3 +1,6 @@
+#if !defined(_WIN32) && !defined(_DEFAULT_SOURCE)
+#define _DEFAULT_SOURCE /* mkstemp, fsync, fseeko with -std=c11 on glibc */
+#endif
 #include "rlw_fs.h"
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +21,7 @@ static int narrow(const wchar_t *w, char *out, size_t capacity) {
 #else
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
@@ -162,6 +166,63 @@ int rlw_remove_tree(const char *path) {
  return r.failed || !ok ? -1 : 0;
 #else
  return r.failed || rmdir(path) ? -1 : 0;
+#endif
+}
+
+int rlw_remove_file(const char *path) {
+ if (!rlw_exists(path)) return 0;
+#ifdef _WIN32
+ wchar_t *p = wide(path); BOOL ok = p && DeleteFileW(p); free(p); return ok ? 0 : -1;
+#else
+ return unlink(path) ? -1 : 0;
+#endif
+}
+
+int rlw_durable_write(const char *target, const uint8_t *a, size_t an, const uint8_t *b, size_t bn) {
+ static unsigned counter;
+ char temporary[4200];
+#ifdef _WIN32
+ if (snprintf(temporary, sizeof(temporary), "%s.tmp.%lu.%u", target, (unsigned long)GetCurrentProcessId(), ++counter) >= (int)sizeof(temporary)) return -1;
+ wchar_t *t = wide(temporary), *w = wide(target); if (!t || !w) { free(t); free(w); return -1; }
+ HANDLE h = CreateFileW(t, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+ if (h == INVALID_HANDLE_VALUE) { free(t); free(w); return -1; }
+ int bad = 0; const uint8_t *parts[2] = {a, b}; size_t sizes[2] = {an, bn};
+ for (int i = 0; i < 2 && !bad; i++) {
+  size_t done = 0;
+  while (done < sizes[i] && !bad) {
+   DWORD chunk = sizes[i] - done > (1u << 30) ? (1u << 30) : (DWORD)(sizes[i] - done), wrote = 0;
+   if (!WriteFile(h, parts[i] + done, chunk, &wrote, NULL) || wrote != chunk) bad = 1; else done += wrote;
+  }
+ }
+ if (!bad && !FlushFileBuffers(h)) bad = 1;
+ if (!CloseHandle(h)) bad = 1;
+ if (!bad && !MoveFileExW(t, w, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) bad = 1;
+ if (bad) DeleteFileW(t);
+ free(t); free(w); return bad ? -1 : 0;
+#else
+ if (snprintf(temporary, sizeof(temporary), "%s.tmp.XXXXXX", target) >= (int)sizeof(temporary)) return -1;
+ (void)counter;
+ int fd = mkstemp(temporary); if (fd < 0) return -1;
+ FILE *f = fdopen(fd, "wb"); if (!f) { close(fd); unlink(temporary); return -1; }
+ int bad = (an && fwrite(a, 1, an, f) != an) || (bn && fwrite(b, 1, bn, f) != bn) || fflush(f) || fsync(fd);
+ if (fclose(f)) bad = 1;
+ if (!bad) bad = chmod(temporary, 0644) != 0;
+ if (bad || rename(temporary, target)) { unlink(temporary); return -1; }
+ char directory[4200]; snprintf(directory, sizeof(directory), "%s", target); char *slash = strrchr(directory, '/');
+ if (slash) { if (slash == directory) slash[1] = 0; else *slash = 0; int dfd = open(directory, O_RDONLY); if (dfd >= 0) { fsync(dfd); close(dfd); } }
+ return 0;
+#endif
+}
+
+int64_t rlw_file_mtime(const char *path) {
+#ifdef _WIN32
+ wchar_t *p = wide(path); if (!p) return -1;
+ WIN32_FILE_ATTRIBUTE_DATA data; BOOL ok = GetFileAttributesExW(p, GetFileExInfoStandard, &data); free(p);
+ if (!ok || (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) return -1;
+ uint64_t t = ((uint64_t)data.ftLastWriteTime.dwHighDateTime << 32) | data.ftLastWriteTime.dwLowDateTime;
+ return (int64_t)(t / 10000000ull) - 11644473600ll;
+#else
+ struct stat s; if (stat(path, &s) || S_ISDIR(s.st_mode)) return -1; return (int64_t)s.st_mtime;
 #endif
 }
 

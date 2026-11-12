@@ -7,6 +7,10 @@ pub const FORMAT_VERSION: u32 = 1;
 // Schema 1 has no authoritative render receipt: its boundary consumption is
 // unknowable. Refuse it explicitly; never infer "not yet drawn" on load.
 pub const STATE_SCHEMA: u32 = 2;
+/// Schema 3 = schema 2 plus section 8, the world rule set. Only a world with a
+/// non-zero rule set writes it, so original-rules saves stay schema 2 byte for
+/// byte, and an engine without rules refuses a modern save.
+pub const RULES_SCHEMA: u32 = 3;
 pub const MAX_SAVE_BYTES: usize = 160 * 1024 * 1024;
 const MAX_RAW: usize = 128 * 1024 * 1024;
 const MAX_MEMORY: usize = 64 * 1024 * 1024;
@@ -14,6 +18,9 @@ const MAX_RECORDS: usize = 65536;
 const MAGIC: &[u8; 8] = b"RLSAVE\r\n";
 const HEADER: usize = 64;
 const SECTIONS: u32 = 7;
+const RULES_SECTIONS: u32 = 8;
+/// Schema 3 with section 9, the Shift+click order queue (only when not empty).
+const QUEUE_SECTIONS: u32 = 9;
 
 #[derive(Debug)]
 pub enum SaveError {
@@ -404,6 +411,28 @@ pub fn encode(world: &World, resume: &ResumeState) -> SaveResult<Vec<u8>> {
         }
     }
     raw.section(7, receipt)?;
+    if world.rules != 0 {
+        let mut rules = Writer::default();
+        rules.u32(world.rules);
+        raw.section(8, rules)?;
+    }
+    let queued = !world.order_queue.is_empty();
+    if queued {
+        if world.rules & crate::RULE_ORDER_QUEUE == 0 {
+            return Err(SaveError::Invalid("order queue without its rule"));
+        }
+        let mut queue = Writer::default();
+        queue.count(world.order_queue.0.len())?;
+        for (unit, w) in world.order_queue.iter() {
+            queue.u32(u32::from(unit));
+            queue.u32(u32::from(w.player));
+            queue.u32(w.cells.len() as u32);
+            for cell in &w.cells {
+                queue.u32(u32::from(*cell));
+            }
+        }
+        raw.section(9, queue)?;
+    }
     let packed = compress(&raw.0);
     if packed.len() + HEADER > MAX_SAVE_BYTES {
         return Err(SaveError::Limit);
@@ -411,11 +440,21 @@ pub fn encode(world: &World, resume: &ResumeState) -> SaveResult<Vec<u8>> {
     let mut header = Writer(MAGIC.to_vec());
     for v in [
         FORMAT_VERSION,
-        STATE_SCHEMA,
+        if world.rules != 0 {
+            RULES_SCHEMA
+        } else {
+            STATE_SCHEMA
+        },
         1,
         raw.0.len() as u32,
         packed.len() as u32,
-        SECTIONS,
+        if queued {
+            QUEUE_SECTIONS
+        } else if world.rules != 0 {
+            RULES_SECTIONS
+        } else {
+            SECTIONS
+        },
     ] {
         header.u32(v);
     }
@@ -437,7 +476,7 @@ pub fn decode(bytes: &[u8]) -> SaveResult<(World, ResumeState)> {
     }
     let format = h.u32()?;
     let schema = h.u32()?;
-    if format != FORMAT_VERSION || !matches!(schema, 1 | STATE_SCHEMA) {
+    if format != FORMAT_VERSION || !matches!(schema, 1 | STATE_SCHEMA | RULES_SCHEMA) {
         return Err(SaveError::Version { format, schema });
     }
     if h.u32()? != 1 {
@@ -449,8 +488,15 @@ pub fn decode(bytes: &[u8]) -> SaveResult<(World, ResumeState)> {
         return Err(SaveError::Limit);
     }
     // Validate the complete known legacy body before returning typed refusal.
-    let section_count = if schema == 1 { 6 } else { SECTIONS };
-    if h.u32()? != section_count {
+    let declared = h.u32()?;
+    let section_count = match schema {
+        1 => 6,
+        STATE_SCHEMA => SECTIONS,
+        // Section 9 (the order queue) is present only when the queue is not empty.
+        _ if declared == QUEUE_SECTIONS => QUEUE_SECTIONS,
+        _ => RULES_SECTIONS,
+    };
+    if declared != section_count {
         return Err(SaveError::Invalid("section count"));
     }
     let digest = h.take(32)?;
@@ -541,7 +587,7 @@ pub fn decode(bytes: &[u8]) -> SaveResult<(World, ResumeState)> {
     let mut m = Reader::new(sections[5]);
     world.frame_freed = m.memory()?;
     m.finish()?;
-    if schema == STATE_SCHEMA {
+    if schema >= STATE_SCHEMA {
         let mut m = Reader::new(sections[6]);
         world.render_receipt = match m.u32()? {
             0 => None,
@@ -573,6 +619,54 @@ pub fn decode(bytes: &[u8]) -> SaveResult<(World, ResumeState)> {
         };
         m.finish()?;
         world.validate_render_receipt()?;
+    }
+    if schema == RULES_SCHEMA {
+        let mut m = Reader::new(sections[7]);
+        let rules = m.u32()?;
+        m.finish()?;
+        // Schema 3 exists only for a non-zero rule set; unknown bits are refused.
+        if rules == 0 || rules & !RULES_KNOWN != 0 {
+            return Err(SaveError::Invalid("rules"));
+        }
+        world.rules = rules;
+    }
+    if section_count == QUEUE_SECTIONS {
+        if world.rules & crate::RULE_ORDER_QUEUE == 0 {
+            return Err(SaveError::Invalid("order queue without its rule"));
+        }
+        let mut m = Reader::new(sections[8]);
+        let mut entries = Vec::new();
+        for _ in 0..m.count()? {
+            let unit = m.u32()?;
+            let player = m.u32()?;
+            let n = m.u32()?;
+            if unit > u32::from(u16::MAX)
+                || player > 255
+                || n as usize > crate::order_queue::MAX_WAYPOINTS
+            {
+                return Err(SaveError::Invalid("order queue entry"));
+            }
+            let mut cells = Vec::new();
+            for _ in 0..n {
+                let cell = m.u32()?;
+                if cell > u32::from(u16::MAX) {
+                    return Err(SaveError::Invalid("order queue cell"));
+                }
+                cells.push(cell as u16);
+            }
+            entries.push((
+                unit as u16,
+                crate::order_queue::Waypoints {
+                    player: player as u8,
+                    cells,
+                },
+            ));
+        }
+        m.finish()?;
+        world.order_queue = crate::OrderQueue::from_entries(entries).map_err(SaveError::Invalid)?;
+        if world.order_queue.is_empty() {
+            return Err(SaveError::Invalid("empty order queue section"));
+        }
     }
     // Semantic state and address bindings must be reconstructible without changing bytes.
     if world.project()? != world.projection.template {

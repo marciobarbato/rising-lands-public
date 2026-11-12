@@ -5,7 +5,9 @@
 # read-only) over the same native engine, and compares the per-tick SHA-256 of
 # the presented pixels and palette. Then the scripted menu walk
 # (src/rlw_menu_demo.c: main menu, Novo jogo, briefing, play, pause, restart)
-# through both drivers, compared step by step.
+# through both drivers, compared step by step. Then the save walk (stage
+# autosave, save, load and replay, the pause menu's save and load lists), whose
+# lines include the SHA-256 of every slot and .view file each driver wrote.
 #
 #   windows/parity.sh --cd /caminho/RISING_LANDS_BR_.cue [ticks]
 #   windows/parity.sh --data /pasta-com-Dados [ticks]
@@ -57,4 +59,12 @@ if cmp -s "$OUT/windows-menu.txt" "$OUT/macos-menu.txt"; then
   echo "PARIDADE DOS MENUS OK: $(grep -c '' "$OUT/windows-menu.txt") linhas idênticas ($(tail -1 "$OUT/windows-menu.txt"))"
 else
   echo "PARIDADE DOS MENUS FALHOU"; diff "$OUT/windows-menu.txt" "$OUT/macos-menu.txt" | head -20; exit 1
+fi
+rm -rf "$OUT/saves-windows" "$OUT/saves-macos"; mkdir -p "$OUT/saves-windows" "$OUT/saves-macos"
+"$OUT/parity-windows" "$DATA/Dados" save "$OUT/windows-save.txt" "$OUT/saves-windows"
+"$OUT/parity-macos" "$DATA/Dados" save "$OUT/macos-save.txt" "$OUT/saves-macos"
+if cmp -s "$OUT/windows-save.txt" "$OUT/macos-save.txt"; then
+  echo "PARIDADE DOS SAVES OK: $(grep -c '' "$OUT/windows-save.txt") linhas idênticas ($(tail -1 "$OUT/windows-save.txt"))"
+else
+  echo "PARIDADE DOS SAVES FALHOU"; diff "$OUT/windows-save.txt" "$OUT/macos-save.txt" | head -20; exit 1
 fi

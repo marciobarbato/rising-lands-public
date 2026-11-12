@@ -1,9 +1,15 @@
 #include "rlw_menu_demo.h"
 #include "rlw_demo.h"
 #include "rlw_sha256.h"
+#include "rlw_fs.h"
+#include <stdlib.h>
 #include <string.h>
 
-typedef struct { const RlwDemoOps *ops; void *d; RlwMenu menu; FILE *out; unsigned step; int ended; } Walk;
+typedef struct {
+ const RlwDemoOps *ops; void *d; RlwMenu menu; FILE *out; unsigned step; int ended;
+ /* Save walk: the last line's picture hash and an optional per-frame record. */
+ char last_hex[65]; char (*record)[65]; unsigned recorded;
+} Walk;
 
 static const char *result_name(int r) {
  static const char *names[] = {"idle", "repaint", "host", "game", "failed"};
@@ -12,7 +18,7 @@ static const char *result_name(int r) {
 static void line(Walk *w, const char *action, const char *result) {
  RlwSha256 c; uint8_t digest[32]; char hex[65];
  rlw_sha256_init(&c); rlw_sha256_update(&c, w->ops->pixels(w->d), 480000); rlw_sha256_update(&c, w->ops->palette(w->d), 768);
- rlw_sha256_final(&c, digest); rlw_sha256_hex(digest, hex);
+ rlw_sha256_final(&c, digest); rlw_sha256_hex(digest, hex); memcpy(w->last_hex, hex, 65);
  fprintf(w->out, "%u %s %s %u %u %llu %s\n", w->step++, action, result, w->ops->menu.mode(w->d),
          w->ops->menu.mode(w->d) ? 0u : w->ops->screen(w->d), (unsigned long long)w->ops->frames(w->d), hex);
 }
@@ -57,6 +63,7 @@ static int play(Walk *w, unsigned n, const RlwDemoEvent *extra, unsigned extra_c
    return 0;
   }
   line(w, "frame", "ok");
+  if (w->record) memcpy(w->record[w->recorded++], w->last_hex, 65);
  }
  return 0;
 }
@@ -119,6 +126,114 @@ int rlw_menu_demo_run(const RlwDemoOps *ops, void *driver, FILE *out) {
  if (keys(&w, "enter-start", RL_SHELL_ENTER, RLW_MENU_GAME)) goto done;
  line(&w, "stage", "restarted");
  if (play(&w, 60, escape_up, 1)) goto done;
+ fprintf(out, "end complete\n");
+ rc = 0;
+done:
+ rlw_menu_close(&w.menu);
+ return rc;
+}
+
+/* ---- Save walk (milestone 3) ---- */
+
+static int file_hex(const char *path, char hex[65]) {
+ uint32_t n = 0; uint8_t *b = rlw_read_file(path, &n, 160u * 1024u * 1024u);
+ if (!b) { snprintf(hex, 65, "absent"); return 1; }
+ uint8_t digest[32]; rlw_sha256(b, n, digest); free(b); rlw_sha256_hex(digest, hex); return 0;
+}
+/* "<step> <action> rc=<code> <sha256 slot> <sha256 companion>" (no paths). */
+static void slot_line(Walk *w, const char *action, int rc, const char *path) {
+ char rls[65], view[65] = "absent", companion[4300];
+ if (!file_hex(path, rls)) { snprintf(companion, sizeof(companion), "%s.%s.view", path, rls); file_hex(companion, view); }
+ fprintf(w->out, "%u %s rc=%d %s %s\n", w->step++, action, rc, rls, view);
+}
+typedef struct { unsigned rls, view, tmp; } FileCount;
+static int count_file(const char *name, int is_dir, void *ctx) {
+ FileCount *f = ctx; size_t n = strlen(name); if (is_dir) return 0;
+ if (strstr(name, ".tmp.")) f->tmp++; else if (n > 4 && !strcmp(name + n - 4, ".rls")) f->rls++; else if (n > 5 && !strcmp(name + n - 5, ".view")) f->view++;
+ return 0;
+}
+static void files_line(Walk *w, const char *directory) {
+ FileCount f = {0, 0, 0}; rlw_list_dir(directory, count_file, &f);
+ fprintf(w->out, "%u files rls=%u view=%u tmp=%u\n", w->step++, f.rls, f.view, f.tmp);
+}
+static int play_record(Walk *w, unsigned n, char (*record)[65]) {
+ w->record = record; w->recorded = 0; int c = play(w, n, NULL, 0); w->record = NULL; return c;
+}
+/* Replays n frames and compares them with an earlier record of the same frames. */
+static int play_compare(Walk *w, unsigned n, char (*expected)[65], const char *what) {
+ static char now[64][65];
+ if (n > 64 || play_record(w, n, now)) return 1;
+ if (w->recorded != n) return end_walk(w, what);
+ for (unsigned i = 0; i < n; i++) if (strcmp(now[i], expected[i])) {
+  fprintf(w->out, "%u %s differs at frame %u\n", w->step++, what, i + 1); return end_walk(w, what);
+ }
+ fprintf(w->out, "%u %s equal %u\n", w->step++, what, n); return 0;
+}
+static int expect_host(Walk *w, const char *action, int r, uint32_t kind) {
+ if (r != RLW_MENU_HOST || w->menu.host_event.kind != kind) {
+  line(w, action, result_name(r)); char why[96]; snprintf(why, sizeof(why), "%s did not request %u", action, kind); return end_walk(w, why);
+ }
+ fprintf(w->out, "%u %s host %u/%u slot %u\n", w->step++, action, w->menu.host_event.kind, w->menu.host_event.mode, w->menu.host_event.reserved);
+ return 0;
+}
+static void slot_path(const char *directory, uint32_t index, char *out, size_t capacity) {
+ snprintf(out, capacity, "%s" RLW_SEP "posicao-%u.rls", directory, index + 1);
+}
+
+int rlw_save_demo_run(const RlwDemoOps *ops, void *driver, const char *directory, FILE *out) {
+ Walk w; memset(&w, 0, sizeof(w)); w.ops = ops; w.d = driver; w.out = out;
+ rlw_menu_init(&w.menu, &ops->menu, driver, NULL);
+ static char first[30][65], before[60][65];
+ char slot[4200], stage[4200], path[4200];
+ slot_path(directory, 0, slot, sizeof(slot)); snprintf(stage, sizeof(stage), "%s" RLW_SEP "inicio-fase.rls", directory);
+ int rc = 1, c = 0;
+ line(&w, "start", ops->menu.mode(driver) ? "menu" : "play");
+ if (ops->menu.mode(driver)) { end_walk(&w, "not in play"); goto done; }
+ /* Load tail and first picture, then the stage autosave (the host's stage start). */
+ if (play(&w, 1, NULL, 0)) goto done;
+ c = ops->autosave(driver, stage); slot_line(&w, "autosave", c, stage);
+ if (c) { ops->menu.error(driver, w.menu.error, sizeof(w.menu.error)); end_walk(&w, w.menu.error); goto done; }
+ if (play_record(&w, 30, first) || play(&w, 90, NULL, 0)) goto done;
+ /* Frame 120: nothing held or queued (the fixed input ends at frame 60). */
+ c = ops->save(driver, slot); slot_line(&w, "save", c, slot);
+ if (c) { ops->menu.error(driver, w.menu.error, sizeof(w.menu.error)); end_walk(&w, w.menu.error); goto done; }
+ if (play_record(&w, 60, before)) goto done;
+ c = ops->load(driver, slot); line(&w, "load", c ? "failed" : "ok");
+ if (c) { ops->menu.error(driver, w.menu.error, sizeof(w.menu.error)); end_walk(&w, w.menu.error); goto done; }
+ if (play_compare(&w, 60, before, "replay")) goto done;
+ c = ops->load(driver, stage); line(&w, "load-autosave", c ? "failed" : "ok");
+ if (c) { ops->menu.error(driver, w.menu.error, sizeof(w.menu.error)); end_walk(&w, w.menu.error); goto done; }
+ if (play_compare(&w, 30, first, "replay-autosave")) goto done;
+ if (play(&w, 10, NULL, 0) || escape_to_pause(&w)) goto done;
+ /* Salvar (pause item 1): list 14 with one host caption, Enter on its first slot. */
+ memset(w.menu.slot_table, 0, sizeof(w.menu.slot_table)); w.menu.slot_table[0] = 1; memcpy(w.menu.slot_table + 1, "Teste", 5);
+ if (pointer_off_items(&w) || ticks(&w, 5)) goto done;
+ if (keys(&w, "down", RL_SHELL_DOWN, RLW_MENU_REPAINT) || keys(&w, "enter-save", RL_SHELL_ENTER, RLW_MENU_REPAINT)) goto done;
+ if (ops->menu.mode(driver) != RL_SHELL_SAVE_LIST) { end_walk(&w, "pause item 1 did not open the save list"); goto done; }
+ if (ticks(&w, 5) || expect_host(&w, "enter-slot", rlw_menu_keys(&w.menu, RL_SHELL_ENTER, 0), RL_SHELL_SAVE_SLOT)) goto done;
+ int32_t saved = -1; slot_path(directory, w.menu.host_event.reserved, path, sizeof(path));
+ c = ops->shell_save_slot(driver, path, &saved); rlw_menu_reset(&w.menu);
+ slot_line(&w, saved ? "save-slot-failed" : "save-slot", c, path);
+ if (c || saved) { ops->menu.error(driver, w.menu.error, sizeof(w.menu.error)); end_walk(&w, w.menu.error); goto done; }
+ if (ops->menu.mode(driver)) { end_walk(&w, "save slot did not resume"); goto done; }
+ files_line(&w, directory);
+ if (play(&w, 20, NULL, 0) || escape_to_pause(&w)) goto done;
+ /* Carregar (pause item 0): list 12, Enter on the first slot: the paused save. */
+ if (pointer_off_items(&w) || ticks(&w, 5) || keys(&w, "enter-load", RL_SHELL_ENTER, RLW_MENU_REPAINT)) goto done;
+ if (ops->menu.mode(driver) != RL_SHELL_LOAD_LIST) { end_walk(&w, "pause item 0 did not open the load list"); goto done; }
+ if (ticks(&w, 5) || expect_host(&w, "enter-slot", rlw_menu_keys(&w.menu, RL_SHELL_ENTER, 0), RL_SHELL_LOAD_SLOT)) goto done;
+ slot_path(directory, w.menu.host_event.reserved, path, sizeof(path));
+ c = ops->load(driver, path); rlw_menu_reset(&w.menu); line(&w, "load-slot", c ? "failed" : "ok");
+ if (c) { ops->menu.error(driver, w.menu.error, sizeof(w.menu.error)); end_walk(&w, w.menu.error); goto done; }
+ /* A save from the pause list reopens the original pause at the next host tick. */
+ if (play(&w, 1, NULL, 0)) goto done;
+ if (ops->menu.mode(driver) != RL_SHELL_PAUSE) { end_walk(&w, "the paused save did not reopen the pause"); goto done; }
+ if (pointer_off_items(&w) || ticks(&w, 5)) goto done;
+ for (int i = 0; i < 5; i++) if (keys(&w, "down", RL_SHELL_DOWN, RLW_MENU_REPAINT)) goto done;
+ if (keys(&w, "enter-continue", RL_SHELL_ENTER, RLW_MENU_GAME)) goto done;
+ line(&w, "resume", "game");
+ if (play(&w, 20, NULL, 0)) goto done;
+ files_line(&w, directory);
  fprintf(out, "end complete\n");
  rc = 0;
 done:

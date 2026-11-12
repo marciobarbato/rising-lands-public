@@ -65,13 +65,13 @@ int rlw_shell_state(const RlwDriver *d, RlShellInput *out);
 int rlw_shell_input(RlwDriver *d, const RlShellInput *input, RlShellEvent *out);
 int rlw_shell_draw(RlwDriver *d, uint32_t animation);
 /* Request completions: SHOW/SAVE_LOAD/CREDITS, MISSION_NEXT, RESET_CAMPAIGN and
- * RESUME, START_MISSION, the three movie requests, SAVE_SLOT (no save yet). */
+ * RESUME, START_MISSION, the three movie requests and SAVE_SLOT (below). The
+ * host completes LOAD_SLOT with rlw_driver_load (event.reserved = slot index). */
 int rlw_shell_show(RlwDriver *d);
 int rlw_shell_prepare(RlwDriver *d);
 int rlw_shell_request(RlwDriver *d);
 int rlw_shell_load(RlwDriver *d);
 int rlw_shell_movie_finish(RlwDriver *d, uint32_t completion);
-int rlw_shell_save_slot(RlwDriver *d, int32_t *saved);
 /* 10 x [present 0/1, 32-byte CP1252 caption] for the original save lists. */
 int rlw_shell_slots(RlwDriver *d, const uint8_t *table, uint32_t length);
 int rlw_shell_peek(RlwDriver *d, uint32_t address, uint32_t size, uint8_t *out);
@@ -81,4 +81,41 @@ uint32_t rlw_shell_click_clock(uint32_t mode, uint32_t clock, uint32_t press);
 int rlw_shell_credits_frame(RlwDriver *d, uint32_t elapsed_ms, RlShellCredits *out);
 int rlw_shell_credits_present(RlwDriver *d, const RlShellCredits *frame, const uint8_t *pixels, const uint8_t *palette);
 void rlw_shell_error(const RlwDriver *d, char *out, size_t capacity);
+
+/* ---- Saves (milestone 3) ----
+ * Same contract and file format as MacOSLiveDriver.h's macos_live_save*,
+ * macos_live_autosave, macos_live_load and macos_live_shell_save_slot*: the slot
+ * file holds exactly the engine's save bytes, a content-addressed companion
+ * "<slot>.<sha256>.view" the host presentation. A save written by either host
+ * loads in the other. Errors are separate from the simulation stop latch and
+ * readable with rlw_driver_save_error (RL_SAVE_BUSY: retry at a later frame). */
+typedef struct RlwSaveJob RlwSaveJob;
+/* Between complete frames in play, no host input waiting for its frame, no held button. */
+int rlw_driver_save(RlwDriver *d, const char *path);
+/* Same checks; captures bytes + companion now, rlw_save_commit writes them later. */
+int rlw_driver_save_begin(RlwDriver *d, const char *path, RlwSaveJob **job);
+/* Stage-start autosave: the world captured by the load tail and the first picture. */
+int rlw_driver_autosave(RlwDriver *d, const char *path);
+/* Replaces world, renderer and picture together (an open shell session is
+ * discarded); host input is reset. A pause-list save (mode16) reopens the
+ * pause: rlw_driver_advance then reports screen 16 without stepping. */
+int rlw_driver_load(RlwDriver *d, const char *path);
+void rlw_driver_save_error(const RlwDriver *d, char *out, size_t capacity);
+/* 1 before a stage's first rlw_driver_advance (its load tail): the host takes the
+ * stage autosave right after that advance succeeds. */
+int rlw_driver_stage_start(const RlwDriver *d);
+/* Current stage file name ("MONDE01.ETA"; "MENU" in the original main menu). */
+const char *rlw_driver_mission(const RlwDriver *d);
+/* Host messages queued by rlw_driver_event and not yet given to a frame. */
+uint32_t rlw_driver_pending_input(const RlwDriver *d);
+/* Any thread, one job at a time, no driver: companion first, then the slot
+ * through a temporary + flush + atomic replace (a failure keeps the old save). */
+int rlw_save_commit(RlwSaveJob *job);
+void rlw_save_job_error(const RlwSaveJob *job, char *out, size_t capacity);
+void rlw_save_job_free(RlwSaveJob *job);
+/* Pending SAVE_SLOT (in-game list 14): modern save of the paused game to path
+ * (*saved = its result), then the original MenuInit(18) resume; returns the
+ * resume result (play continues even if the save failed). */
+int rlw_shell_save_slot(RlwDriver *d, const char *path, int32_t *saved);
+int rlw_shell_save_slot_begin(RlwDriver *d, const char *path, int32_t *saved, RlwSaveJob **job);
 #endif

@@ -3,6 +3,7 @@
  * comments name the macOS function each part mirrors. */
 #include "rlw_driver.h"
 #include "rlw_fs.h"
+#include "rlw_sha256.h"
 #include "rising_engine.h"
 #include "rising_difficulty.h"
 #include "rising_load_tail_input.h"
@@ -46,6 +47,9 @@ struct RlwDriver {
  /* Gameplay presentation retained across the pause menu. */
  uint8_t *pause_presentation, pause_palette[768];
  char save_error[512];
+ /* Saves (rlw_save.inc): the presentation and pointer captured with the stage's
+  * first draw (its autosave companion) and the last serialisation size. */
+ uint8_t *stage_presentation; int32_t stage_cursor_x, stage_cursor_y; uint32_t save_capacity;
 };
 
 static uint8_t *file(const char *root, const char *name, uint32_t *length) {
@@ -264,7 +268,7 @@ void rlw_driver_free(RlwDriver *d) {
  if (d->shell) rl_shell_free(d->shell);
  if (d->renderer) rl_render_liberar(d->renderer);
  if (d->world) rl_liberar_mundo(d->world);
- free(d->root); free(d->events_directory); free(d->events_bytes); free(d->pause_presentation); free(d);
+ free(d->root); free(d->events_directory); free(d->events_bytes); free(d->pause_presentation); free(d->stage_presentation); free(d);
 }
 
 static int check_render(RlwDriver *d, const RlRenderResult *out, uint64_t generation) {
@@ -345,6 +349,11 @@ static int advance_step(RlwDriver *d) {
   d->input.registers = d->phase2.registers;
   if ((c = first_game_draw(d))) return c;
   c = rl_autosalvar_inicio_fase(d->world, &d->input); if (c) return fail(d, c, "captura automática no início da fase");
+  /* The stage autosave's companion: this first picture and pointer. */
+  free(d->stage_presentation); d->stage_presentation = malloc(PRESENTATION_SIZE);
+  if (!d->stage_presentation) return fail(d, RL_IO_ERROR, "memória da apresentação automática");
+  c = capture_presentation(d, d->stage_presentation); if (c) return fail(d, c, "apresentação automática");
+  d->stage_cursor_x = d->cursor_x; d->stage_cursor_y = d->cursor_y;
   d->phase_index = 0; d->started = 1;
   return 0;
  }
@@ -357,7 +366,18 @@ static int advance_step(RlwDriver *d) {
   if ((c = check_render(d, &out, gen))) return c;
  }
  uint32_t pending = 0; c = rl_entrada_quantidade_pendente(d->world, &pending); if (c) return fail(d, c, "consulta de entradas salvas");
- if (pending) return named_stop(d, "SavedInputUnsupportedInMilestone");
+ if (pending) {
+  /* A restored FIFO owns its phase answers: drain to the next complete frame
+   * before admitting newer host messages. A failed item remains queued. */
+  do {
+   c = rl_entrada_passo_pendente(d->world, &d->input); if (c) return fail(d, c, "entrada salva");
+   c = rl_render_geracao(d->world, &gen, &phase, &counter); if (c) return fail(d, c, "fase da entrada salva");
+   if (phase == 2) { d->cursor_x = d->input.cursor_x; d->cursor_y = d->input.cursor_y; }
+   if (phase == 3) { d->status.frames++; d->phase_index = (uint32_t)(2 * d->status.frames); d->input_next_phase = 2; return flc_skip(d); }
+   c = rl_entrada_quantidade_pendente(d->world, &pending); if (c) return fail(d, c, "consulta de entradas salvas");
+  } while (pending);
+  return named_stop(d, "SavedInputMissingPhase3");
+ }
  RlDeclaredInput frame_input;
  if ((c = human_phase(d, 2, &frame_input))) return c;
  if ((c = human_phase(d, 3, &frame_input))) return c;
@@ -438,4 +458,5 @@ void rlw_driver_status(const RlwDriver *d, RlwStatus *out) { if (d && out) *out 
 const uint8_t *rlw_driver_pixels(const RlwDriver *d) { return d ? d->pixels : NULL; }
 const uint8_t *rlw_driver_palette(const RlwDriver *d) { return d ? d->palette : NULL; }
 
+#include "rlw_save.inc"
 #include "rlw_shell.inc"

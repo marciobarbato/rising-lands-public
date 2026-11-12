@@ -16,6 +16,13 @@ int rlw_is_dir(const char *path);
 int rlw_exists(const char *path);
 int rlw_rename_replace_dir(const char *from, const char *to); /* removes `to` first */
 int rlw_remove_tree(const char *path);
+int rlw_remove_file(const char *path);        /* 0 when removed or absent */
+/* Writes a then b to a temporary file beside `target`, flushes it to disk and
+ * atomically replaces `target` (MoveFileEx write-through / fsync + rename). On
+ * failure the previous `target` is intact and no temporary is left. */
+int rlw_durable_write(const char *target, const uint8_t *a, size_t an, const uint8_t *b, size_t bn);
+/* Last modification time in seconds since 1970 (UTC); -1 when absent. */
+int64_t rlw_file_mtime(const char *path);
 /* Lists direct children of a directory: calls fn(name, is_dir, ctx) per entry
  * (no "." or ".."). Returns 0 or -1. */
 int rlw_list_dir(const char *path, int (*fn)(const char *, int, void *), void *ctx);

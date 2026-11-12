@@ -694,6 +694,13 @@ impl Input {
                 if m.b(AE)? != 0 && m.b(AF)? != 0 {
                     self.ord(m, p, 5, [c, 0, 0, 0], 0x42aecf)?
                 }
+            } else if page == 12 && m.order_queue_rule() {
+                // Optional order queue: a Shift+click into the unexplored queues
+                // the move a plain click would give (page 0 above).
+                self.cursor(m, 0x1df5, m.d(0x508f80)? & 7)?;
+                if m.b(AE)? != 0 && m.b(AF)? != 0 {
+                    self.ord(m, p, crate::order_queue::TAG_QUEUE, [c, 0, 0, 0], 0x42aecf)?
+                }
             } else {
                 self.cursor(m, 0x1e0e, 0)?
             }
@@ -742,7 +749,7 @@ impl Input {
         }
         match page {
             9 => return self.deposit(m, p, c),
-            12 => return self.group_page(m, p),
+            12 => return self.group_page(m, p, c),
             11 => return self.engineer_page(m, p),
             13 => return self.nova_page(m, p, c),
             5 => return crate::spell_order_acceptance::input_cast(m, p as u8, c as u16),

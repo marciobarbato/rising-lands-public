@@ -17,6 +17,12 @@ pub struct MemoriaJogo {
     pub(crate) player: Option<crate::player::Runtime>,
     journal: Journal,
     pub(crate) audit: bool,
+    /// World rule set (`crate::RULE_*` bits), stamped by `World` on every
+    /// projection; never part of projected game bytes or equality.
+    pub(crate) rules: u32,
+    /// Shift+click waypoints (`crate::order_queue`), stamped and collected by
+    /// `World` around every phase; never part of projected game bytes or equality.
+    pub(crate) order_queue: crate::OrderQueue,
     #[cfg(feature = "validation-trace")]
     validation_trace: Option<Vec<(u32, Vec<u8>)>>,
 }
@@ -108,6 +114,8 @@ impl Default for MemoriaJogo {
             player: None,
             journal: Journal::default(),
             audit: true,
+            rules: 0,
+            order_queue: crate::OrderQueue::default(),
             #[cfg(feature = "validation-trace")]
             validation_trace: None,
         }

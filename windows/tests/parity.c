@@ -8,7 +8,11 @@
  *   parity <Dados> <frames> <hashes.txt> [--demo-input]
  * Menu parity (milestone 2): the scripted walk of rlw_menu_demo.c from the
  * original main menu through briefing, play, pause and restart:
- *   parity <Dados> menu <walk.txt> */
+ *   parity <Dados> menu <walk.txt>
+ * Save parity (milestone 3): the save walk of rlw_menu_demo.c from MONDE01 in
+ * play mode (autosave, save, load and replay, pause list save/load), writing in
+ * an empty folder; the slot and .view files must be byte-identical too:
+ *   parity <Dados> save <walk.txt> <folder> */
 #include "rlw_demo.h"
 #include "rlw_menu_demo.h"
 #include "rlw_sha256.h"
@@ -45,8 +49,13 @@ static uint64_t op_frames(void *driver) { MacOSLiveStatus s; macos_live_status(D
 static const uint8_t *op_pixels(void *driver) { return macos_live_pixels(D); }
 static const uint8_t *op_palette(void *driver) { return macos_live_palette(D); }
 static void op_stop(void *driver, char *o, size_t n) { MacOSLiveStatus s; macos_live_status(D, &s); snprintf(o, n, "%s", s.message); }
+static int op_save(void *driver, const char *p) { return macos_live_save(D, p); }
+static int op_autosave(void *driver, const char *p) { return macos_live_autosave(D, p); }
+static int op_load_file(void *driver, const char *p) { return macos_live_load(D, p); }
+static int op_save_slot(void *driver, const char *p, int32_t *saved) { return macos_live_shell_save_slot(D, p, saved); }
 static const RlwDemoOps OPS = {{op_mode, op_state, op_input, op_draw, op_show, op_prepare, op_request, op_load, op_slots, op_zone,
- macos_live_shell_click_clock, op_credits_frame, op_credits_present, op_error}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop};
+ macos_live_shell_click_clock, op_credits_frame, op_credits_present, op_error}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
+ op_save, op_autosave, op_load_file, op_save_slot};
 #else
 #define OPS RLW_WINDOWS_OPS
 #endif
@@ -75,9 +84,34 @@ static int menu_walk(const char *root, const char *path) {
  return 0;
 }
 
+static int save_walk(const char *root, const char *path, const char *directory) {
+ FILE *out = fopen(path, "w"); if (!out) return 2;
+ char error[1024] = {0};
+#ifdef PARITY_MACOS
+ static const char logical[] = "C:\\RISING";
+ MacOSLiveDriver *d = macos_live_create_mission_host_v1(NULL, root, "MONDE01.ETA", 1, (const uint8_t *)logical, (uint32_t)strlen(logical), error, sizeof(error));
+ if (d && macos_live_validation(d, 0)) { MacOSLiveStatus s; macos_live_status(d, &s); snprintf(error, sizeof(error), "%s", s.message); macos_live_free(d); d = NULL; }
+ const char *name = "macos";
+#else
+ RlwDriver *d = rlw_driver_create(root, "MONDE01.ETA", 1, error, sizeof(error));
+ const char *name = "windows";
+#endif
+ if (!d) { fprintf(stderr, "%s save create: %s\n", name, error); fclose(out); return 3; }
+ int rc = rlw_save_demo_run(&OPS, d, directory, out);
+ fclose(out);
+#ifdef PARITY_MACOS
+ macos_live_free(d);
+#else
+ rlw_driver_free(d);
+#endif
+ printf("%s: save walk %s\n", name, rc ? "ended early (see the file)" : "complete");
+ return 0;
+}
+
 int main(int argc, char **argv) {
- if (argc < 4) { fprintf(stderr, "usage: parity <Dados> <frames>|menu <hashes.txt> [--demo-input]\n"); return 64; }
+ if (argc < 4) { fprintf(stderr, "usage: parity <Dados> <frames>|menu|save <hashes.txt> [--demo-input|<folder>]\n"); return 64; }
  if (!strcmp(argv[2], "menu")) return menu_walk(argv[1], argv[3]);
+ if (!strcmp(argv[2], "save")) { if (argc < 5) { fprintf(stderr, "usage: parity <Dados> save <walk.txt> <folder>\n"); return 64; } return save_walk(argv[1], argv[3], argv[4]); }
  const char *root = argv[1]; unsigned frames = (unsigned)strtoul(argv[2], NULL, 10);
  int demo = argc > 4 && !strcmp(argv[4], "--demo-input");
  FILE *out = fopen(argv[3], "w"); if (!out) return 2;

@@ -45,8 +45,13 @@ typedef struct {
  int mouse_down; uint8_t held[256];
  int move_pending; uint32_t move_x, move_y;
  int zone_known[2]; int32_t zone_rect[2][4];
- /* Host captions for the original save lists (all empty until saves exist). */
+ /* Host captions for the original save lists, handed to the driver before every
+  * request that may open one; publish_slots (when set) refreshes them first. */
  uint8_t slot_table[330];
+ void (*publish_slots)(void *ctx, uint8_t table[330]); void *publish_ctx;
+ /* Request that closed the session with RLW_MENU_GAME: RESUME or START_MISSION
+  * (a new stage: the host takes its stage autosave). */
+ uint32_t game_kind;
  /* Credits (mode10): CREDITS.FLC path, decoder and the time of its last frame read. */
  char credits_path[4096]; RlwFlc credits; int credits_open; double credits_read_ms;
  RlShellEvent host_event;

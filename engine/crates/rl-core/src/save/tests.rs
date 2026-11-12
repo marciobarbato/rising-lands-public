@@ -139,3 +139,69 @@ fn files_and_stage_autosave_preserve_previous_on_failure() {
     assert_eq!(fs::read(&path).unwrap(), original);
     fs::remove_file(path).unwrap();
 }
+#[test]
+fn original_rules_stay_schema_2_and_unknown_rules_are_refused() {
+    let (mut w, resume) = sample();
+    let original = encode(&w, &resume).unwrap();
+    assert_eq!(&original[12..16], &STATE_SCHEMA.to_le_bytes());
+    assert_eq!(&original[28..32], &7u32.to_le_bytes());
+    let (faithful, _) = decode(&original).unwrap();
+    assert_eq!(faithful.rules(), 0);
+    // A rule bit this engine does not know is written as schema 3 by a newer
+    // engine; this one refuses it instead of loading it as the original game.
+    w.rules = 1 << 31;
+    let foreign = encode(&w, &resume).unwrap();
+    assert_eq!(&foreign[12..16], &RULES_SCHEMA.to_le_bytes());
+    assert_eq!(&foreign[28..32], &8u32.to_le_bytes());
+    assert!(matches!(decode(&foreign), Err(SaveError::Invalid("rules"))));
+}
+#[test]
+fn rules_are_fixed_once_a_phase_ran() {
+    let (mut w, _) = sample();
+    assert_eq!(w.set_rules(0), Err(RulesError::Locked));
+    w.frame_phase = 0;
+    assert_eq!(w.set_rules(1 << 31), Err(RulesError::Unknown(1 << 31)));
+    assert_eq!(w.set_rules(0), Ok(()));
+    assert_eq!(w.rules(), 0);
+}
+#[test]
+fn order_queue_rule_writes_schema_3_and_its_queue_as_section_9() {
+    let (mut w, resume) = sample();
+    w.rules = crate::RULE_ORDER_QUEUE;
+    let ruled = encode(&w, &resume).unwrap();
+    assert_eq!(&ruled[12..16], &RULES_SCHEMA.to_le_bytes());
+    assert_eq!(&ruled[28..32], &8u32.to_le_bytes());
+    let (loaded, again) = decode(&ruled).unwrap();
+    assert_eq!(loaded.rules(), crate::RULE_ORDER_QUEUE);
+    assert!(loaded.order_queue().is_empty());
+    assert_eq!(encode(&loaded, &again).unwrap(), ruled);
+
+    let waypoints = |cells: Vec<u16>| crate::order_queue::Waypoints { player: 1, cells };
+    w.order_queue = crate::OrderQueue::from_entries([
+        (4, waypoints(vec![0x0a0b, 0x0c0d])),
+        (799, waypoints(vec![0x0102])),
+    ])
+    .unwrap();
+    let queued = encode(&w, &resume).unwrap();
+    assert_eq!(&queued[12..16], &RULES_SCHEMA.to_le_bytes());
+    assert_eq!(&queued[28..32], &9u32.to_le_bytes());
+    let (loaded, again) = decode(&queued).unwrap();
+    assert_eq!(loaded.order_queue(), &w.order_queue);
+    assert_eq!(loaded.order_queue().cells(4), &[0x0a0b, 0x0c0d]);
+    assert_eq!(encode(&loaded, &again).unwrap(), queued);
+
+    // A queue never exists without its rule.
+    w.rules = 0;
+    assert!(matches!(
+        encode(&w, &resume),
+        Err(SaveError::Invalid("order queue without its rule"))
+    ));
+}
+#[test]
+fn rules_round_trip_and_unknown_bits_are_refused() {
+    let (mut w, _) = sample();
+    w.frame_phase = 0;
+    assert_eq!(w.set_rules(crate::RULE_ORDER_QUEUE), Ok(()));
+    assert_eq!(w.set_rules(1), Err(RulesError::Unknown(1)));
+    assert_eq!(w.rules(), crate::RULE_ORDER_QUEUE);
+}

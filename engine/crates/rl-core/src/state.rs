@@ -226,6 +226,22 @@ pub struct World {
     pub frame_freed: MemoriaJogo,
     pub player_events: Vec<crate::player::PlayerEvent>,
     pub player_cursor: (i32, i32),
+    /// Rule set of this world (`RULE_*` bits): fixed before the load tail,
+    /// inherited by the next stage, recorded by saves. 0 is the original game.
+    pub(crate) rules: u32,
+    /// Shift+click waypoints (`RULE_ORDER_QUEUE`), Rust-side, never game memory.
+    pub(crate) order_queue: crate::OrderQueue,
+}
+/// Every rule bit this engine knows; any other bit is refused. Each optional
+/// feature adds its `RULE_*` bit here.
+pub const RULES_KNOWN: u32 = crate::order_queue::RULE_ORDER_QUEUE;
+/// Why a rule change was refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RulesError {
+    /// A bit outside `RULES_KNOWN`.
+    Unknown(u32),
+    /// The world already ran its load tail (or any later phase).
+    Locked,
 }
 impl World {
     pub fn new(rate: u32, epoch: u32) -> Result<Self> {
@@ -249,7 +265,37 @@ impl World {
             frame_freed: MemoriaJogo::default(),
             player_events: Vec::new(),
             player_cursor: (0, 0),
+            rules: 0,
+            order_queue: crate::OrderQueue::default(),
         })
+    }
+    /// `load` under an explicit rule set, as a save that records it decodes.
+    pub fn load_with_rules(memory: MemoriaJogo, clock: TickClock, rules: u32) -> Result<Self> {
+        if rules & !RULES_KNOWN != 0 {
+            return Err(EngineError::InvalidRules(rules));
+        }
+        let mut world = Self::load(memory, clock)?;
+        world.rules = rules;
+        Ok(world)
+    }
+    pub fn rules(&self) -> u32 {
+        self.rules
+    }
+    /// Pending Shift+click waypoints (always empty without `RULE_ORDER_QUEUE`).
+    pub fn order_queue(&self) -> &crate::OrderQueue {
+        &self.order_queue
+    }
+    /// Rules change only before the load tail: a menu world or a stage world
+    /// that has not run phase 1 yet. The next stage inherits them.
+    pub fn set_rules(&mut self, rules: u32) -> std::result::Result<(), RulesError> {
+        if rules & !RULES_KNOWN != 0 {
+            return Err(RulesError::Unknown(rules));
+        }
+        if self.frame_phase != 0 {
+            return Err(RulesError::Locked);
+        }
+        self.rules = rules;
+        Ok(())
     }
     pub fn state(&self) -> &GameState {
         &self.state
@@ -264,7 +310,9 @@ impl World {
         &mut self.state
     }
     pub fn project(&self) -> Result<MemoriaJogo> {
-        let memory = self.state.project(&self.projection)?;
+        let mut memory = self.state.project(&self.projection)?;
+        memory.rules = self.rules;
+        memory.order_queue = self.order_queue.clone();
         if self.execution_mode != 0 && memory != self.projection.template {
             return Err(EngineError::ExecutionProjectionMismatch);
         }
@@ -278,6 +326,8 @@ impl World {
         next.difficulty_setup = self.difficulty_setup;
         next.player_cursor = player_cursor;
         next.generation = generation;
+        next.rules = self.rules;
+        next.order_queue = self.order_queue.clone();
         if mode != 0 && next.state.frame.is_some() {
             next.set_execution_mode(mode)?;
         }
@@ -300,7 +350,9 @@ impl World {
         let mut memory = self.project()?;
         memory.audit = self.execution_mode != 1;
         let (output, events, freed) = crate::frame::phase(&mut memory, phase, input)?;
+        let queue = std::mem::take(&mut memory.order_queue);
         self.replace_memory(memory)?;
+        self.order_queue = queue;
         self.difficulty_setup = None;
         self.frame_phase = phase;
         self.frame_events = events;
@@ -331,7 +383,9 @@ impl World {
         let result = crate::player::phase(&mut memory, phase, input, answers);
         match result {
             Ok((output, events, consumed)) => {
+                let queue = std::mem::take(&mut memory.order_queue);
                 self.replace_memory(memory)?;
+                self.order_queue = queue;
                 self.difficulty_setup = None;
                 self.frame_phase = phase;
                 self.frame_events = events;

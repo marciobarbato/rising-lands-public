@@ -278,14 +278,36 @@ impl Input {
         m.sw(PAGE, 0)?;
         self.point(m, c)
     }
-    pub(super) fn group_page(&self, m: &mut MemoriaJogo, p: u32) -> Result<()> {
+    pub(super) fn group_page(&self, m: &mut MemoriaJogo, p: u32, c: u32) -> Result<()> {
         let u = m.w(0x496ac2)?;
+        if u == 65535 && m.order_queue_rule() {
+            return self.queue_waypoint(m, p, c);
+        }
         if u == 65535 || self.core(m, "EnginSelectionnable", [u, 0, 0, 0], 0x429dc5)? & 255 == 0 {
             return Ok(());
         }
         self.cursor(m, 0x1df0, m.d(0x508f80)? % 5)?;
         if m.b(AF)? != 0 {
             self.ord(m, p, 0x24, [u, 0, 0, 0], 0x42aecf)?;
+        }
+        Ok(())
+    }
+    /// Optional order queue (`RULE_ORDER_QUEUE`): a Shift+click on open ground
+    /// with units selected queues a move to the cell (order tag 40). The cell
+    /// test and cursors are `terrain()`'s for a plain move; a structure under
+    /// the cursor, or no unit selection, stays the original no-op.
+    fn queue_waypoint(&self, m: &mut MemoriaJogo, p: u32, c: u32) -> Result<()> {
+        if count(m, p)? == 0 || m.w(0x496ac4)? != 65535 {
+            return Ok(());
+        }
+        let bad = (lit(m, c, p)? && collision(m, c, 1)? && land(m, p)?)
+            || (!lit(m, c, p)? && obstacle(m, c)? && land(m, p)?);
+        if bad {
+            return self.cursor(m, 0x1e0e, 0);
+        }
+        self.cursor(m, 0x1df5, m.d(0x508f80)? & 7)?;
+        if self.clicked(m)? {
+            self.ord(m, p, crate::order_queue::TAG_QUEUE, [c, 0, 0, 0], 0x42aecf)?;
         }
         Ok(())
     }

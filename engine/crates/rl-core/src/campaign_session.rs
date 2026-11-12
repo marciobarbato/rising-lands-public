@@ -193,6 +193,7 @@ impl Presenter {
             mission_load::load(&mut m, Some(&eta), &MissionIni::parse(&monsters))?;
             let carried = input.registers;
             let mut next = World::load(m, world.clock.clone())?;
+            next.rules = world.rules;
             next.player_cursor = world.player_cursor;
             next.set_execution_mode(world.execution_mode())?;
             let mut output = next.load_tail_input_v1(*input, answers)?;

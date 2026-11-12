@@ -896,6 +896,7 @@ pub fn process(m: &mut MemoriaJogo, p: u32) -> Result<u32> {
         ];
         player::event(m, 8, 0x45edc0, &v)
     }
+    crate::order_queue::replaced(m, p, tag, &w)?;
     match tag {
         1..=3 => {
             deselect(m, p)?;
@@ -1071,6 +1072,12 @@ pub fn process(m: &mut MemoriaJogo, p: u32) -> Result<u32> {
                     &mut crate::campaign_flow::NoFiles,
                 )?;
             }
+        }
+        // Shift+click waypoint (RULE_ORDER_QUEUE). Without the rule, tag 40 takes
+        // the original default 0x45f2de like every tag above 39: no action, then
+        // the packet is cleared below (corpus case process_tag40_clear).
+        crate::order_queue::TAG_QUEUE if m.order_queue_rule() => {
+            crate::order_queue::order(m, p, w[1] as u16)?
         }
         _ => {
             if jump != 0x45f2de {

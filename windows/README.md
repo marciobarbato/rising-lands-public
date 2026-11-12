@@ -1,4 +1,4 @@
-# Rising Lands for Windows (milestones 1–2)
+# Rising Lands for Windows (milestones 1–3)
 
 > **Resumo em português.** Cliente Windows sobre o mesmo motor em Rust e a mesma ABI em C (`engine/include`) do app
 > macOS. Este primeiro marco importa o CD brasileiro do jogador (imagem `.BIN`/`.CUE`, `.ISO` ou pasta), roda a
@@ -8,8 +8,10 @@
 > Compila sem máquina Windows (mingw-w64). O marco 2 abre no menu principal original e roda os menus pelo shell
 > preparado do motor, como o macOS: "Um jogador", "Novo jogo", briefing e objetivos (páginas por clique, setas ou
 > roda do mouse), pausa no jogo (Esc: continuar, objetivos, abandonar, reiniciar a missão), tela de resultado com a
-> próxima fase, créditos (FLC decodificado) e "Sair". Áudio, filmes e saves ficam para os próximos marcos: as listas
-> de salvar/carregar aparecem vazias, salvar avisa e volta ao jogo, e os filmes contam como indisponíveis.
+> próxima fase, créditos (FLC decodificado) e "Sair". O marco 3 traz os saves, com os mesmos arquivos do macOS:
+> menu "Partida" (salvar rápido F5, carregar rápido F9, posições com nome, início da fase), as listas originais de
+> salvar e carregar na pausa e "Carregar jogo" no menu principal, e o salvamento automático no início de cada fase.
+> Áudio e filmes ficam para os próximos marcos (os filmes contam como indisponíveis).
 > Nenhum dado do jogo vai para o repositório: tudo vem do CD importado na primeira execução.
 
 ## Stack and why
@@ -122,28 +124,51 @@ completes requests, like the macOS app:
   stage after a victory (MISSION_NEXT, then the briefing's START_MISSION) and credits are completed through the driver.
   "Sair" closes the program. "Multijogador" reports that network play is not part of this version and reopens the
   main menu, as on macOS.
-- Not yet (later milestones): saves (the lists show empty slots; saving shows a notice and resumes without writing;
-  loading reopens the main menu), movies (defeat and campaign-end movies complete as unavailable; the introduction
+- Not yet (later milestones): movies (defeat and campaign-end movies complete as unavailable; the introduction
   completes as finished when the CD has it, as the macOS host does) and audio.
+
+### Saves
+
+Same files, names and checks as the macOS app, so a `Partidas` folder can be copied between the two
+(`src/rlw_saves.h`, `src/rlw_save.inc`):
+
+- Folder: `%LOCALAPPDATA%\RisingLands-ptbr\Partidas` (`--save-directory` to change it). `posicao-1`…`posicao-10.rls`
+  are the named positions (the original lists show them as `save1.sav`…`save9.sav`, `save0.sav`), `rapido.rls` the
+  quick save, `inicio-fase.rls` the stage-start autosave, `nomes.plist` the position names. Each slot file holds
+  exactly the engine's save bytes; its presentation (picture, terrain cache, pointer, stage and difficulty) is the
+  companion `<slot>.<sha256>.view`.
+- "Partida" menu: **Salvar rápido** (F5), **Carregar rápido** (F9), **Salvar partida…** (positions 1–5, asks for a
+  name), **Carregar partida** (positions 1–5 and "Início da fase · salvamento automático"). F5/F9 are host keys.
+- The pause menu's Salvar (list 14) saves the paused game and resumes it; its Carregar (list 12) and the main menu's
+  "Carregar jogo" (list 13) load a position. The lists show "<name> · dd/MM HH:mm" for existing positions.
+- A save is captured between complete frames (held keys are released first; while their releases or a held button
+  are waiting, it retries every 80 ms) and written on a background thread: companion first, then the slot through a
+  temporary file, `FlushFileBuffers` and an atomic replace, so a failure keeps the previous save. Loading waits for a
+  save still being written and replaces world, renderer and picture together; a game saved in the pause menu loads
+  with its picture and reopens the pause. A failed load from an original list reopens the main menu, as on macOS.
+- The autosave is written after each stage's first frame (start, restart, next stage). Frame-count smoke runs write
+  no saves unless `--save-directory` is given.
 
 Test switches: `--selftest` (engine ABI versions, no data), `--import-only`, `--frames N` (run N frames as fast as
 possible in the window, then exit; with `--screenshot out.bmp` saves the presented client area), `--headless` (no
 window), `--hashes out.txt` (one line per tick: frames, screen, SHA-256 of pixels and palette), `--demo-input` (the
 fixed synthetic input of `src/rlw_demo.h`), `--no-verify-image`, `--menu-demo out.txt` (no window: the scripted menu
-walk of `src/rlw_menu_demo.c`, one line per step). `--frames`/`--headless` without `--mission` start MONDE01 as in
-milestone 1.
+walk of `src/rlw_menu_demo.c`, one line per step), `--save-demo out.txt [--save-directory EMPTY]` (no window: the
+scripted save walk, writing in its own empty folder, never in the player's saves). `--frames`/`--headless` without
+`--mission` start MONDE01 as in milestone 1.
 
 ## Tests
 
 | Test | Needs | What it shows |
 |---|---|---|
-| `windows/build.sh test` | any OS with a C compiler | SHA-256, ISO 9660 reader over ISO/BIN MODE1+CUE/BIN MODE2/folder, import (menus, briefings, movies), refusals, atomic replacement; menu routing; FLC decoding |
+| `windows/build.sh test` | any OS with a C compiler | SHA-256, ISO 9660 reader over ISO/BIN MODE1+CUE/BIN MODE2/folder, import (menus, briefings, movies), refusals, atomic replacement; menu routing; FLC decoding; save folder (durable replace, `nomes.plist`, list captions, CP1252) |
 | `windows/build.sh` | mingw-w64 | the engine and host build for Windows; `objdump -p` shows only system DLL imports |
-| `windows/parity.sh --cd …/RISING_LANDS_BR_.cue 300` | macOS + the player's CD | the Windows driver and the macOS driver give identical per-tick frame hashes with the same input (`PARIDADE OK`), then identical lines for the scripted menu walk: main menu, Novo jogo, briefing page, stage start, 150 frames, pause, objectives page, Enter back to the pause, Escape to resume, pause, restart, 60 frames (`PARIDADE DOS MENUS OK`) |
+| `windows/parity.sh --cd …/RISING_LANDS_BR_.cue 300` | macOS + the player's CD | the Windows driver and the macOS driver give identical per-tick frame hashes with the same input (`PARIDADE OK`), then identical lines for the scripted menu walk: main menu, Novo jogo, briefing page, stage start, 150 frames, pause, objectives page, Enter back to the pause, Escape to resume, pause, restart, 60 frames (`PARIDADE DOS MENUS OK`); then the save walk: stage autosave, 120 frames, save, 60 frames, load and the same 60 frames (compared), autosave load and its first 30 frames (compared), the pause list's save over the same slot, the pause list's load of that paused save, the reopened pause, continue, 20 frames; the lines carry the SHA-256 of every slot and `.view` file, so both drivers must write identical files (`PARIDADE DOS SAVES OK`) |
 | `RisingLands.exe --selftest` | Windows, wine or CI | engine ABI/extension versions inside the Windows build |
 | `RisingLands.exe --headless --cd … --frames 300 --demo-input --hashes w.txt` | Windows/wine + CD | MONDE01 runs; the hashes must equal `parity.sh`'s `windows.txt` (cross-platform determinism) |
 | `RisingLands.exe --cd … --frames 300 --screenshot s.bmp` | Windows/wine + CD | presentation (palette, aspect-fit) |
 | `RisingLands.exe --cd … --menu-demo m.txt` | Windows/wine + CD | the menu walk on Windows; must equal `parity.sh`'s `windows-menu.txt` |
+| `RisingLands.exe --cd … --save-demo s.txt` | Windows/wine + CD | the save walk on Windows (real Win32 file writes); must equal `parity.sh`'s `windows-save.txt` |
 | `.github/workflows/windows-client.yml` | GitHub Actions | build, unit tests through the Win32 file APIs, self-test, import refusal |
 
 Wine on macOS: the Homebrew `wine-stable`/`wine@staging` casks are disabled since 2026-09-01 because they fail
@@ -168,10 +193,17 @@ renderer rebuilt from it; a stage start goes through `rl_shell_campaign_load_dif
 the load tail and first picture before it replaces the current world. Briefing texts and the stage path are the
 exact original CD-root byte strings (`0x509594`, `0x498430`, `0x494b27`, `0x494b36`, `0x497154`).
 
+Saves follow `macos_live_driver.c`: `rl_salvar_bytes` (with the current frame input) or `rl_autosalvar_bytes`, the
+first draw of the save boundary except in the pause (mode 16 keeps its retained picture), `rl_render_cache` for the
+companion; loading is `rl_carregar_arquivo`, `rl_execucao_modo` and `rl_render_geracao` checks (play mode, phase 1 or
+3), `rl_eventos_reassociar_v1`, the FLC table, a renderer reset from the companion and `rl_render_quadro` (or, for a
+paused save, the saved picture with `rl_mundo_paleta_jogo`). A loaded world with a saved input queue drains it with
+`rl_entrada_passo_pendente` to the next complete frame before new host input. The pause list's SAVE_SLOT saves first,
+then resumes through `rl_shell_resume`; the save list slots are the exact original paths behind `0x497128`.
+
 ## Known gaps (next milestones)
 
 - Audio (sound effects, CD music), event pictures (FLC) and movies. An in-game FLC event is ended at once with
   `rl_evento_flc_terminar_v1` (the call the macOS host makes when its picture ends), so play continues without the picture.
-- Saves/loads (the original lists show empty slots), the stage-start autosave file (the engine slot is captured, not
-  written) and saved input queues.
+- Position names only for 1–5 in the "Partida" menu (6–10 through the original lists, unnamed), as on macOS.
 - MSVC build, ARM64 Windows, a D3D11 presenter, DPI awareness and a settings UI.

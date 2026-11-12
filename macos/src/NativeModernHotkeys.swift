@@ -18,6 +18,13 @@ import Foundation
 enum NativeModernHotkeys {
     static let preferenceKey = "RisingLandsModernHotkeys"
     /// On by default (coordinator decision 2026-11-11): every shortcut is additive.
+    /// Engine rule set that follows this preference (user decision 2026-11-12):
+    /// the Shift+click order queue, `RL_REGRA_FILA_ORDENS` (bit 1 of regras).
+    /// It applies to worlds created afterwards; saves keep the rules they recorded.
+    static let orderQueueRule: UInt32 = 0x2
+    static func engineRules(_ defaults: UserDefaults = .standard) -> UInt32 {
+        isEnabled(defaults) ? orderQueueRule : 0
+    }
     static func isEnabled(_ defaults: UserDefaults = .standard) -> Bool {
         defaults.object(forKey: preferenceKey) == nil ? true : defaults.bool(forKey: preferenceKey)
     }
@@ -405,5 +412,42 @@ final class NativeModernJob {
         for vkey in held.sorted() { _ = send(.key(vkey: vkey, down: false), host) }
         if movedMouse { let p = host.pointer(); _ = send(.mouse(msg: 0x200, x: p.x, y: p.y), host) }
         state = .aborted
+    }
+}
+
+/// Shift+click order queue markers (engine rule `RL_REGRA_FILA_ORDENS`): the
+/// pending waypoints of the local player's selected units, in original 800x600
+/// pixels, one path per unit. Read-only (one snapshot plus `rl_fila_ordens`);
+/// drawn by the host over the picture, never part of the game or a recording.
+struct NativeOrderQueueMarkers: Equatable {
+    struct Point: Equatable { var x: Int, y: Int }
+    /// Waypoint centres per selected unit with waypoints, oldest first.
+    var paths: [[Point]] = []
+    /// The map part of the picture (the view's cells), where markers may show.
+    var mapWidth = 0, mapHeight = 0
+    static let empty = NativeOrderQueueMarkers()
+    /// Mission state, local player, view (x, y, w, h), the four selection lists.
+    static let addresses: [UInt32] = [0x4e2f78, 0x508041, 0x508720, 0x508728]
+    static let sizes: [UInt32] = [1, 1, 8, 4 * 512]
+    /// At most this many selected units are drawn.
+    static let maxUnits = 64
+
+    static func read(peek: ([UInt32], [UInt32]) -> [UInt8]?, queue: (Int) -> [UInt16]) -> NativeOrderQueueMarkers? {
+        guard let b = peek(addresses, sizes), b.count == Int(sizes.reduce(0, +)) else { return nil }
+        func u16(_ o: Int) -> Int { Int(b[o]) | Int(b[o + 1]) << 8 }
+        guard b[0] == 0x12 else { return .empty }
+        let local = Int(b[1]) & 3
+        let (vx, vy, vw, vh) = (u16(2), u16(4), u16(6), u16(8))
+        let list = 10 + 512 * local
+        let count = min(u16(list), maxUnits, 255)
+        var markers = NativeOrderQueueMarkers(paths: [], mapWidth: vw * 32, mapHeight: vh * 32)
+        for k in 0..<count {
+            let cells = queue(u16(list + 2 + 2 * k))
+            if cells.isEmpty { continue }
+            markers.paths.append(cells.map {
+                Point(x: (Int($0 & 255) - vx) * 32 + 16, y: (Int($0 >> 8) - vy) * 32 + 16)
+            })
+        }
+        return markers
     }
 }

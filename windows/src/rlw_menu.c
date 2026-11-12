@@ -49,6 +49,11 @@ static int credits_frame(RlwMenu *m, double now_ms, int *changed) {
 }
 
 /* sendShell(input:) */
+/* publishSlots(): the host's current captions, then the driver's copy. */
+static int publish(RlwMenu *m) {
+ if (m->publish_slots) m->publish_slots(m->publish_ctx, m->slot_table);
+ return m->ops->slots(m->driver, m->slot_table, sizeof(m->slot_table));
+}
 int rlw_menu_send(RlwMenu *m, const RlShellInput *supplied, double now_ms) {
  if (!m->ops->mode(m->driver)) return RLW_MENU_IDLE;
  RlShellInput input = *supplied; RlShellEvent event; memset(&event, 0, sizeof(event));
@@ -64,7 +69,7 @@ int rlw_menu_send(RlwMenu *m, const RlShellInput *supplied, double now_ms) {
   } else c = m->ops->draw(m->driver, input.animation_84);
   break;
  case RL_SHELL_SHOW: case RL_SHELL_SAVE_LOAD:
-  close_credits(m); c = m->ops->slots(m->driver, m->slot_table, sizeof(m->slot_table)); if (!c) c = m->ops->show(m->driver); rlw_menu_reset(m);
+  close_credits(m); c = publish(m); if (!c) c = m->ops->show(m->driver); rlw_menu_reset(m);
   break;
  case RL_SHELL_MISSION_NEXT:
   c = m->ops->prepare(m->driver); rlw_menu_reset(m);
@@ -72,15 +77,15 @@ int rlw_menu_send(RlwMenu *m, const RlShellInput *supplied, double now_ms) {
  case RL_SHELL_RESUME:
   /* Pause "continuar"/Escape: original in-game MenuInit(18), same clock and frame. */
   c = m->ops->request(m->driver);
-  if (!c) { rlw_menu_reset(m); return RLW_MENU_GAME; }
+  if (!c) { rlw_menu_reset(m); m->game_kind = RL_SHELL_RESUME; return RLW_MENU_GAME; }
   break;
  case RL_SHELL_RESET_CAMPAIGN:
   /* "Novo jogo"/"Carregar jogo": the driver owns the engine call. */
-  c = m->ops->slots(m->driver, m->slot_table, sizeof(m->slot_table)); if (!c) c = m->ops->request(m->driver); rlw_menu_reset(m);
+  c = publish(m); if (!c) c = m->ops->request(m->driver); rlw_menu_reset(m);
   break;
  case RL_SHELL_START_MISSION:
   c = m->ops->load(m->driver);
-  if (!c) { rlw_menu_reset(m); return RLW_MENU_GAME; }
+  if (!c) { rlw_menu_reset(m); m->game_kind = RL_SHELL_START_MISSION; return RLW_MENU_GAME; }
   break;
  case RL_SHELL_CREDITS:
   c = begin_credits(m, now_ms); rlw_menu_reset(m);
