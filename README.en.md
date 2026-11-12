@@ -20,7 +20,7 @@ Requirements to play: a Mac with **Apple Silicon** and **macOS 13** or later. Th
 
 The Windows client is in progress, in [`windows/`](windows/README.md). There is a **pre-alpha** for early testers:
 
-1. Download `RisingLands.exe` from the `v0.1.0-prealpha.1-windows` pre-release on **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. Check it against the SHA-256 in the release notes. The `.exe` was built by GitHub Actions from this source (the `windows-client` workflow).
+1. Download `RisingLands.exe` from the latest Windows pre-release (`v0.1.0-prealpha.…-windows`) on **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. Check it against the SHA-256 in the release notes. The `.exe` was built by GitHub Actions from this source (the `windows-client` workflow).
 2. **SmartScreen warning:** the `.exe` is **not signed**, so Windows shows "Windows protected your PC". Click **More info**, then **Run anyway**. If you would rather not, wait for a signed build or build it yourself (see below).
 3. On first launch a window asks for the CD: pick **RISING_LANDS_BR_.BIN** (or the .CUE, or an .ISO). The files are checked by SHA-256 and copied to `%LOCALAPPDATA%\RisingLands-ptbr\Dados`. Then the game opens in the original menu.
 
@@ -29,14 +29,14 @@ Requirements: 64-bit Windows 10 or 11 (x86-64). It is a single `.exe`, with no i
 What works:
 - CD import (.BIN/.CUE, .ISO or the CD folder);
 - the original menus: "Um jogador", "Novo jogo", briefing and objectives, pause (resume, objectives, abandon, restart), the result screen and next stage, credits and "Sair";
+- **saves**: the original save and load lists and a "Partida" menu (**F5** quick save, **F9** quick load), with the stage-start autosave. The format is the macOS one: the `Partidas` folder works on both. Saves are in the current source; pre-alpha 1 does not have them yet;
 - the campaign, with the macOS host's mouse and keyboard, edge scrolling, fullscreen (**F11**), pause (**P**) and speeds (**+** and **−**: 0.5x, 1x, 2x and 4x).
-- Parity with macOS: with the same input, the Windows driver and the macOS driver produce the same frames, tick by tick, and the same menu walk.
+- Parity with macOS: with the same input, the Windows driver and the macOS driver produce the same frames, tick by tick, the same menu walk and the same save files.
 
 Still missing:
-- **saves** (the save and load lists show empty slots);
 - **audio** (sound effects and CD music), in-game event pictures (FLC) and **movies**;
 - code signing, MSVC and ARM64 builds;
-- the macOS modern shortcuts.
+- the macOS modern shortcuts and order queue.
 
 Note: parity was checked on macOS, by building the Windows driver against the same engine. On real Windows, CI only checks the build, the unit tests, the engine self-test and the refusal of a file that is not the CD. **Nobody has played this build on a Windows PC yet.** Reports from testers are very welcome: open an issue and say it is Windows.
 
@@ -49,8 +49,8 @@ The original Brazilian CD image can be found on the **Internet Archive**. Downlo
 - The campaign runs on all 25 stages. An automated bot played every one of them, each game up to 72,000 frames, with no engine stop. The first missions were also played by hand without problems.
 - Nobody has finished the whole campaign yet. That is where your testing helps.
 - If the game reaches something not ported yet, it does not freeze silently: it shows a **stop panel** with the original routine's address. That text is the most useful part of a report.
-- macOS: alpha `v0.1.0-alpha.2`. The source already has new fixes for the next release: the monastery clock with the side panel hidden, the balloon leaving the hangar and the modern shortcuts (see "Controls").
-- Windows: pre-alpha, in progress (see "Windows (pre-alpha)").
+- macOS: alpha `v0.1.0-alpha.2`. The source already has new fixes for the next release: the monastery clock with the side panel hidden, the balloon leaving the hangar, the modern shortcuts and the Shift+click order queue (see "Controls").
+- Windows: pre-alpha, in progress; game, menus and saves done (see "Windows (pre-alpha)").
 - Only the Brazilian Portuguese release of the game is supported.
 
 ## Controls
@@ -64,7 +64,8 @@ The original Brazilian CD image can be found on the **Internet Archive**. Downlo
   - **Home:** last alert (the original's X).
   - **.** (period): next idle worker. **,** (comma): next idle military unit.
   - **H:** selects the Sanctuary.
-  - They are on by default. To turn them off, untick **Jogo → Atalhos modernos**. Keys can be remapped in **Jogo → Configurar teclas…**. They do nothing in menus, in the briefing or while paused.
+  - **Shift+click** on open ground with units selected: queues a waypoint. Units walk the waypoints in order, and a plain order replaces the queue. Waypoints show as small flags joined by a dashed line. In the original this click does nothing; the queue is an optional engine rule that follows the **Atalhos modernos** option. Changing the option applies to games started afterwards; the game in progress and its following stages keep the rules it started with, and a save keeps its own.
+  - They are on by default. To turn them off, untick **Jogo → Atalhos modernos**. Keys can be remapped in **Jogo → Configurar teclas…**. The key shortcuts do nothing in menus, in the briefing or while paused.
 
 ## Reporting problems
 
@@ -111,10 +112,16 @@ The `.exe` is written to `windows/build/RisingLands.exe`.
 
 Tests that need the original game files are skipped when the files are absent. With `RL_CD_ROOT` pointing at the CD folder, `cd_derived_assets` checks that the data computed from the CD (palette, tables, menu screens and terrain cache) equals the original's, byte for byte. What is and is not in this repository is listed in [PUBLICATION_AUDIT.md](PUBLICATION_AUDIT.md).
 
+## Work fronts
+
+What is being worked on, the state of each front and where outside help fits: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Each front has an issue: Windows ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1), [#3](https://github.com/marciobarbato/rising-lands-public/issues/3), [#4](https://github.com/marciobarbato/rising-lands-public/issues/4), [#5](https://github.com/marciobarbato/rising-lands-public/issues/5)), better pathfinding ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), Options screen ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)), other CDs and languages ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) and in-game checks ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Before starting anything large, comment on the front's issue.
+
 ## Help wanted
 
-- **Windows client:** a pre-alpha exists (`windows/`). Saves, audio, movies, code signing and the MSVC and ARM64 builds are still open, and it needs people testing on a Windows PC. [docs/WINDOWS_CLIENT.md](docs/WINDOWS_CLIENT.md) lists what is missing and where it lives in the macOS code. See [issue #1](https://github.com/marciobarbato/rising-lands-public/issues/1).
-- **Other languages:** only the Brazilian release is supported today. Other versions, such as the English CD, would need the engine checked against that release's executable and files. If you own another version and want to help, please open an issue.
+- **Test Windows on a real PC:** nobody has played the pre-alpha on a Windows PC yet ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1), [#3](https://github.com/marciobarbato/rising-lands-public/issues/3)).
+- **Windows:** code signing and MSVC and ARM64 builds ([#5](https://github.com/marciobarbato/rising-lands-public/issues/5)); bringing the modern shortcuts and the order queue to Windows. For audio, music and movies ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) an outside contribution is already under discussion: agree on the issue first. [docs/WINDOWS_CLIENT.md](docs/WINDOWS_CLIENT.md) maps each part to the macOS code.
+- **In-game checks:** the ESPELHO spell, the druid and the fusion monastery, and the full campaign ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)).
+- **Other languages:** only the Brazilian CD works today. If you own another original CD (English, French...), say which on [#8](https://github.com/marciobarbato/rising-lands-public/issues/8). No translated game text may go into the repository.
 
 ## License
 

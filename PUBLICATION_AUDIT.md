@@ -167,3 +167,39 @@ Checked before the push: `cargo build --release` and `cargo fmt --all --check` i
 in `engine/` (with `RL_CD_ROOT`), `sh macos/tests/run.sh`, `./build-macos.sh`, the portable Windows unit tests
 (`test_cd`, `test_menu`) with the host compiler, and `windows/parity.sh` with the CD (Windows driver vs macOS driver
 over the public sources). The Windows `.exe` is built by the workflow on `windows-latest`.
+
+### 2026-11-12 (second round): private `main` `44977c47`
+
+Previous synchronisation: public `7ba0153` (private `main` `c2ce3135`). Before starting, the open pull requests and
+issues of this repository were checked: only PR #2 (an outside Windows client) is open.
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `1550b35e` world rule set (`RlMissaoInicio.regras`, `rl_regras`, `rl_regras_definir`, save schema 3; `regras = 0` is the original game byte for byte and still writes schema 2) | `engine/crates/rl-core/src/campaign_session.rs`, `lib.rs`, `memory.rs`, `mission_entry.rs`, `play.rs`, `save.rs`, `save/tests.rs`, `state.rs`; `engine/crates/rl-ffi/src/lib.rs`, `mission_abi.rs`, `rules_abi_tests.rs` (new), `shell_campaign_tests.rs`; `engine/include/rising_engine.h` |
+| `69edde8a`, `c54e71d8` optional Shift+click order queue (`RL_REGRA_FILA_ORDENS`, bit 1, player order 40, `rl_fila_ordens`; without the rule, order 40 takes the original default `0x45f2de`) | `engine/crates/rl-core/src/order_queue.rs` (new), `frame.rs`, `play.rs`, `player_input.rs`, `player_orders.rs`, `player_pages.rs`, `save.rs`, `save/tests.rs`, `state.rs`, `memory.rs`, `lib.rs`; tests `order_queue_world.rs` and `support/legacy_save.rs` (new; they skip without engine-made saves); `rl-ffi/src/lib.rs`, `rules_abi_tests.rs`; `rising_engine.h` |
+| `2cbdb3d4` macOS: the queue follows "Atalhos modernos"; waypoint markers | `macos/src/MacOSLiveDriver.h`, `macos_live_driver.c` (rules as optional symbols, `LOAD_OPTIONAL` added for the public driver), `NativeLiveWindow.swift`, `NativeModernHotkeys.swift`; `macos/tests/ModernHotkeysTests.swift`. No new Swift file, so `build-macos.sh` is unchanged |
+| `d6ef3a94` Windows client milestone 3: saves in the macOS format | `windows/src/rlw_save.inc`, `rlw_saves.c`, `rlw_saves.h` (new), `rlw_driver.c/.h`, `rlw_fs.c/.h`, `rlw_main.c`, `rlw_menu*.c/.h`, `rlw_shell.inc`; `windows/tests/test_saves.c` (new), `parity.c`; `windows/build.sh`, `parity.sh`, `README.md` |
+
+Public-only changes in this round: `docs/ROADMAP.md` (new, PT and EN: work fronts, state, issues, where outside help
+fits); `docs/WINDOWS_CLIENT.md` (saves done; modern shortcuts not on Windows); READMEs (work fronts, Windows saves, the
+order queue, help wanted). Comments in the two new tests that pointed to private research notes say "private research
+repository".
+
+Left out, and why:
+
+| Left out | Reason |
+|---|---|
+| `motor/crates/rl-core/src/bin/campaign_replay.rs`, `play_bot.rs` changes | Private tools (section 2) |
+| `motor/SAVE_FORMAT.md`, `motor/research/order-queue/` (`DESIGN.md`, `RECEIPT.md`), `apps/macos-preview/HANDOFF.md` | Internal notes (section 2) |
+| `ModernHotkeysWorldTests.swift` changes | The test stays private (first round) |
+| `apps/windows/tests/test_windows_host.py` changes | Private `check.py` wrapper (first round) |
+| Better pathfinding (`research/modern-pathing`) | Not in the private `main`; bit 0 of `regras` stays reserved and unused |
+| Personal-use 2x presentation and display filters | Same as the first round |
+
+Checked before the push: `cargo fmt --all --check`, `cargo build --release --locked` and `cargo test --release
+--locked` in `engine/` (84 passed, 0 failed, 10 ignored; with `RL_CD_ROOT`), `sh macos/tests/run.sh`,
+`./build-macos.sh`, the portable Windows tests (`test_cd`, `test_menu`, `test_saves`), and `windows/parity.sh` with the
+CD: game 301 identical ticks, menus 358 identical lines, saves 379 identical lines (`end complete`).
+

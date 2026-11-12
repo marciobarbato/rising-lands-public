@@ -8,8 +8,9 @@
 > específico do macOS. Nenhum dado do jogo pode ser incluído: tudo vem do CD original do jogador.
 
 > **Estado (2026-11-12).** O cliente Windows já existe em [`windows/`](../windows/README.md) (Win32 + GDI em C, motor
-> estático, um único `RisingLands.exe`): importa o CD, abre no menu principal original e joga a campanha com paridade
-> quadro a quadro com o macOS. Faltam saves, áudio e filmes. Este guia continua valendo como mapa da camada de host.
+> estático, um único `RisingLands.exe`): importa o CD, abre no menu principal original, joga a campanha e salva e
+> carrega no mesmo formato do macOS, com paridade quadro a quadro com o macOS. Faltam áudio e filmes (#4) e a
+> assinatura do código (#5). Este guia continua valendo como mapa da camada de host.
 
 This guide is for a contributor who wants to build a Windows host over the same engine. Each statement points to the
 macOS file that implements it. Items not checked against the code are marked **unverified**.
@@ -28,9 +29,10 @@ self-contained `RisingLands.exe` that imports only system DLLs. It cross-compile
 | Mission start, renderer from the CD, per-frame phases | `macos_live_driver.c` | `rlw_driver.c` — done, per-tick frame hashes equal to the macOS driver's |
 | First-run CD import (BIN/CUE/ISO/folder, SHA-256) | `NativeCDImport.swift`, `NativePlayerImport.swift` | `rlw_cd.c` — done (no audio decoding yet) |
 | Original menus, briefing, pause, result, credits | `macos_campaign_shell.inc`, `NativeLiveWindow.swift` shell paths, `NativeFLC.swift` | `rlw_shell.inc`, `rlw_menu.c`, `rlw_flc.c` — done, menu walk equal to the macOS driver's |
-| Saves and loads | `macos_live_driver.c` save functions | **open**: the lists show empty slots |
-| Sound effects, CD music, event pictures (FLC), movies (AVI) | `NativeAudio.swift`, `NativeCDMusic*.swift`, `NativeEventFLCPlayback.swift`, `NativeDefeatMovie.swift` | **open**: in-game FLC events end at once; movies complete as unavailable |
-| MSVC and ARM64 builds, code signing, DPI awareness | — | **open** |
+| Saves and loads: slots + `.view` companion, background write, stage autosave, the original save/load lists, "Partida" menu (F5/F9) | `macos_live_driver.c` (`snapshot_capture`, `macos_live_save*`, `macos_live_load`, `macos_live_autosave`), `macos_campaign_shell.inc`, `NativeLiveWindow.swift`, `main.swift` | `rlw_save.inc`, `rlw_saves.c`, `rlw_fs.c` (durable replace with `FlushFileBuffers`) — done, same files as macOS, saved files equal to the macOS driver's |
+| Sound effects, CD music, event pictures (FLC), movies (AVI) | `NativeAudio.swift`, `NativeCDMusic*.swift`, `NativeEventFLCPlayback.swift`, `NativeDefeatMovie.swift` | **open** (#4): in-game FLC events end at once; movies complete as unavailable |
+| MSVC and ARM64 builds, code signing, DPI awareness | — | **open** (#5) |
+| Modern shortcuts and the Shift+click order queue (`RL_REGRA_FILA_ORDENS`) | `NativeModernHotkeys.swift`, `macos_live_default_rules` | **open**: the Windows host creates worlds with `regras = 0` (the original rules) |
 
 The rest of this guide is the original contributor map, kept for anyone working on the open parts.
 
