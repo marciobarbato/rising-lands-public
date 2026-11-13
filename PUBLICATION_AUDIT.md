@@ -308,3 +308,21 @@ inputs), `docs/MACOS_PLAYABLE.md` (internal notes), the personal-use display cod
 
 Checked before the push: `sh macos/tests/run.sh` (all component tests passed) and `./build-macos.sh` (exit 0). The
 private build of `8c7f7d1d` passed its UI smokes 10/10, including the new Opções checks (main menu and pause).
+
+### 2026-11-13 (third round): private `main` `7d0fb293`
+
+Previous synchronisation: public `c3699b6` (private `main` `035121c5`).
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `923c423d` better unit paths (rule bit 0 only): a stationary unit with an order whose route the original path search has not written yet reads as "no route" (a count above the route capacity), instead of reading past the route buffer; the diagnostic replay restarts the rule's scratch state after a rollback. Found by a stop census with the rule on (MONDE17/17A/17B/22, 0xa7 fill); with the app's zero fill the count was 0. Test `an_unwritten_route_count_is_no_route` | `engine/crates/rl-core/src/modern_path.rs`, `play.rs` |
+
+Left out, and why: `victory_bot/human.rs` (a private research bot, section 2); `motor/validation/claude-20261112/` (the
+ESPELHO and monastery native receipts of issue #9: 360/360 and 4482/4482 cases equal); `HANDOFF.md`.
+
+Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (with
+`RL_CD_ROOT`; all passed, the new test included). In the private repository: the MONDE01 gate (20 seeds x 36,000
+frames, rule off) kept its SHA-256, `validate.sh` passed, and three stop censuses (417 runs, about 286 game hours, rules
+0, 1 and 3) end with no engine stop after this fix.

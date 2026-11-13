@@ -465,11 +465,14 @@ fn waits_for(m: &MemoriaJogo, other: u32, i: u32) -> Result<bool> {
     }
     Ok(false)
 }
-/// The next cell of a unit's route, or NONE.
+/// The next cell of a unit's route, or NONE. A unit whose route was never
+/// written (an order still waiting for CheminCalcul) holds the allocation fill
+/// as its count (0xa7a7 with the gate fill): any count above the route
+/// capacity is no route, never an index past the buffer.
 fn next_cell(m: &MemoriaJogo, i: u32) -> Result<u16> {
     let r = route(m, i)?;
     let n = m.u16(r)?;
-    Ok(if n == 0 {
+    Ok(if n == 0 || usize::from(n) > ROUTE_CAPACITY {
         NONE
     } else {
         m.u16(r.wrapping_add(2 * u32::from(n)))?
@@ -907,6 +910,26 @@ mod tests {
         blocked(&mut m, 0, 5 + 5 * 256).unwrap();
         assert_eq!(m.u16(UNITS + 0x7e).unwrap(), 6 + 6 * 256);
         assert_eq!(m.u8(UNITS + 0x88).unwrap(), 0);
+    }
+
+    /// MONDE17 seed 4, frame 907 with the 0xa7 fill: a stationary unit with an
+    /// order but no route yet (count 0xa7a7) stood on the blocker's next cell;
+    /// the wait-cycle test read its route 85 KB past the buffer and stopped.
+    #[test]
+    fn an_unwritten_route_count_is_no_route() {
+        let mut m = world(&[]);
+        place(&mut m, 0, 0, (4, 4), (12, 4));
+        write_route(&mut m, 0, &[5 + 4 * 256]).unwrap();
+        // The unit on (5, 4) has an order (goal elsewhere) and the fill count.
+        place(&mut m, 1, 0, (5, 4), (5, 12));
+        m.set_u16(ROUTES + 512, 0xa7a7).unwrap();
+        assert_eq!(next_cell(&m, 1).unwrap(), NONE);
+        assert!(waiting_on(&m, 1).unwrap().is_empty());
+        assert!(!waits_for(&m, 1, 0).unwrap());
+        m.set_u16(ROUTES + 512, ROUTE_CAPACITY as u16 + 1).unwrap();
+        assert_eq!(next_cell(&m, 1).unwrap(), NONE);
+        m.set_u16(ROUTES + 512, ROUTE_CAPACITY as u16).unwrap();
+        assert_eq!(next_cell(&m, 1).unwrap(), 0);
     }
 
     #[test]

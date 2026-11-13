@@ -154,6 +154,12 @@ impl World {
                         // Re-execution has only owned deterministic inputs, no external callbacks.
                         let m = &mut self.projection.template;
                         m.audit = true;
+                        // Rollback restores game bytes only: the Rust-side scratch the
+                        // failed attempt consumed (modern-path search budget, order
+                        // queue) must start again as the attempt saw it, or the replay
+                        // takes another path and reports a mismatch instead of the stop.
+                        m.path_searches = 0;
+                        m.order_queue = self.order_queue.clone();
                         m.begin();
                         let replay = player::phase(m, phase, input, runtime.answers);
                         let diagnostics = m.player.take().map(|r| r.events).unwrap_or_default();
