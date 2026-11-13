@@ -55,9 +55,33 @@ pub fn display(renderer: &mut Renderer, m: &MemoriaJogo, r: FrameRegisters) -> R
 
 /// Disjoint extension selector: existing proven body domains remain in unit().
 /// Native has no phase<count check: state19 can inherit an attack phase.
+/// AffEngin 0x41591f state dispatch: the states it hands to AffDeplaceEngin
+/// 0x412390 whatever the kind and owner (1/22/24 only without an attack
+/// phase: 0x415990 / 0x4159a6 / 0x4159fb; kind 16 never attacks in 1/24).
+fn deplace_routed(r: &[u8]) -> bool {
+    matches!(r[2], 2 | 3 | 6..=9 | 13 | 16..=21 | 23 | 30)
+        || matches!(r[2], 1 | 22 | 24) && r[0x8a] == 0
+        || r[1] == 16 && matches!(r[2], 1 | 24)
+}
+
 pub fn supports(r: &[u8]) -> bool {
     if r.len() != 276 || !matches!(r[1], 0..=17 | 20..=25) {
         return false;
+    }
+    // The routed states the per-kind lists below did not admit: spying
+    // thieves (23), carrying loops (16..20) of non-workers, 3/6/8/9/30 and
+    // 22/24 without a phase, for every owner; and neutral (owner 200)
+    // units in any routed state. 412390 reads the state only for the order
+    // markers (0x412611 skips state 17), so the body is the common one.
+    // Owner-0 kinds 0..9 in their walking states keep the proven route in
+    // render_units (AffEngin's overlay checks).
+    if deplace_routed(r) {
+        let uncommon = matches!(r[2], 3 | 6 | 8 | 9 | 23 | 30)
+            || matches!(r[2], 22 | 24) && r[0x8a] == 0 && !(r[1] == 4 && r[2] == 24)
+            || matches!(r[2], 16..=18 | 20) && !matches!(r[1], 5..=7);
+        if uncommon || r[0] == 200 {
+            return true;
+        }
     }
     if r[1] == 4 {
         // 4159a6: states 1 and 24 without an attack phase reach 412390.
@@ -265,7 +289,8 @@ impl Context<'_> {
     ) -> Result<()> {
         let kind = r[1];
         if !matches!(kind, 0..=17 | 20..=25)
-            || !(matches!(r[2], 2 | 7 | 16 | 17 | 19)
+            || !(deplace_routed(r)
+                || matches!(r[2], 2 | 7 | 16 | 17 | 19)
                 || matches!(kind, 5..=7) && matches!(r[2], 18 | 20)
                 || matches!(kind, 0 | 1 | 2 | 4 | 5 | 6 | 7 | 8 | 9) && matches!(r[2], 13 | 21)
                 || r[2] == 1 && r[0x8a] == 0
@@ -275,7 +300,6 @@ impl Context<'_> {
                     && (matches!(r[2], 3 | 6 | 8 | 9 | 13 | 18 | 20 | 21 | 23 | 30)
                         || matches!(r[2], 22 | 24) && r[0x8a] == 0)
                 || crate::transport_unit_render::supports(r))
-            || kind == 4 && !matches!(r[2], 1 | 2 | 7 | 13 | 19 | 21 | 24)
         {
             return self.stop(
                 0x41591f,

@@ -45,9 +45,8 @@ impl Context<'_> {
             return Ok(());
         }
         // AffDyingEngin reads neither the camera nor +0x99; the effects of
-        // +0xdc are AffCorpsEngin's. The neutral fade (PasteGrisCmp) is not
-        // ported.
-        if r[0] > 4 {
+        // +0xdc are AffCorpsEngin's (owners 0..4 and the neutral grey).
+        if r[0] > 4 && r[0] != 200 {
             return self.stop(0x411147, "AffDyingEngin owner");
         }
         if !(1..=16).contains(&r[0x91]) {
@@ -75,6 +74,12 @@ impl Context<'_> {
         };
         for _ in 0..copies {
             self.shadow(px, py, id, false)?;
+            // 0x4157b4 / 0x4158e7: a neutral corpse also gets PasteGrisCmp
+            // 0x45bcb0 after each PasteOmbreCmp copy.
+            if r[0] == 200 {
+                self.observe("PasteGrisCmp", 0x45bcb0, &[px, py, id as i32, 1]);
+                self.remap_sprite(px, py, id, 0x4e24c4)?;
+            }
         }
         Ok(())
     }

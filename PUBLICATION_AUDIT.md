@@ -365,3 +365,21 @@ Checked before the push: `cargo fmt --all --check` and `cargo test --release --l
 all passed). In the private repository: the MONDE01 gate kept its SHA-256 and `validate.sh` passed. Five stop
 censuses on 2026-11-12/13 (797 runs, about 525 game hours, fills 0xa7 and 0, rules 0, 1 and 3) end with no engine stop
 after this port and the better-paths fix.
+
+### 2026-11-13 (sixth round): private `main` `ef16deda`
+
+Previous synchronisation: public `4507f4b` (private `main` `063411c9`).
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `8e526efb` AffDeplaceEngin for every state AffEngin (`0x41591f`) routes to the common body (2/3/6..9/13/16..21/23/30, and 1/22/24 without a phase), any unit type and any owner. Reachable cases that stopped the renderer: the LADRÃO spying (state 23, set when the player orders a theft), carrying loops 16..20 of non-workers, states 3/6/8/9/30 and 22/24 without a phase, and every neutral unit (owner 200) | `engine/crates/rl-core/src/render_units.rs`, `unit_display_extra.rs` |
+| `a48e5087` a neutral unit's death (PasteGrisCmp after each fade copy) | `engine/crates/rl-core/src/unit_display_extra.rs` |
+
+Left out, and why: the native receipts (`affengin_sweep` v2: 8,676 equal of 9,152 cases, 1,308 more than v1 and none
+lost; `dying-v2` 1368/1368; the remaining cases need unit types no stage has, monsters outside owner 4, or are faults of
+the original); `UNREACHABLE_REVIEW` notes; `HANDOFF.md`.
+
+Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (with `RL_CD_ROOT`;
+all passed). In the private repository: the MONDE01 gate kept its SHA-256 and `validate.sh` passed.
