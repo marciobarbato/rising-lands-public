@@ -221,6 +221,22 @@ static int stop_handle(M*m,uint32_t reference){
  }
  return 1;
 }
+/* PlaySnd_StopAllSound 0x48aac5 -> 0x48a4a8 over the 50 records 0x52137c+44*i:
+ * a playing record (state 1) loses its sound (0x489e35); then, while its
+ * caller reference is still held and the state is still set, a waiting record
+ * (state 2) is compacted with the reference cleared (0x48af1b, EDX=1) and any
+ * other one gets reference NONE, state 0 and +0x20 = 0 (stop_handle's tail). */
+static void stop_all(M*m){
+ for(uint32_t i=0;i<50;i++){
+  uint32_t r=TABLE+i*STRIDE;
+  if(!rb(m,r+8))continue;
+  if(rb(m,r+8)==1)destroy_only_sound(m,r);
+  if(rd(m,rd(m,r+40))!=NONE&&rb(m,r+8)){
+   if(rb(m,r+8)==2)compact(m,r,1);
+   else{wr(m,rd(m,r+40),NONE);wb(m,r+8,0);wr(m,r+32,0);}
+  }
+ }
+}
 static int set_volume(M*m,uint32_t reference,uint32_t volume){
  uint32_t index=rd(m,reference);
  if(index==NONE)return 0;
@@ -378,6 +394,7 @@ uint32_t macos_audio_request(MacOSAudioMapper*m,const MacOSSoundEvent*e){
  m->frame=e->frame;m->phase=e->phase;m->stats.requests++;
  if(e->kind==0){m->stats.manages++;return manage(m);}
  if(e->kind==2){m->stats.stops++;return (uint32_t)stop_handle(m,e->eax);}
+ if(e->kind==3){m->stats.stop_alls++;stop_all(m);return 1;}
  if(e->kind!=1){m->stats.domain_faults++;return 0;}
  m->stats.posts++;
  for(int b=0;b<3;b++)if(SELECTORS[b]==e->eax)return (uint32_t)insert(m,e->edx,BANKS[b],e->ebx,e->ecx&255,e->volume);
@@ -398,4 +415,5 @@ int32_t macos_audio_sample(MacOSAudioMapper*m,uint32_t key,uint32_t*bank,uint32_
  }
  return 1;
 }
+uint32_t macos_audio_reference(MacOSAudioMapper*m,uint32_t address){return m?rd(m,address):NONE;}
 void macos_audio_stats(MacOSAudioMapper*m,MacOSAudioStats*out){if(m&&out)*out=m->stats;}

@@ -256,7 +256,9 @@ fn end(m: &mut MemoriaJogo, site: u32) -> Result<()> {
     m.set_u8(0x4e05a2, 1)?;
     m.set_u8(0x4e1b14, 0)?;
     message_box_next(m)?;
-    crate::campaign_flow::stop_sounds(m)?;
+    // StopAllSound at 0x4580b7 (EvenementEnd) or 0x45837a (EvenementAffiche).
+    let stop_all = if site == 0x4580cb { 0x4580b7 } else { 0x45837a };
+    crate::campaign_flow::stop_sounds(m, stop_all)?;
     post_sound(m, site, 0x40100, 0x496cd0, 0)
 }
 /// EvenementStop 0x458088 (Escape in game, a click or Escape in mode 22).
@@ -285,7 +287,7 @@ pub fn affiche(m: &mut MemoriaJogo) -> Result<()> {
     if last {
         end(m, 0x4583ab)
     } else {
-        crate::campaign_flow::stop_sounds(m)?;
+        crate::campaign_flow::stop_sounds(m, 0x458390)?;
         post_sound(m, 0x4583ab, 0x40000, 0x496cd0, 0)
     }
 }
@@ -467,7 +469,10 @@ mod tests {
         affiche(&mut m).unwrap();
         assert_eq!(
             sounds(&m),
-            vec![(0x4583ab, vec![1, 0x41, 0x40000, 0x496cd0, 0, 1, 0x100])]
+            vec![
+                (0x458390, vec![2, 0, 0, 0, 0, 0, 0]),
+                (0x4583ab, vec![1, 0x41, 0x40000, 0x496cd0, 0, 1, 0x100])
+            ]
         );
         m.set_u8(crate::shell_state::MODE, 0x16).unwrap();
         finish(&mut m).unwrap();
@@ -475,7 +480,10 @@ mod tests {
         affiche(&mut m).unwrap();
         assert_eq!(
             sounds(&m),
-            vec![(0x4583ab, vec![1, 0x41, 0x40100, 0x496cd0, 0, 1, 0x100])]
+            vec![
+                (0x45837a, vec![2, 0, 0, 0, 0, 0, 0]),
+                (0x4583ab, vec![1, 0x41, 0x40100, 0x496cd0, 0, 1, 0x100])
+            ]
         );
         assert_eq!(m.u8(0x4e1b0e).unwrap(), 0);
 
@@ -486,7 +494,10 @@ mod tests {
         stop_event(&mut m).unwrap();
         assert_eq!(
             sounds(&m),
-            vec![(0x4580cb, vec![1, 0x41, 0x40100, 0x496cd0, 0, 1, 0x100])]
+            vec![
+                (0x4580b7, vec![2, 0, 0, 0, 0, 0, 0]),
+                (0x4580cb, vec![1, 0x41, 0x40100, 0x496cd0, 0, 1, 0x100])
+            ]
         );
     }
 

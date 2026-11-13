@@ -444,3 +444,25 @@ Left out, and why: the native receipts (`sound_sites_arrival-v1`, MONDE13 seeds 
 
 Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (with `RL_CD_ROOT`;
 all passed). In the private repository: the MONDE01 gate kept its SHA-256 and `validate.sh` passed.
+
+### 2026-11-13 (day, third): private `main` `d16d0e64`
+
+Previous synchronisation: public `8105f37` (private `main` `b3d92eec`).
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `a2bf842c` StopAllSound reaches the host: `campaign_flow::stop_sounds(m, site)` publishes a kind-10 event `[2,0,…]` at the original call (Escape `0x429335`, result screen `0x42d4c8`, event end/start `0x4580b7`, `0x45837a`, `0x458390`, PlayVideo `0x47c83a`); an Escape now yields four input events | `engine/crates/rl-core/src/campaign_flow.rs`, `event_flc.rs`, `player_input.rs` |
+| `4aee3c0c` menu **Áudio** in the player edition (mute and volume of effects and music, host only, user defaults) | `macos/src/NativePlayerApp.swift`, `NativePlayerOptions.swift`, `NativeAudio.swift`, `NativeLiveWindow.swift` |
+| `7392df6c` the host maps StopAllSound to the original 0x48a4a8 walk over the 50 queue records, and the event FLC's per-frame PostSound(0x41, 0x40200, 0x496cd4, 1) at `0x45827f` while the opening sound holds `0x496cd0` | `macos/src/macos_audio_mapper.c`, `MacOSAudioMapper.h`, `NativeEventFLCPlayback.swift`, `NativeAudio.swift`, `macos_live_driver.c`, `MacOSLiveDriver.h`, `macos_campaign_shell.inc` |
+| `--save-load-smoke SAVE REPORT`: a smoke that loads a real save into disposable slots | `macos/src/main.swift` |
+
+Left out, and why: the private Filtro/Resolução (HD) code around the same lines (`NativeLiveWindow.swift`,
+`NativePlayerOptions.swift`, `NativePlayerApp.swift` keep their public form; the player smoke counts 20 checks here, 22 in
+the private edition), the user's saves the smoke was run on, `docs/MACOS_*` and `HANDOFF.md`. READMEs (PT and EN): the
+Áudio menu and the new sounds in the macOS "next release" lists.
+
+Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (103 passed),
+`./macos/tests/run.sh` (all passed) and `./build-macos.sh` (ad hoc). In the private repository: MONDE01 gate kept its
+SHA-256, `validate.sh` passed, and the macOS app passed every UI smoke (defeat 17/17, player 22/22) and the real-save smoke.

@@ -86,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                 // reaches an unported logic rule (any exact named stop is accepted).
                 beginGame(CampaignSelection(mission:"MONDE12.ETA",difficulty:1))
             }
-            else if args.contains("--save-smoke") || args.contains("--campaign-smoke") || args.contains("--defeat-smoke") || args.contains("--pause-smoke") || args.contains("--ux-menu-trace") {beginGame(CampaignSelection(mission:"MONDE01.ETA",difficulty:1))}
+            else if args.contains("--save-smoke") || args.contains("--save-load-smoke") || args.contains("--campaign-smoke") || args.contains("--defeat-smoke") || args.contains("--pause-smoke") || args.contains("--ux-menu-trace") {beginGame(CampaignSelection(mission:"MONDE01.ETA",difficulty:1))}
             else if args.contains("--play-smoke") {
                 // Direct stage chooser (Jogo → Nova partida…) remains its own diagnostic.
                 showCampaignChooser()
@@ -98,6 +98,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         if let index=args.firstIndex(of:"--save-smoke"),args.count>index+1 {
             let output=URL(fileURLWithPath:args[index+1])
             DispatchQueue.main.asyncAfter(deadline:.now()+4){[weak self] in self?.startSaveSmoke(output)}
+        }
+        if let index=args.firstIndex(of:"--save-load-smoke"),args.count>index+2 {
+            let save=URL(fileURLWithPath:args[index+1]),output=URL(fileURLWithPath:args[index+2])
+            DispatchQueue.main.asyncAfter(deadline:.now()+4){[weak self] in self?.startSaveLoadSmoke(save,output)}
         }
         if let index=args.firstIndex(of:"--campaign-smoke"),args.count>index+1 {
             let output=URL(fileURLWithPath:args[index+1])
@@ -263,6 +267,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         host.mute(!host.player.isMuted);item.state=host.player.isMuted ? .on:.off
     }
     func validateMenuItem(_ item:NSMenuItem)->Bool {
+        if let audio=validateAudioItem(item){return audio}
         if item.action == #selector(togglePause) {
             item.title=nativeLive?.isRunning == true ? "Pausar":"Continuar"
             return nativeLive.map{!$0.validationMode && $0.window.isVisible} ?? false
@@ -827,6 +832,151 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         }
         captureOwnWindow(live.window,to:output.deletingPathExtension().appendingPathExtension("png")){captured in
             self.writePlayStopSmoke(output,result:["passed":captured,"declaredSkip":"No engine stop reachable on the consumer path","stopPanelExercised":false,"framesWithoutStop":frames,"snapshot":value])
+        }
+    }
+    /// A real save as input (--save-load-smoke SAVE REPORT [--save-load-seconds N]): the save
+    /// and its presentation companion are copied into the disposable smoke slots (the input is
+    /// only read), loaded through the production load, then: the original pause menu when it
+    /// was saved there, Jogo > Opções… over the pause, Escape back to play, N seconds of real
+    /// mouse/key NSEvents on the game view, and the players table (alliances, sympathies) and
+    /// rules compared before and after. Frame time is reported, not judged.
+    func startSaveLoadSmoke(_ save:URL,_ output:URL){
+        guard let live=nativeLive else{return}
+        let args=CommandLine.arguments
+        let seconds=args.firstIndex(of:"--save-load-seconds").flatMap{args.count>$0+1 ? Int(args[$0+1]):nil} ?? 120
+        var checks=[String:Bool](),finished=false,info=[String:Any](),copied=[URL]()
+        info["save"]=save.lastPathComponent;info["playSeconds"]=seconds
+        func finish(_ error:String?=nil){
+            guard !finished else{return};finished=true
+            for url in copied{try? FileManager.default.removeItem(at:url)}
+            live.perform("live-pause"){value in
+                var result:[String:Any]=["passed":error==nil && !checks.isEmpty && checks.values.allSatisfy{$0},"checks":checks,"checksPassed":checks.values.filter{$0}.count,"checksTotal":checks.count,
+                                         "info":info,"state":value,"nativeWindowVisible":live.window.isVisible,"commit":Bundle.main.object(forInfoDictionaryKey:"RisingLandsSourceCommit") as? String ?? ""]
+                if let error{result["error"]=error}
+                let screenshot=self.screenshotOutput ?? output.deletingPathExtension().appendingPathExtension("png")
+                captureOwnWindow(live.window,to:screenshot){captured in
+                    if !captured{result["passed"]=false}
+                    do{try JSONSerialization.data(withJSONObject:result,options:[.prettyPrinted,.sortedKeys]).write(to:output,options:.atomic)}catch{fputs("Save-load smoke report: \(error)\n",stderr)}
+                    NSApp.terminate(nil)
+                }
+            }
+        }
+        func poll(_ left:Int,_ test:@escaping([String:Any])->Bool,_ next:@escaping([String:Any])->Void){
+            guard !finished else{return}
+            live.perform("live-status"){value in
+                if test(value){next(value);return}
+                if value["live_stop"] is [String:Any]{finish("Native stop: \(value["live_stop"]!)");return}
+                guard left>0 else{finish("Condition timed out");return}
+                DispatchQueue.main.asyncAfter(deadline:.now()+0.1){poll(left-1,test,next)}
+            }
+        }
+        func escape(_ transitions:[Bool]=[true,false])->Bool{
+            live.window.makeKeyAndOrderFront(nil)
+            guard live.window.makeFirstResponder(live.metal) else{return false}
+            for down in transitions{guard self.sendPlayStopSmokeEscape(live,down:down) else{return false}}
+            return true
+        }
+        func key(_ code:UInt16,down:Bool){
+            live.window.makeKeyAndOrderFront(nil);_=live.window.makeFirstResponder(live.metal)
+            if let event=NSEvent.keyEvent(with:down ? .keyDown:.keyUp,location:.zero,modifierFlags:[],timestamp:ProcessInfo.processInfo.systemUptime,windowNumber:live.window.windowNumber,context:nil,characters:"",charactersIgnoringModifiers:"",isARepeat:false,keyCode:code){live.window.sendEvent(event)}
+        }
+        func frames(_ value:[String:Any])->UInt64{(value["native_metrics"] as? [String:Any])?["frames"] as? UInt64 ?? 0}
+        func mode(_ value:[String:Any])->UInt32{value["original_shell_mode"] as? UInt32 ?? 0}
+        func masks(_ state:[String:Any])->[Int]{(state["players"] as? [[String:Any]] ?? []).map{$0["allianceMask"] as? Int ?? -1}}
+        // Deterministic input over the map area of the 800x600 picture (HUD excluded).
+        var seed:UInt32=0x5eed1234,inputs=0
+        func next(_ bound:Int)->Int{seed=seed &* 1664525 &+ 1013904223;return Int(seed>>8)%bound}
+        func play(_ deadline:Double,_ resumed:[String:Any],_ loaded:[String:Any]){
+            guard !finished else{return}
+            if ProcessInfo.processInfo.systemUptime>=deadline{
+                for code:UInt16 in [123,124,125,126]{key(code,down:false)}
+                live.perform("live-status"){value in
+                    let metrics=value["native_metrics"] as? [String:Any] ?? [:]
+                    info["playFrames"]=frames(value)
+                    info["frameTime"]=metrics.filter{$0.key.hasPrefix("frame")}
+                    info["presentation"]=metrics.filter{["presented","displayFPS","minOneSecondFPS","gameFPS","gameSpeed","humanEvents"].contains($0.key)}
+                    info["inputsSent"]=inputs
+                    checks["noStopDuringPlay"]=value["live_stop"] is NSNull && live.stoppedReason==nil && live.stopPanel.isHidden
+                    checks["inputReachedEngine"]=(metrics["humanEvents"] as? UInt64 ?? 0)>0
+                    live.allianceState{after in
+                        info["afterPlay"]=after
+                        checks["playersTableRead"]=after["playersRead"] as? Int32==0 || after["playersRead"] as? Int==0
+                        checks["alliancesKept"]=masks(after)==masks(loaded) && !masks(after).isEmpty
+                        checks["rulesKept"]=after["rules"] as? Int==loaded["rules"] as? Int
+                        checks["missionKept"]=after["mission"] as? String==loaded["mission"] as? String
+                        finish()
+                    }
+                }
+                return
+            }
+            live.perform("live-status"){value in
+                if value["live_stop"] is [String:Any]{finish("Native stop during play: \(value["live_stop"]!)");return}
+                let m=mode(value)
+                if m==16{_=escape()}                                   // a click opened the original pause: resume
+                else if m != 0{info["shellDuringPlay"]=Int(m);checks["noStopDuringPlay"]=true;finish();return}   // the stage ended (result screen)
+                else{
+                    switch next(8){
+                    case 0,1,2:live.benchmarkClick(Double(40+next(560)),Double(40+next(380)));inputs+=1
+                    case 3,4:live.benchmarkClick(Double(40+next(560)),Double(40+next(380)),right:true);inputs+=1
+                    case 5:let code=UInt16(123+next(4));key(code,down:true);DispatchQueue.main.asyncAfter(deadline:.now()+0.4){key(code,down:false)};inputs+=1
+                    default:live.benchmarkPointer(Double(40+next(560)),Double(40+next(380)))
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline:.now()+0.5){play(deadline,resumed,loaded)}
+            }
+        }
+        func optionsThenResume(_ loaded:[String:Any]){
+            checks["optionsMenuAction"]=NSApp.sendAction(#selector(self.showOptions),to:self,from:nil)
+            poll(100,{mode($0)==16}){_ in
+                live.waitOptions(open:true){opened in
+                    checks["optionsOverPause"]=opened
+                    checks["optionsEscape"]=escape()
+                    live.waitOptions(open:false){closed in
+                        checks["optionsEscape"]=checks["optionsEscape"]==true && closed
+                        checks["escapeResumes"]=escape()
+                        poll(100,{mode($0)==0 && $0["native_running"] as? Bool==true && frames($0)>=10}){resumed in
+                            checks["resumedPlay"]=resumed["live_stop"] is NSNull
+                            live.allianceState{state in
+                                info["afterResume"]=state
+                                checks["alliancesAfterResume"]=masks(state)==masks(loaded)
+                                play(ProcessInfo.processInfo.systemUptime+Double(seconds),resumed,loaded)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        poll(150,{frames($0)>=10 && $0["native_running"] as? Bool==true}){_ in
+            do{
+                let data=try Data(contentsOf:save)
+                let sha=SHA256.hash(data:data).map{String(format:"%02x",$0)}.joined()
+                let view=URL(fileURLWithPath:save.path+".\(sha).view")
+                info["saveSHA256"]=sha
+                guard FileManager.default.fileExists(atPath:view.path) else{finish("Presentation companion missing: \(view.lastPathComponent)");return}
+                let slot=live.saveURL("entrada-smoke")
+                try FileManager.default.createDirectory(at:live.saveDirectory,withIntermediateDirectories:true)
+                let targets=[slot,URL(fileURLWithPath:slot.path+".\(sha).view")]
+                for target in targets{try? FileManager.default.removeItem(at:target)}
+                try FileManager.default.copyItem(at:save,to:targets[0]);copied.append(targets[0])
+                try FileManager.default.copyItem(at:view,to:targets[1]);copied.append(targets[1])
+            }catch{finish("Copy into the smoke slots: \(error.localizedDescription)");return}
+            let started=ProcessInfo.processInfo.systemUptime
+            live.loadSlot("entrada-smoke"){result in
+                if case .failure(let error)=result{checks["loaded"]=false;finish("Load: \(error.localizedDescription)");return}
+                checks["loaded"]=true;info["loadSeconds"]=ProcessInfo.processInfo.systemUptime-started
+                live.allianceState{loaded in
+                    info["afterLoad"]=loaded
+                    checks["playersTableRead"]=loaded["playersRead"] as? Int32==0 || loaded["playersRead"] as? Int==0
+                    // A save made in the original pause list reopens that menu; any other resumes play.
+                    poll(100,{mode($0)==16 || ($0["native_running"] as? Bool==true && frames($0)>=10)}){value in
+                        info["savedInPause"]=mode(value)==16
+                        captureOwnWindow(live.window,to:output.deletingPathExtension().appendingPathExtension("loaded.png")){captured in
+                            checks["loadedCaptured"]=captured
+                            optionsThenResume(loaded)
+                        }
+                    }
+                }
+            }
         }
     }
     /// In-game Escape -> original pause menu (MenuInit 16) -> Escape -> rl_shell_resume

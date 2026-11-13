@@ -10,7 +10,12 @@ use crate::{
 
 /// PlaySnd_StopAllSound 48aac5 -> 48a4a8, in the engine's unopened audio domain.
 /// Active device and queued sample destruction remain explicit dependencies.
-pub fn stop_sounds(m: &mut MemoriaJogo) -> Result<()> {
+/// The call is published to the host first as a kind-10 player event whose
+/// first value is 2 (stop all; 1 is a post, 0 a stop of one handle) at the
+/// original call `site`: 0x429335 InputGame, 0x42d4c8 CalculGame,
+/// 0x4580b7 EvenementEnd, 0x45837a / 0x458390 EvenementAffiche, 0x47c83a PlayVideo.
+pub fn stop_sounds(m: &mut MemoriaJogo, site: u32) -> Result<()> {
+    crate::player::event(m, 10, site, &[2, 0, 0, 0, 0, 0, 0]);
     for i in 0..50 {
         let p = 0x52137c + 44 * i;
         let state = m.u8(p + 8)?;
@@ -50,7 +55,7 @@ fn finish_menu(m: &mut MemoriaJogo, mode: u8) -> Result<()> {
 /// CalculGame 42d4c8 and MenuInit mode19. Caption/background pixels are drawn
 /// by the shell presenter; this routine preserves the actual result latch.
 pub fn result(m: &mut MemoriaJogo) -> Result<()> {
-    stop_sounds(m)?;
+    stop_sounds(m, 0x42d4c8)?;
     if m.u16(0x49a018)? == 640 {
         return stop("MenuInit result 640-wide device transition", 0x468acf);
     }
@@ -415,7 +420,7 @@ pub fn credits_input(m: &MemoriaJogo, escape: bool) -> Result<bool> {
 /// exists and calls DirectSoundCreate, the host's device boundary, which in this
 /// domain fails exactly as at the program start that produced it.
 fn play_video(m: &mut MemoriaJogo) -> Result<()> {
-    stop_sounds(m)?;
+    stop_sounds(m, 0x47c83a)?;
     if m.u8(0x521fc4)? != 0 {
         return stop(
             "PlayVideo FreeSoundLib on an opened sound library",

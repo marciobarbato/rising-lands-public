@@ -35,6 +35,15 @@ static int shell_word(const uint8_t*b,uint32_t n,uint32_t address,uint32_t size,
 static int shell_string(const uint8_t*b,uint32_t n,uint32_t address,uint8_t*out,uint32_t cap,uint32_t*length){
  for(uint32_t i=0;i<cap;i++){int c=campaign_byte(b,n,address+i,&out[i]);if(c)return c;if(!out[i]){*length=i;return 0;}}return RL_INVALID_ARGUMENT;
 }
+/* The live players table [0x5080a8] (PlayerRetrieve 0x46df41): four 20-byte records,
+ * +6 alliance mask, +0x0c..+0x13 four signed-16 sympathies. Diagnostic read only. */
+int32_t macos_live_players(MacOSLiveDriver*d,uint8_t*out,uint32_t capacity){
+ if(!d||!d->world||!out||capacity<80)return RL_INVALID_ARGUMENT;
+ uint8_t*b=NULL;uint32_t n=0,table=0;int c=shell_world_bytes(d,&b,&n);if(c)return c;
+ c=shell_word(b,n,0x5080a8,4,&table);
+ for(uint32_t i=0;!c&&i<80;i++)c=campaign_byte(b,n,table+i,&out[i]);
+ free(b);return c;
+}
 uint32_t macos_live_shell_mode(MacOSLiveDriver*d){return d?d->shell_mode:0;}
 int32_t macos_live_shell_state(MacOSLiveDriver*d,RlShellInput*out){
  if(!d||!d->shell||!out)return RL_INVALID_ARGUMENT;*out=d->shell_input;out->keys=0;out->mouse_b0=0;return 0;

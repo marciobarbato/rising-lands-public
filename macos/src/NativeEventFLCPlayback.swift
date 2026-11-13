@@ -19,11 +19,15 @@ final class NativeEventFLCPlayback {
     init(folder: URL) { self.folder = folder }
 
     /// Returns true when `surface`/`flc.palette` replace the engine's buffers this frame.
+    /// `tick` runs on each display step after the opening one (the original latch
+    /// 0x4e1b14 is clear) while the FLC counter, once advanced, is still below its
+    /// frame count, before the frame is drawn: EvenementAffiche's loop sound post.
     func update(state: MacOSEventFlcState, now: Double, name: (UInt32) -> String?, enginePixels: UnsafePointer<UInt8>,
-                finish: () -> Int32) -> Bool {
+                finish: () -> Int32, tick: () -> Void = {}) -> Bool {
         guard state.running != 0 else { flc = nil; index = .max; finished = false; return false }
         if finished { return false }
-        if flc == nil || index != state.index {
+        let opening = flc == nil || index != state.index
+        if opening {
             index = state.index; started = now; failure = nil
             guard let stem = name(state.index) else { failure = "Evento FLC \(state.index) sem nome"; finished = true; return false }
             do {
@@ -40,6 +44,7 @@ final class NativeEventFLCPlayback {
         let target = min(flc.frames, 1 + Int((now - started) * 1000 / delay))
         do { while flc.shown < target { try flc.next() } }
         catch { failure = "Evento FLC: \(error)"; finished = true; return false }
+        if !opening && flc.shown < flc.frames { tick() }
         if flc.shown >= flc.frames && state.modal != 0 && (now - started) * 1000 >= Double(flc.frames) * delay {
             // The last frame has been shown for its delay: the original player's end.
             terminations += 1

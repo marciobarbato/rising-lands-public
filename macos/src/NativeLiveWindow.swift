@@ -441,6 +441,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         let host=NativeCDMusicHost(player:player);cdMusic=host
         host.onChange={ [weak self,weak host] in self?.musicLabel.stringValue=host?.notice ?? "" }
         if active{host.beginStage()}
+        applyMusicLevel()
         musicLabel.stringValue=host.notice
     }
     @MainActor func closeCDMusic(){cdMusic?.close()}
@@ -454,6 +455,16 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     var metalSeconds=0.0
     var playStarted=0.0,playEnded=0.0
     var startFrames:UInt64=0,startLogic:UInt64=0,startRender:UInt64=0,startProof:UInt64=0
+    /// Worker. Wall time of each play frame's macos_live_advance (logic + render),
+    /// in microseconds, since the last play start or load (diagnostic report only).
+    var frameMicros=[UInt32]()
+    func frameTimeSummary()->[String:Any] {
+        guard !frameMicros.isEmpty else{return ["frameSamples":0]}
+        let sorted=frameMicros.sorted(),n=sorted.count
+        func pct(_ p:Double)->Double{Double(sorted[min(n-1,Int(Double(n)*p))])/1000}
+        return ["frameSamples":n,"frameMeanMs":Double(sorted.reduce(0,{$0+UInt64($1)}))/Double(n)/1000,"frameP50Ms":pct(0.5),"frameP95Ms":pct(0.95),"frameP99Ms":pct(0.99),"frameMaxMs":Double(sorted[n-1])/1000,
+                "framesOver8_3ms":sorted.filter{$0>8_333}.count,"framesOver16_7ms":sorted.filter{$0>16_667}.count,"framesOver33_3ms":sorted.filter{$0>33_333}.count]
+    }
     var startMetal=0.0
     var lastNotify=0.0
     var update:(([String:Any])->Void)?
@@ -502,10 +513,23 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         return FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("RisingLands-ptbr/Partidas",isDirectory:true)
     }
     /// Smokes, benchmarks and Test B never read or write the player's saves or preferences.
-    static let diagnosticRun=CommandLine.arguments.contains(where:{["--smoke-test","--play-smoke","--play-stop-smoke","--native-benchmark","--native-horizon","--test-b-session","--player-smoke","--save-smoke","--campaign-smoke","--defeat-smoke","--menu-smoke","--pause-smoke","--ux-menu-trace"].contains($0)})
+    static let diagnosticRun=CommandLine.arguments.contains(where:{["--smoke-test","--play-smoke","--play-stop-smoke","--native-benchmark","--native-horizon","--test-b-session","--player-smoke","--save-smoke","--campaign-smoke","--defeat-smoke","--menu-smoke","--pause-smoke","--ux-menu-trace","--save-load-smoke"].contains($0)})
     static var initialSpeed:NativeGameSpeed { diagnosticRun ? .normal:NativeGameSpeed.load() }
     static var initialDifficulty:NativeDifficulty { diagnosticRun ? .normal:NativeDifficulty.load() }
     static var initialDisplay:NativeDisplayOptions { diagnosticRun ? NativeDisplayOptions():NativeDisplayOptions.load() }
+    static var initialAudio:NativeAudioSettings { diagnosticRun ? NativeAudioSettings():NativeAudioSettings.load() }
+    /// Main thread. Áudio menu levels; diagnostic runs never store them.
+    private(set) var audioSettings=NativeLiveWindow.initialAudio
+    @MainActor func setAudio(_ value:NativeAudioSettings){
+        audioSettings=value;if !Self.diagnosticRun{value.store()}
+        applyMusicLevel()
+        let gain=value.effectsGain
+        work.async{[weak self] in self?.audio?.setOutputGain(gain)}
+    }
+    @MainActor func applyMusicLevel(){
+        guard let player=cdMusic?.player,player.state != .closed else{return}
+        try? player.execute(.setVolume(audioSettings.musicVolume));try? player.execute(.setMuted(audioSettings.musicMuted))
+    }
     func saveURL(_ slot:String)->URL {saveDirectory.appendingPathComponent(slot).appendingPathExtension("rls")}
     func saveError(_ code:Int32)->NSError {
         var text=[CChar](repeating:0,count:512);macos_live_save_error(driver,&text,512)
@@ -584,7 +608,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 self.runID &+= 1;self.running=false;self.stoppedReason=nil;self.presenter?.clear();self.audio?.reset()
                 DispatchQueue.main.async{self.cdMusic?.beginStage()}
                 self.campaignEnd=nil;self.refreshSelection()
-                self.playStarted=0;self.playEnded=0;self.startFrames=self.status().frames;self.startLogic=0;self.startRender=0;self.startProof=0;self.startMetal=self.metalSeconds
+                self.playStarted=0;self.playEnded=0;self.frameMicros.removeAll();self.startFrames=self.status().frames;self.startLogic=0;self.startRender=0;self.startProof=0;self.startMetal=self.metalSeconds
                 self.saveNotice="Partida carregada"
                 if let pixels=macos_live_pixels(self.driver),let palette=macos_live_palette(self.driver){
                     DispatchQueue.main.sync{self.metal.releaseKeys();self.metal.isHidden=false;do{try self.metal.present(pixels,palette)}catch{self.stoppedReason="Metal: \(error.localizedDescription)"}}
@@ -837,7 +861,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
             throw NSError(domain:"NativeValidationModeRejected",code:1,userInfo:[NSLocalizedDescriptionKey:detail])
         }
         // Sound is a play-mode consumer only; validation never enables the transport.
-        if !validationMode && audio==nil{audio=NativeAudioPlayback(directory:root.appendingPathComponent("audio"))}
+        if !validationMode && audio==nil{audio=NativeAudioPlayback(directory:root.appendingPathComponent("audio"));audio?.setOutputGain(DispatchQueue.main.sync{audioSettings.effectsGain})}
         audio?.reset()
         if !validationMode,audio?.enabled==true,macos_live_sound_capture(candidate,1) != 0{macos_live_free(candidate);throw NSError(domain:"NativeSoundTransportRejected",code:1)}
         let previous=driver;driver=candidate;saveNotice="";if let previous=previous{macos_live_free(previous)}
@@ -858,6 +882,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         let frames=s.frames>=startFrames ? s.frames-startFrames:0
         var timing:[String:Any]=["frames":frames,"seconds":elapsed,"fps":playStarted>0 ? Double(frames)/elapsed:0,"rustSeconds":Double(s.logic_ns-startLogic)/1e9,"renderSeconds":Double(s.render_ns-startRender)/1e9,"proofSeconds":Double(s.proof_ns-startProof)/1e9,"metalSeconds":metalSeconds-startMetal]
         timing["humanEvents"]=macos_live_human_events(driver);timing["declaredFrames"]=macos_live_declared_frames(driver)
+        if Self.diagnosticRun && !validationMode{timing.merge(frameTimeSummary()){_,new in new}}
         timing["gameFPS"]=validationMode ? 0:gameFPS;timing["gameSpeed"]=NativeGameSpeed(frameRate:gameFPS)?.label ?? NSNull();timing["executionMode"]=validationMode ? "test":"play"
         let end=running ? ProcessInfo.processInfo.systemUptime:playEnded
         if !validationMode,let presenter=presenter{timing.merge(presenter.metrics(start:playStarted,end:end,detailed:!running)){_,new in new}}
@@ -897,7 +922,10 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     }
     func advance(){
         let stageStart = !validationMode && status().phase_index==UInt32.max
+        let timed = !validationMode && Self.diagnosticRun && macos_live_shell_mode(driver)==0
+        let started=DispatchTime.now().uptimeNanoseconds
         let code=macos_live_advance(driver,nil,nil),s=status()
+        if timed && code==0 && frameMicros.count<1_000_000 {frameMicros.append(UInt32(min(UInt64(UInt32.max),(DispatchTime.now().uptimeNanoseconds-started)/1000)))}
         if stageStart && code==0 {
             do {
                 try FileManager.default.createDirectory(at:saveDirectory,withIntermediateDirectories:true)
@@ -959,7 +987,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 if macos_live_event_flc_state(driver,&state)==0,eventFLC.update(state:state,now:ProcessInfo.processInfo.systemUptime,name:{[weak self] index in
                     guard let self=self else{return nil};var name=[CChar](repeating:0,count:16)
                     return macos_live_event_flc_name(self.driver,index,&name,16)==0 ? String(cString:name):nil
-                },enginePixels:pixels,finish:{[weak self] in macos_live_event_flc_finish(self?.driver)}),let flc=eventFLC.flc {
+                },enginePixels:pixels,finish:{[weak self] in macos_live_event_flc_finish(self?.driver)},tick:{[weak self] in self?.audio?.eventTick(frame:UInt32(truncatingIfNeeded:s.frames))}),let flc=eventFLC.flc {
                     eventFLC.surface.withUnsafeBufferPointer{surface in flc.palette.withUnsafeBufferPointer{rgb in presenter?.publish(surface.baseAddress!,rgb.baseAddress!,frame:s.frames)}}
                 } else {
                 presenter?.publish(pixels,palette,frame:s.frames)
@@ -1464,7 +1492,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
             case "live-play":
                 if self.running{self.running=false;self.playEnded=ProcessInfo.processInfo.systemUptime}
                 else if self.status().stopped==0 && self.stoppedReason==nil && macos_live_shell_mode(self.driver)==0{
-                    let s=self.status();self.startFrames=s.frames;self.startLogic=s.logic_ns;self.startRender=s.render_ns;self.startProof=s.proof_ns;self.startMetal=self.metalSeconds;self.playStarted=ProcessInfo.processInfo.systemUptime;self.playEnded=self.playStarted;self.running=true
+                    let s=self.status();self.frameMicros.removeAll();self.startFrames=s.frames;self.startLogic=s.logic_ns;self.startRender=s.render_ns;self.startProof=s.proof_ns;self.startMetal=self.metalSeconds;self.playStarted=ProcessInfo.processInfo.systemUptime;self.playEnded=self.playStarted;self.running=true
                     if !self.validationMode{self.presenter?.start(at:self.playStarted);DispatchQueue.main.async{self.metal.isHidden=false;self.window.makeFirstResponder(self.metal);if self.cdMusic?.stageActive==false{self.cdMusic?.beginStage()}}}
                     self.runID &+= 1;let run=self.runID;self.pacer.restart(now:self.playStarted);self.work.async{[weak self] in self?.pump(run)}
                 }
@@ -1617,6 +1645,24 @@ extension NativeLiveWindow {
     func refuseOptions(){DispatchQueue.main.async{NSSound.beep()}}
     /// Smokes: waits (0.1 s steps) until the options screen is open (or
     /// closed); completion(true) when it reached that state in time.
+    /// Diagnostic (save-load smoke): players table, rules, campaign screen and shell mode,
+    /// read on the worker, answered on the main thread.
+    func allianceState(_ completion:@escaping([String:Any])->Void){
+        work.async{[weak self] in
+            guard let self else{return}
+            var table=[UInt8](repeating:0,count:80),screen:UInt32=0
+            let code=macos_live_players(self.driver,&table,80)
+            _=macos_live_campaign_screen(self.driver,&screen)
+            var players=[[String:Any]]()
+            if code==0{for p in 0..<4{
+                let r=Array(table[(p*20)..<(p*20+20)])
+                players.append(["player":p,"allianceMask":Int(r[6]),"sympathy":(0..<4).map{Int(Int16(bitPattern:UInt16(r[12+2*$0])|UInt16(r[13+2*$0])<<8))}])
+            }}
+            let value:[String:Any]=["playersRead":code,"players":players,"rules":Int(macos_live_rules(self.driver)),"campaignScreen":Int(screen),"shellMode":Int(macos_live_shell_mode(self.driver)),
+                                    "mission":self.campaignSelection.mission,"difficulty":Int(self.campaignSelection.difficulty)]
+            DispatchQueue.main.async{completion(value)}
+        }
+    }
     func waitOptions(open wanted:Bool,tries:Int=100,_ completion:@escaping(Bool)->Void){
         work.async{[weak self] in
             let open=self.map{macos_live_options_open($0.driver) != 0} ?? !wanted

@@ -33,3 +33,40 @@ struct NativeDisplayOptions: Equatable, Sendable {
         defaults.set(smoothFilter, forKey: Self.smoothKey)
     }
 }
+
+/// Sound effects and CD music levels (menu Áudio). Host only: applied to the output
+/// devices (the effects mixer and the music stream), never to the engine, saves or
+/// replay. A stored value outside 0...1 falls back to full volume.
+struct NativeAudioSettings: Equatable, Sendable {
+    static let levels: [Float] = [1, 0.75, 0.5, 0.25]
+    static let effectsVolumeKey = "RisingLandsEffectsVolume"
+    static let effectsMutedKey = "RisingLandsEffectsMuted"
+    static let musicVolumeKey = "RisingLandsMusicVolume"
+    static let musicMutedKey = "RisingLandsMusicMuted"
+    var effectsVolume: Float = 1
+    var effectsMuted = false
+    var musicVolume: Float = 1
+    var musicMuted = false
+    var effectsGain: Float { effectsMuted ? 0 : effectsVolume }
+    var musicGain: Float { musicMuted ? 0 : musicVolume }
+
+    static func title(_ level: Float) -> String { "\(Int((level * 100).rounded()))%" }
+    /// Menu tags are whole percentages.
+    static func level(tag: Int) -> Float? { levels.first { Int(($0 * 100).rounded()) == tag } }
+
+    static func load(_ defaults: UserDefaults = .standard) -> NativeAudioSettings {
+        func volume(_ key: String) -> Float {
+            guard defaults.object(forKey: key) != nil else { return 1 }
+            let value = defaults.float(forKey: key)
+            return value.isFinite && (0...1).contains(value) ? value : 1
+        }
+        return NativeAudioSettings(effectsVolume: volume(effectsVolumeKey), effectsMuted: defaults.bool(forKey: effectsMutedKey),
+                                   musicVolume: volume(musicVolumeKey), musicMuted: defaults.bool(forKey: musicMutedKey))
+    }
+    func store(_ defaults: UserDefaults = .standard) {
+        defaults.set(effectsVolume, forKey: Self.effectsVolumeKey)
+        defaults.set(effectsMuted, forKey: Self.effectsMutedKey)
+        defaults.set(musicVolume, forKey: Self.musicVolumeKey)
+        defaults.set(musicMuted, forKey: Self.musicMutedKey)
+    }
+}

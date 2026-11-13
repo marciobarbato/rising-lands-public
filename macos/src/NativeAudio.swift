@@ -49,6 +49,14 @@ final class NativeAudioPlayback {
     deinit {if let m=mapper{macos_audio_free(m)};events.deallocate();commands.deallocate()}
 
     var enabled:Bool{availability != "ausente"}
+    /// Effects level of the Áudio menu (mute = 0), on the mixer output: the original
+    /// per-buffer volumes stay as the mapper sends them. Any queue.
+    private(set) var outputGain:Float=1
+    func setOutputGain(_ value:Float) {
+        let gain=value.isFinite ? min(1,max(0,value)):1
+        outputGain=gain
+        queue.async{[weak self] in self?.engine.mainMixerNode.outputVolume=gain}
+    }
 
     /// Worker queue: a fresh mapper for a fresh world; silences the device.
     func reset() {
@@ -74,6 +82,24 @@ final class NativeAudioPlayback {
             requests+=UInt64(n)
             if n<256{break}
         }
+        drain(mapper)
+    }
+
+    /// Worker queue. One modal-event display tick of EvenementAffiche
+    /// (0x45827f): with the latch clear and the FLC counter still below its
+    /// frame count, while the start sound's shadow reference 0x496cd0 is held,
+    /// post the event loop PostSound(0x41, 0x40200, 0x496cd4, 1) at volume 0x100.
+    /// The first post starts sample 4/2 looping; later ones only refresh its
+    /// volume; the end path's StopAllSound stops it.
+    func eventTick(frame:UInt32) {
+        guard let mapper=mapper,macos_audio_reference(mapper,0x496cd0) != UInt32.max else{return}
+        var event=MacOSSoundEvent(kind:1,frame:frame,phase:3,site:0x45827f,eax:0x41,edx:0x40200,ebx:0x496cd4,ecx:1,volume:0x100,has_volume:1)
+        _=macos_audio_request(mapper,&event);requests+=1;eventTicks+=1
+        drain(mapper)
+    }
+    private(set) var eventTicks:UInt64=0
+
+    private func drain(_ mapper:OpaquePointer) {
         while true {
             let n=Int(macos_audio_commands(mapper,commands,256))
             if n==0{return}
@@ -96,9 +122,9 @@ final class NativeAudioPlayback {
         // Never waits for the audio queue (it may be decoding a batch): the game
         // worker calls this; the two counters are read under the small lock.
         lock.lock();let played=(playsStarted,missingSamples);lock.unlock()
-        return ["audio":availability,"audioRequests":requests,"audioPosts":stats.posts,"audioStops":stats.stops,"audioManages":stats.manages,
+        return ["audio":availability,"audioOutputGain":Double(outputGain),"audioRequests":requests,"audioPosts":stats.posts,"audioStops":stats.stops,"audioManages":stats.manages,
                 "audioCommands":commandCount,"audioPlays":stats.plays,"audioPlaysStarted":played.0,"audioMissingSamples":played.1,
-                "audioDomainFaults":stats.domain_faults,"audioDroppedCommands":stats.dropped_commands]
+                "audioDomainFaults":stats.domain_faults,"audioDroppedCommands":stats.dropped_commands,"audioStopAlls":stats.stop_alls,"audioEventTicks":eventTicks]
     }
 
     // MARK: audio queue

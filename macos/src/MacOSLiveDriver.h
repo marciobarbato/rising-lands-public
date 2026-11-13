@@ -105,6 +105,8 @@ typedef struct {uint32_t outcome,stage,has_next;char next[16];} MacOSCampaignEnd
  * outcome: 0 ongoing, 1 victory, 2 defeat. No world/RNG mutation. */
 int32_t macos_live_campaign_end(MacOSLiveDriver *,MacOSCampaignEnd *);
 int32_t macos_live_campaign_screen(MacOSLiveDriver *,uint32_t *);
+/* Diagnostic: the 80-byte live players table (alliance masks, sympathies); 0 or the ABI error. */
+int32_t macos_live_players(MacOSLiveDriver *,uint8_t *out,uint32_t capacity);
 /* Explicit confirmation discards unsent old-stage host input. Engine FIFO must
  * be empty. Publish a new world/renderer/autosave only after successful setup. */
 int32_t macos_live_continue(MacOSLiveDriver *,uint32_t difficulty);

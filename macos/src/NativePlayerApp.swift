@@ -89,6 +89,7 @@ extension AppDelegate {
         gameMenu.addItem(withTitle: "Caminhos melhores", action: #selector(toggleModernPaths(_:)), keyEquivalent: "").target = self
         gameMenu.addItem(withTitle: "Importar o CD novamente…", action: #selector(reimportCD), keyEquivalent: "").target = self
         refreshSaveMenus()
+        addAudioMenu(main)
         let windowItem = NSMenuItem(); main.addItem(windowItem); let windowMenu = NSMenu(title: "Janela"); windowItem.submenu = windowMenu
         windowMenu.addItem(withTitle: "Minimizar", action: #selector(NSWindow.miniaturize(_:)), keyEquivalent: "m")
         windowMenu.addItem(withTitle: "Fechar", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
@@ -98,6 +99,46 @@ extension AppDelegate {
         windowMenu.addItem(withTitle: "Escala inteira", action: #selector(integerGame), keyEquivalent: "").target = self
         windowMenu.addItem(withTitle: "Suavizar imagem", action: #selector(toggleSmoothFilter), keyEquivalent: "").target = self
         NSApp.mainMenu = main
+    }
+
+    /// Áudio: sound effects and CD music, each with a mute toggle and four levels.
+    /// Host presentation only (NativeAudioSettings); it applies at once and is stored
+    /// with the other app preferences.
+    func addAudioMenu(_ main: NSMenu) {
+        let audioItem = NSMenuItem(); main.addItem(audioItem)
+        let audioMenu = NSMenu(title: "Áudio"); audioItem.submenu = audioMenu
+        for (mute, title, action, select) in [("Silenciar efeitos", "Volume dos efeitos", #selector(toggleEffectsMute), #selector(selectEffectsVolume(_:))),
+                                              ("Silenciar música", "Volume da música", #selector(toggleMusicMute), #selector(selectMusicVolume(_:)))] {
+            if !audioMenu.items.isEmpty { audioMenu.addItem(.separator()) }
+            audioMenu.addItem(withTitle: mute, action: action, keyEquivalent: "").target = self
+            let levelsItem = NSMenuItem(title: title, action: nil, keyEquivalent: ""); let levels = NSMenu(title: title)
+            levelsItem.submenu = levels; audioMenu.addItem(levelsItem)
+            for level in NativeAudioSettings.levels {
+                let item = levels.addItem(withTitle: NativeAudioSettings.title(level), action: select, keyEquivalent: "")
+                item.target = self; item.tag = Int((level * 100).rounded())
+            }
+        }
+    }
+    func changeAudio(_ change: (inout NativeAudioSettings) -> Void) {
+        var value = nativeLive?.audioSettings ?? NativeLiveWindow.initialAudio
+        change(&value)
+        if let live = nativeLive { live.setAudio(value) } else if !NativeLiveWindow.diagnosticRun { value.store() }
+    }
+    @objc func toggleEffectsMute() { changeAudio { $0.effectsMuted.toggle() } }
+    @objc func toggleMusicMute() { changeAudio { $0.musicMuted.toggle() } }
+    @objc func selectEffectsVolume(_ item: NSMenuItem) { if let level = NativeAudioSettings.level(tag: item.tag) { changeAudio { $0.effectsVolume = level } } }
+    @objc func selectMusicVolume(_ item: NSMenuItem) { if let level = NativeAudioSettings.level(tag: item.tag) { changeAudio { $0.musicVolume = level } } }
+    /// Menu state of the Áudio items; nil for any other item.
+    func validateAudioItem(_ item: NSMenuItem) -> Bool? {
+        let value = nativeLive?.audioSettings ?? NativeLiveWindow.initialAudio
+        switch item.action {
+        case #selector(toggleEffectsMute): item.state = value.effectsMuted ? .on : .off
+        case #selector(toggleMusicMute): item.state = value.musicMuted ? .on : .off
+        case #selector(selectEffectsVolume(_:)): item.state = NativeAudioSettings.level(tag: item.tag) == value.effectsVolume ? .on : .off
+        case #selector(selectMusicVolume(_:)): item.state = NativeAudioSettings.level(tag: item.tag) == value.musicVolume ? .on : .off
+        default: return nil
+        }
+        return true
     }
 
     /// About panel text: what comes from where in this build. The original game
@@ -150,7 +191,7 @@ extension AppDelegate {
         func finish(_ error: String? = nil) {
             guard !finished else { return }; finished = true
             live.perform("live-pause") { value in
-                var result: [String: Any] = ["passed": error == nil && checks.values.allSatisfy { $0 } && checks.count == 19, "checks": checks,
+                var result: [String: Any] = ["passed": error == nil && checks.values.allSatisfy { $0 } && checks.count == 20, "checks": checks,
                                              "state": value, "nativeWindowVisible": live.window.isVisible, "edition": "player",
                                              "commit": Bundle.main.object(forInfoDictionaryKey: "RisingLandsSourceCommit") as? String ?? ""]
                 if let error = error { result["error"] = error }
@@ -210,6 +251,12 @@ extension AppDelegate {
             live.hotkeyPreferences?.window?.close()
             let commit = String((Bundle.main.object(forInfoDictionaryKey: "RisingLandsSourceCommit") as? String ?? "").prefix(12))
             let about = playerAboutCredits(commit: commit).string
+            // Áudio: mute the effects (mixer output 0), music at 50% (the stream's level).
+            let effects = choose("Silenciar efeitos")?.state == .on && live.audioSettings.effectsMuted
+            let music = item("Volume da música").flatMap { menu in menu.submenu?.items.first { $0.tag == 50 } }
+            if let music, let action = music.action { _ = NSApp.sendAction(action, to: music.target, from: music); _ = validateMenuItem(music) }
+            checks["audioMenu"] = effects && music?.state == .on && live.audioSettings.musicVolume == 0.5 && live.audioSettings.effectsGain == 0
+                && (live.cdMusic.map { $0.player.volume == 0.5 } ?? true)
             checks["aboutProvenance"] = !commit.isEmpty && ["PROCEDÊNCIA", "commit \(commit)", "SHA-256", "Microïds", "arquivos)"].allSatisfy(about.contains)
         }
         func mode(_ value: [String: Any]) -> UInt32 { value["original_shell_mode"] as? UInt32 ?? 0 }

@@ -391,7 +391,8 @@ int32_t macos_live_validation(MacOSLiveDriver*d,uint32_t enabled){
  d->validation=enabled==1;d->production_input=enabled==0;return 0;
 }
 static void sound_push(MacOSLiveDriver*d,MacOSSoundEvent e){if(d->sound_count==4096){d->sound_dropped++;return;}d->sounds[d->sound_count++]=e;}
-/* Copies the engine's ordered kind-10 requests after each play phase. The WinMain
+/* Copies the engine's ordered kind-10 requests after each play phase
+ * (values[0]: 1 PostSound, 0 StopSound, 2 StopAllSound -> mapper kind 3). The WinMain
  * loop calls PlaySnd_Manage before every PeekMessage: one tick opens phase 2 and,
  * when phase 2 dispatched requests, the loop's final tick follows them. Queries
  * never consume or modify engine state; failures only count, never stop play. */
@@ -402,7 +403,7 @@ static void sound_collect(MacOSLiveDriver*d,uint32_t phase){
  uint32_t frame=(uint32_t)(d->status.frames+1),requests=0;
  if(phase==2)sound_push(d,(MacOSSoundEvent){0,frame,2,0x460220,0,0,0,0,0,0});
  for(uint32_t i=0;i<n;i++){RlPlayerInputEvent*e=&d->events[i];if(e->kind!=10)continue;
-  sound_push(d,(MacOSSoundEvent){e->values[0]?1:2,e->frame,e->phase,e->site,e->values[1],e->values[2],e->values[3],e->values[4],e->values[6],e->values[5]});requests++;}
+  sound_push(d,(MacOSSoundEvent){e->values[0]==2?3:e->values[0]?1:2,e->frame,e->phase,e->site,e->values[1],e->values[2],e->values[3],e->values[4],e->values[6],e->values[5]});requests++;}
  if(phase==2&&requests)sound_push(d,(MacOSSoundEvent){0,frame,2,0x460220,0,0,0,0,0,0});
 }
 int32_t macos_live_sound_capture(MacOSLiveDriver*d,uint32_t enabled){if(!d||enabled>1)return 1;d->sound_capture=(int)enabled;d->sound_count=0;return 0;}

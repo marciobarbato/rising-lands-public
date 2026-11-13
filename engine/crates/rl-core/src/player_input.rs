@@ -1207,7 +1207,7 @@ pub fn escape(m: &mut MemoriaJogo, p: u32) -> Result<bool> {
         return Ok(false);
     }
     player::order(m, p, 13, [0, 0, 0, 0], 0x45ecd4)?;
-    crate::campaign_flow::stop_sounds(m)?;
+    crate::campaign_flow::stop_sounds(m, 0x429335)?;
     Ok(true)
 }
 fn input_context(m: &mut MemoriaJogo, p: u32, costs: Option<[u16; 3]>) -> Result<()> {
