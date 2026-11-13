@@ -427,3 +427,20 @@ published). `frame_units.rs` keeps its public form (no `validation-trace` observ
 Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (with `RL_CD_ROOT`;
 all passed, including `event_flc::tests::event_sounds_are_published_as_kind_10`). In the private repository: the MONDE01
 gate kept its SHA-256 and `validate.sh` passed.
+
+### 2026-11-13 (day, second): private `main` `b3d92eec`
+
+Previous synchronisation: public `c681a8b` (private `main` `4d21d416`).
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `35fa8431` war vehicles (kinds 11..15) that arrive release their looping move sound: StopSound(unit+0x104) at `0x4545ee` through `player::sound`, keeping the step flag the previous frame left (with an active handle the original skips the clear at `0x454491`). Without it, the move loop that `c681a8b` started delivering would play until the vehicle died. Kind 16 keeps its constant hum, as the original | `engine/crates/rl-core/src/frame_units.rs` |
+
+Left out, and why: the native receipts (`sound_sites_arrival-v1`, MONDE13 seeds 2 and 5, kinds 11..16, 36 chains and
+2916 calls, StopSounds identical; `sound_sites_unit-v2` 1148/1148), the campaign-transition receipts of the same day
+(571/571 stages equal) and `HANDOFF.md`.
+
+Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (with `RL_CD_ROOT`;
+all passed). In the private repository: the MONDE01 gate kept its SHA-256 and `validate.sh` passed.

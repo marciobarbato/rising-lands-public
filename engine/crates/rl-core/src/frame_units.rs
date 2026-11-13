@@ -157,12 +157,17 @@ fn next_unit(m: &mut MemoriaJogo, unit: u16) -> Result<u32> {
     let r = record(m, n)?;
     let mut owner = 0;
     let mut kind = 0;
+    // The step flag as the previous frame left it. With a sound driver an
+    // active handle skips the clear at 0x454491 (0x454479 updates the volume
+    // instead), so the arrival test at 0x4545c8 sees this value.
+    let mut step_flag = 0;
     if m.u8(r + 2)? != 0 {
         owner = m.u8(r)?;
         kind = m.u8(r + 1)?;
         if m.u32(r + 0x104)? != u32::MAX {
             return Err(stop("EnginNextEtape sound handle", 0x454479));
         }
+        step_flag = m.u8(r + 0xf9)?;
         m.set_u8(r + 0xf9, 0)?;
     }
     let state = m.u8(record(m, n)? + 2)?;
@@ -191,6 +196,14 @@ fn next_unit(m: &mut MemoriaJogo, unit: u16) -> Result<u32> {
     reload(m, unit)?;
     if matches!(kind, 20..=24) || (11..=15).contains(&kind) {
         crate::stage_unit_progression::after_reload(m, r, kind)?;
+        // 0x4545c8..0x4545ee: a war vehicle (kinds 11..15) that has arrived
+        // (+0x7e == +8) with the step flag set releases its sound handle with
+        // StopSound. The handle test (+0x104 != -1) is the sound driver's: the
+        // engine never writes the handle, so the request goes to the host, whose
+        // StopSound on a free handle does nothing, as the original skipping it.
+        if (11..=15).contains(&kind) && step_flag != 0 && m.u16(r + 0x7e)? == m.u16(r + 8)? {
+            crate::player::sound(m, 0x4545ee, false, [r + 0x104, 0, 0, 0], None)?;
+        }
     } else if kind == 0x10 && m.u32(r + 0x104)? == u32::MAX {
         // 0x454602..0x454680: with the sound handle free, a type-16 unit on a
         // cell TerrainEstDecouvert reports for the local player posts sound
