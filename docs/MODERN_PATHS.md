@@ -24,7 +24,9 @@ Combat, AI strategy, speeds and what a unit may stand on are unchanged. Only the
 
 - **Plan first.** An order computes a full path before the first step: an integer A* on the unit's footprint (1x1, or
   2x2 for war machines), 10 per step, +1 per heading change, +40 through a stationary friend; moving units are ignored
-  at plan time; stationary enemies block, except what a crusher runs over. At most 16,384 expansions per search.
+  at plan time; stationary enemies block, except what a crusher runs over. At most 16,384 expansions per search. A
+  frame spends at most 24,576 planner expansions (a search counts at least 3,072, so cheap searches stay at 8 per
+  frame); a plan that does not fit waits for the next frame. This budget restarts every frame and is never saved.
 - **Unreachable click.** The unit goes to the reachable cell closest to the target instead of stopping.
 - **Blocked on the way.** A unit in front that is moving, or still has an order of its own, is traffic: wait 2 frames
   and try again. One with no order, head-on, or in a cycle of units waiting for each other is a hard block: shove it if
@@ -76,4 +78,17 @@ In the private research repository, before this sync:
   (original 8.93x). Bridges, gates and 2x2 machines were measured on three more stages.
 
 The measurement tool and its traces are not published: they run on states of the original stages, which come from the
-CD. Not measured yet: the worst frame time on the largest map.
+CD.
+
+Frame time (logic only, no renderer), MONDE17 (256x256, the largest map), 39 land units, rule on, 2026-11-13:
+
+| Scenario | Mean | p99 | Worst frame |
+|---|---:|---:|---:|
+| Long orders across open ground | 0.64 ms | 0.99 ms | 4.6 ms |
+| A new order every 200 frames | 0.71 ms | 3.4 ms | 6.3 ms |
+| The stage start (units penned in, goals unreachable) | 0.52 ms | 2.1 ms | 3.7 ms |
+
+No frame took more than 8.3 ms (the budget at 4x speed). The first measurement found bursts of 36–44 ms right after each
+group order; the planner fix (shared buffers, the per-frame expansion budget, an early stop for attack approaches)
+removed them without changing the routes in the measured scenarios. With the rule off the original code runs: about
+0.6 ms mean, under 3 ms worst.

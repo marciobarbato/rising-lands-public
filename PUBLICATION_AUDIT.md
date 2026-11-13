@@ -326,3 +326,24 @@ Checked before the push: `cargo fmt --all --check` and `cargo test --release --l
 `RL_CD_ROOT`; all passed, the new test included). In the private repository: the MONDE01 gate (20 seeds x 36,000
 frames, rule off) kept its SHA-256, `validate.sh` passed, and three stop censuses (417 runs, about 286 game hours, rules
 0, 1 and 3) end with no engine stop after this fix.
+
+### 2026-11-13 (fourth round): private `main` `3112b226`
+
+Previous synchronisation: public `d2f8832` (private `main` `7d0fb293`).
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `df57ad6f` better unit paths (rule bit 0 only): the planner reads the grids as slices, reuses its buffers and caches cell costs; an attack approach stops once its fallback is one cell away; the limit of 8 searches per frame becomes a budget of 24,576 expansions per frame (each search counts at least 3,072). Worst frame on MONDE17 with 39 units: 44.7 ms → 4.6 ms; the measured scenarios keep their routes | `engine/crates/rl-core/src/modern_path.rs`, `memory.rs` (doc comment) |
+
+Public-only changes in this round: `docs/MODERN_PATHS.md` gains the per-frame budget and the frame-time table, written
+from the private receipt.
+
+Left out, and why: `motor/research/pathing/RECEIPT.md` (internal notes, section 8 of the 2026-11-12 third round); the
+frame-time tool (it runs on a stage-start save of an original stage).
+
+Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (with `RL_CD_ROOT`;
+all passed). In the private repository: the MONDE01 gate (rule off) kept its SHA-256, `validate.sh` passed, 24 runs
+of 72,000 frames with rules 1 and 3 on six stages had no stop and no replay mismatch, and save/load continuations on
+MONDE13 and MONDE17 gave the same state, random state and pixels.

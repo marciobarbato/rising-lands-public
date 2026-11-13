@@ -33,8 +33,13 @@ use crate::{frame_movement, frame_path, frame_spawn, MemoriaJogo, Result};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, VecDeque};
 
-/// Searches per phase; the rest wait for the next frame, in unit order.
-const SEARCHES_PER_PHASE: u32 = 8;
+/// Planner work per phase, in A* expansions; the plans past it wait for the
+/// next frame, in unit order. A search is charged its expansions but at least
+/// `SEARCH_MIN`, so cheap searches still run eight per phase; a search already
+/// started always finishes (the budget is checked before it), which bounds a
+/// phase at `PHASE_BUDGET + MAX_EXPANSIONS` expansions.
+const PHASE_BUDGET: u32 = 24576;
+const SEARCH_MIN: u32 = PHASE_BUDGET / 8;
 /// Expansions per search; past it the closest expanded cell is used.
 const MAX_EXPANSIONS: u32 = 16384;
 const STEP: u32 = 10;
@@ -74,20 +79,6 @@ fn mask_cell(m: &MemoriaJogo, c: u16, mask: u8) -> Result<bool> {
 }
 /// Gate object code (the original `mask_cell` tests the same literal).
 const GATE: u8 = 0xfd;
-/// Planning occupancy of layer `mask`, as EnginPeutPasser reads it when a unit
-/// steps. The original planner (`mask_cell`) counts every gate cell as occupied
-/// for ground units, open or closed, so CheminCalcul never routes through a
-/// gate and only the greedy step crosses an open one. Here an open gate
-/// (occupation bit 0 cleared by BatimentNextEtape at phase 15) is passable and
-/// a closed gate blocks, exactly as for the step.
-fn occupied(m: &MemoriaJogo, c: u16, mask: u8) -> Result<bool> {
-    let flag = grid8(m, 0x507da8, c)?;
-    Ok(if grid8(m, 0x507d74, c)? == GATE {
-        mask & 1 != 0 && flag & 1 != 0
-    } else {
-        flag & mask != 0
-    })
-}
 fn footprint(class: u8) -> &'static [u16] {
     if class == 1 {
         &[0]
@@ -131,20 +122,125 @@ fn stationary(m: &MemoriaJogo, q: u32) -> Result<bool> {
 fn yielding(kind: u8) -> bool {
     matches!(kind, 0..=2 | 4..=10 | 18 | 19 | 22)
 }
+/// Read-only views of the planning grids and the map size for one search.
+/// Every read is the one `grid8`/`grid16`/`frame_path::neighbor` would make
+/// (the search writes nothing); a cell outside a view falls back to them, so
+/// results and errors are unchanged. This only avoids a slot lookup per read.
+struct Grids<'a> {
+    w: i32,
+    h: i32,
+    mask: Option<&'a [u8]>,
+    object: Option<&'a [u8]>,
+    tags: Option<&'a [u8]>,
+}
+impl<'a> Grids<'a> {
+    fn new(m: &'a MemoriaJogo) -> Result<Self> {
+        let w = m.u16(0x497168)?;
+        let h = m.u16(0x49716a)?;
+        let cells = if w == 0 || h == 0 {
+            0
+        } else {
+            256 * (usize::from(h) - 1) + usize::from(w)
+        };
+        let view = |p: u32, n: usize| m.u32(p).ok().and_then(|a| m.read(a, n).ok());
+        Ok(Self {
+            w: i32::from(w),
+            h: i32::from(h),
+            mask: view(0x507da8, cells),
+            object: view(0x507d74, cells),
+            tags: view(0x4e0f38, 2 * cells),
+        })
+    }
+    fn mask(&self, m: &MemoriaJogo, c: u16) -> Result<u8> {
+        match self.mask.and_then(|s| s.get(usize::from(c))) {
+            Some(&b) => Ok(b),
+            None => grid8(m, 0x507da8, c),
+        }
+    }
+    fn object(&self, m: &MemoriaJogo, c: u16) -> Result<u8> {
+        match self.object.and_then(|s| s.get(usize::from(c))) {
+            Some(&b) => Ok(b),
+            None => grid8(m, 0x507d74, c),
+        }
+    }
+    fn tag(&self, m: &MemoriaJogo, c: u16) -> Result<u16> {
+        let i = 2 * usize::from(c);
+        match self.tags.and_then(|s| s.get(i..i + 2)) {
+            Some(b) => Ok(u16::from_le_bytes([b[0], b[1]])),
+            None => grid16(m, 0x4e0f38, c),
+        }
+    }
+    /// Planning occupancy of layer `mask`, as EnginPeutPasser reads it when a unit
+    /// steps. The original planner (`mask_cell`) counts every gate cell as occupied
+    /// for ground units, open or closed, so CheminCalcul never routes through a
+    /// gate and only the greedy step crosses an open one. Here an open gate
+    /// (occupation bit 0 cleared by BatimentNextEtape at phase 15) is passable and
+    /// a closed gate blocks, exactly as for the step.
+    fn occupied(&self, m: &MemoriaJogo, c: u16, mask: u8) -> Result<bool> {
+        let flag = self.mask(m, c)?;
+        Ok(if self.object(m, c)? == GATE {
+            mask & 1 != 0 && flag & 1 != 0
+        } else {
+            flag & mask != 0
+        })
+    }
+    /// `frame_path::neighbor` with the map size read once.
+    fn neighbor(&self, c: u16, d: u8) -> u16 {
+        let (dx, dy) = frame_path::vector(d);
+        let x = i32::from(c & 255) + dx;
+        let y = i32::from(c >> 8) + dy;
+        if x >= 0 && x < self.w && y >= 0 && y < self.h {
+            (x + 256 * y) as u16
+        } else {
+            NONE
+        }
+    }
+}
+/// Search buffers kept between searches (planner scratch, never game state).
+/// A cell's g/parent/heading are valid when `seen` holds the current stamp,
+/// and it is closed when `closed` does, so nothing is cleared per search.
+struct Scratch {
+    stamp: u32,
+    seen: Vec<u32>,
+    closed: Vec<u32>,
+    g: Vec<u32>,
+    parent: Vec<u16>,
+    heading: Vec<u8>,
+    /// `cell_cost` per cell, valid when `costed` holds the stamp (the search
+    /// writes nothing, so a cell's cost cannot change within one search).
+    costed: Vec<u32>,
+    cost: Vec<Option<u32>>,
+    heap: BinaryHeap<Reverse<(u32, u32, u32, u16)>>,
+}
+std::thread_local! {
+    static SCRATCH: std::cell::RefCell<Scratch> = const {
+        std::cell::RefCell::new(Scratch {
+            stamp: 0,
+            seen: Vec::new(),
+            closed: Vec::new(),
+            g: Vec::new(),
+            parent: Vec::new(),
+            heading: Vec::new(),
+            costed: Vec::new(),
+            cost: Vec::new(),
+            heap: BinaryHeap::new(),
+        })
+    };
+}
 /// Planning cost of standing on `c`: None when blocked; Some(extra) otherwise.
 /// Terrain, structures and closed gates block; open gates do not; moving units are ignored; stationary enemies
 /// block (except what a crusher runs over); stationary friends cost extra.
-fn cell_cost(m: &MemoriaJogo, v: &Mover, c: u16) -> Result<Option<u32>> {
+fn cell_cost(m: &MemoriaJogo, grids: &Grids, v: &Mover, c: u16) -> Result<Option<u32>> {
     if v.class != 1 && (c & 255 == 0 || c >> 8 == 0) {
         return Ok(None);
     }
     let mut extra = 0;
     for d in footprint(v.class) {
         let sc = c.wrapping_sub(*d);
-        if !occupied(m, sc, v.mask)? {
+        if !grids.occupied(m, sc, v.mask)? {
             continue;
         }
-        let tag = grid16(m, 0x4e0f38, sc)?;
+        let tag = grids.tag(m, sc)?;
         if tag & 0xc000 != 0x4000 {
             return Ok(None);
         }
@@ -170,23 +266,67 @@ struct Plan {
     cells: Vec<u16>,
     /// Last cell: the goal, or the closest reachable cell to it.
     end: u16,
+    /// Cells expanded (the planner's work, charged to the phase budget).
+    expansions: u32,
 }
 /// A* from `start` toward `goal`. A cell where another unit stands can never
 /// be the end; when the goal is not reached the end is the expanded cell
 /// (other than a gate) minimising (Chebyshev distance to goal, path cost, cell
 /// index).
 fn search(m: &MemoriaJogo, v: &Mover, start: u16, goal: u16) -> Result<Plan> {
-    let w = u32::from(m.u16(0x497168)?);
-    let h = u32::from(m.u16(0x49716a)?);
+    SCRATCH.with(|scratch| search_with(m, v, start, goal, &mut scratch.borrow_mut()))
+}
+fn search_with(m: &MemoriaJogo, v: &Mover, start: u16, goal: u16, s: &mut Scratch) -> Result<Plan> {
+    let grids = Grids::new(m)?;
+    let w = grids.w as u32;
     let index = |c: u16| (u32::from(c & 255) + w * u32::from(c >> 8)) as usize;
-    let size = (w * h) as usize;
-    let mut g = vec![u32::MAX; size];
-    let mut parent = vec![NONE; size];
-    let mut heading = vec![0u8; size];
-    let mut closed = vec![false; size];
-    let mut heap = BinaryHeap::new();
+    let size = (w * grids.h as u32) as usize;
+    if s.seen.len() < size {
+        s.seen.resize(size, 0);
+        s.closed.resize(size, 0);
+        s.g.resize(size, 0);
+        s.parent.resize(size, 0);
+        s.heading.resize(size, 0);
+        s.costed.resize(size, 0);
+        s.cost.resize(size, None);
+    }
+    s.stamp = s.stamp.wrapping_add(1);
+    if s.stamp == 0 {
+        s.seen.fill(0);
+        s.closed.fill(0);
+        s.costed.fill(0);
+        s.stamp = 1;
+    }
+    let stamp = s.stamp;
+    s.heap.clear();
+    let Scratch {
+        seen,
+        closed,
+        g,
+        parent,
+        heading,
+        costed,
+        cost: costs,
+        heap,
+        ..
+    } = s;
+    let mut cost_at = |c: u16| -> Result<Option<u32>> {
+        let i = index(c);
+        if costed[i] != stamp {
+            costs[i] = cell_cost(m, &grids, v, c)?;
+            costed[i] = stamp;
+        }
+        Ok(costs[i])
+    };
+    // Unvisited cells read as g = MAX, parent = NONE, heading = 0.
+    let cost_of =
+        |seen: &[u32], g: &[u32], i: usize| if seen[i] == stamp { g[i] } else { u32::MAX };
     let mut counter = 0u32;
-    g[index(start)] = 0;
+    let si = index(start);
+    seen[si] = stamp;
+    g[si] = 0;
+    parent[si] = NONE;
+    heading[si] = 0;
     heap.push(Reverse((
         STEP * cheb(start, goal),
         cheb(start, goal),
@@ -196,32 +336,43 @@ fn search(m: &MemoriaJogo, v: &Mover, start: u16, goal: u16) -> Result<Plan> {
     let mut best = (cheb(start, goal), 0u32, start);
     let mut found = false;
     let mut expansions = 0;
-    while let Some(Reverse((_, _, _, c))) = heap.pop() {
+    // A goal that can never be an end (an attack approach aims at the target's
+    // own cell) is never found, so the search used to run to MAX_EXPANSIONS.
+    // The best fallback is then at distance 1; once it is, and the popped f
+    // exceeds its f, no later cell can beat it (consistent heuristic: every
+    // later f is at least the popped one, and a distance-1 cell has
+    // g = f - STEP). Stopping there returns the same plan.
+    let unreachable_goal = goal != start && cost_at(goal)? != Some(0);
+    while let Some(Reverse((f, _, _, c))) = heap.pop() {
+        if unreachable_goal && best.0 == 1 && f > best.1 + STEP {
+            break;
+        }
         let ci = index(c);
-        if closed[ci] {
+        if closed[ci] == stamp {
             continue;
         }
-        closed[ci] = true;
+        closed[ci] = stamp;
         expansions += 1;
-        let free = c == start || cell_cost(m, v, c)? == Some(0);
+        let gc = cost_of(seen, g, ci);
+        let free = c == start || cost_at(c)? == Some(0);
         if c == goal && free {
             found = true;
             break;
         }
         // A fallback end is never a gate cell: a unit parked there would stop
         // the gate from closing on it.
-        if free && grid8(m, 0x507d74, c)? != GATE && (cheb(c, goal), g[ci], c) < best {
-            best = (cheb(c, goal), g[ci], c);
+        if free && grids.object(m, c)? != GATE && (cheb(c, goal), gc, c) < best {
+            best = (cheb(c, goal), gc, c);
         }
         if expansions >= MAX_EXPANSIONS {
             break;
         }
         for d in DIRECTIONS {
-            let n = frame_path::neighbor(m, c, d)?;
-            if n == NONE || closed[index(n)] {
+            let n = grids.neighbor(c, d);
+            if n == NONE || closed[index(n)] == stamp {
                 continue;
             }
-            let Some(extra) = cell_cost(m, v, n)? else {
+            let Some(extra) = cost_at(n)? else {
                 continue;
             };
             let turn = if c != start && heading[ci] != d {
@@ -229,9 +380,10 @@ fn search(m: &MemoriaJogo, v: &Mover, start: u16, goal: u16) -> Result<Plan> {
             } else {
                 0
             };
-            let cost = g[ci] + STEP + extra + turn;
+            let cost = gc + STEP + extra + turn;
             let ni = index(n);
-            if cost < g[ni] {
+            if cost < cost_of(seen, g, ni) {
+                seen[ni] = stamp;
                 g[ni] = cost;
                 parent[ni] = c;
                 heading[ni] = d;
@@ -249,7 +401,11 @@ fn search(m: &MemoriaJogo, v: &Mover, start: u16, goal: u16) -> Result<Plan> {
         at = parent[index(at)];
     }
     cells.reverse();
-    Ok(Plan { cells, end })
+    Ok(Plan {
+        cells,
+        end,
+        expansions,
+    })
 }
 
 fn route(m: &MemoriaJogo, i: u32) -> Result<u32> {
@@ -330,13 +486,13 @@ pub(crate) fn displace(m: &mut MemoriaJogo, i: u32) -> Result<u32> {
 }
 fn plan(m: &mut MemoriaJogo, i: u32) -> Result<u32> {
     let u = unit(m, i)?;
-    if m.path_searches >= SEARCHES_PER_PHASE {
+    if m.path_searches >= PHASE_BUDGET {
         m.set_u8(u + 0x88, 3)?;
         return Ok(0);
     }
-    m.path_searches += 1;
     let v = mover(m, i)?;
     let p = search(m, &v, m.u16(u + 8)?, m.u16(u + 0x7e)?)?;
+    m.path_searches += p.expansions.max(SEARCH_MIN);
     if p.cells.is_empty() {
         return settle(m, i);
     }
@@ -930,6 +1086,42 @@ mod tests {
         assert_eq!(next_cell(&m, 1).unwrap(), NONE);
         m.set_u16(ROUTES + 512, ROUTE_CAPACITY as u16).unwrap();
         assert_eq!(next_cell(&m, 1).unwrap(), 0);
+    }
+
+    /// An attack approach aims at the target's own (occupied) cell, which is
+    /// never an end: the search stops once its fallback is adjacent, with the
+    /// plan a full flood would give, instead of expanding the whole region.
+    #[test]
+    fn an_occupied_goal_stops_the_search_at_the_adjacent_fallback() {
+        let mut m = world(&wall());
+        place(&mut m, 0, 0, (4, 2), (12, 2));
+        place(&mut m, 1, 1, (12, 2), (12, 2));
+        let v = mover(&m, 0).unwrap();
+        let p = search(&m, &v, 4 + 2 * 256, 12 + 2 * 256).unwrap();
+        assert_eq!(cheb(p.end, 12 + 2 * 256), 1);
+        // The goal itself costs one step more than the adjacent end (22 cells
+        // around the wall end, see search_goes_around_and_is_shortest).
+        assert_eq!(p.cells.len(), 21);
+        // The flood of the open 16x16 region (243 cells) is cut short.
+        assert!(p.expansions < 200, "{} expansions", p.expansions);
+        // Exact: the same end and route as when the goal cell is free and the
+        // end is forced one cell short of it.
+        let full = search(&m, &v, 4 + 2 * 256, p.end).unwrap();
+        assert_eq!(full.cells, p.cells);
+    }
+
+    /// The planner work budget restarts with every projection; a plan asked
+    /// for after it is spent waits for the next phase (state 3) untouched.
+    #[test]
+    fn a_spent_phase_budget_defers_the_plan() {
+        let mut m = world(&wall());
+        place(&mut m, 0, 0, (4, 2), (12, 2));
+        m.path_searches = PHASE_BUDGET;
+        assert_eq!(plan(&mut m, 0).unwrap(), 0);
+        assert_eq!(m.u8(UNITS + 0x88).unwrap(), 3);
+        assert_eq!(m.u16(ROUTES).unwrap(), 0);
+        assert_eq!(m.path_searches, PHASE_BUDGET);
+        assert_eq!(SEARCH_MIN * 8, PHASE_BUDGET);
     }
 
     #[test]
