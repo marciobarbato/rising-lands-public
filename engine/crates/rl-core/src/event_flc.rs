@@ -241,24 +241,27 @@ fn message_box_next(m: &mut MemoriaJogo) -> Result<()> {
     m.set_u16(0x507d54, ((u32::from(m.u16(0x507d54)?) + 1) % 256) as u16)?;
     m.set_u8(0x507d58, 0)
 }
-fn post_sound(m: &mut MemoriaJogo, edx: u32, ebx: u32, ecx: u32) -> Result<()> {
-    // The volume stack word 0x100 is outside the typed request.
-    crate::player_audio::request(m, true, [0x41, edx, ebx, ecx]).map(|_| ())
+/// PlaySnd_PostSound 0x48aa79(0x41, EDX, EBX, ECX) with the stack volume word
+/// 0x100 the three event calls push (0x4580bc, 0x45837f, 0x458395), published to
+/// the host as a kind-10 player event at the call `site`.
+fn post_sound(m: &mut MemoriaJogo, site: u32, edx: u32, ebx: u32, ecx: u32) -> Result<()> {
+    crate::player::sound(m, site, true, [0x41, edx, ebx, ecx], Some(0x100)).map(|_| ())
 }
 /// The common tail of both ends: FlicClose, event off, HUD latch, next
-/// notification, StopAllSound and PostSound(0x41, 0x40100, 0x496cd0).
-fn end(m: &mut MemoriaJogo) -> Result<()> {
+/// notification, StopAllSound and PostSound(0x41, 0x40100, 0x496cd0), posted at
+/// 0x4580cb by EvenementStop and at 0x4583ab by EvenementAffiche's end branch.
+fn end(m: &mut MemoriaJogo, site: u32) -> Result<()> {
     flic_close(m)?;
     m.set_u8(0x4e1b0e, 0)?;
     m.set_u8(0x4e05a2, 1)?;
     m.set_u8(0x4e1b14, 0)?;
     message_box_next(m)?;
     crate::campaign_flow::stop_sounds(m)?;
-    post_sound(m, 0x40100, 0x496cd0, 0)
+    post_sound(m, site, 0x40100, 0x496cd0, 0)
 }
 /// EvenementStop 0x458088 (Escape in game, a click or Escape in mode 22).
 pub fn stop_event(m: &mut MemoriaJogo) -> Result<()> {
-    end(m)
+    end(m, 0x4580cb)
 }
 /// EvenementAffiche 0x4581bc, the engine-side part. `0x4e1b14` set (just
 /// opened, or the host reported the last frame): clear the view (presentation),
@@ -275,11 +278,15 @@ pub fn affiche(m: &mut MemoriaJogo) -> Result<()> {
         return Ok(());
     }
     m.set_u8(0x4e1b14, 0)?;
+    // Both branches reach the one PostSound call at 0x4583ab (0x45838e jumps
+    // there with EDX 0x40100). The per-frame PostSound(0x41, 0x40200, 0x496cd4, 1)
+    // at 0x45827f needs the handle 0x496cd0 written by a sound driver; the engine
+    // never writes it (the host plays from the events), so it stays -1.
     if last {
-        end(m)
+        end(m, 0x4583ab)
     } else {
         crate::campaign_flow::stop_sounds(m)?;
-        post_sound(m, 0x40000, 0x496cd0, 0)
+        post_sound(m, 0x4583ab, 0x40000, 0x496cd0, 0)
     }
 }
 /// Host report: the FLC's last frame has been shown. Leaves the state the
@@ -430,6 +437,57 @@ mod tests {
             }]
         )
         .is_err());
+    }
+
+    /// The event's PostSound calls reach the host as kind-10 player events with
+    /// the original call sites and the stack volume 0x100.
+    #[test]
+    fn event_sounds_are_published_as_kind_10() {
+        let sounds = |m: &MemoriaJogo| -> Vec<(u32, Vec<u32>)> {
+            m.player
+                .as_ref()
+                .unwrap()
+                .events
+                .iter()
+                .filter(|e| e.kind == 10)
+                .map(|e| (e.site, e.values[..7].to_vec()))
+                .collect()
+        };
+        let runtime = || crate::player::Runtime {
+            answers: crate::player::DeclaredInput {
+                display_sound_boundary: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut m = world(true);
+        m.declare(0x52137c, vec![0; 44 * 50]).unwrap();
+        message_box_run(&mut m).unwrap();
+        m.player = Some(runtime());
+        affiche(&mut m).unwrap();
+        assert_eq!(
+            sounds(&m),
+            vec![(0x4583ab, vec![1, 0x41, 0x40000, 0x496cd0, 0, 1, 0x100])]
+        );
+        m.set_u8(crate::shell_state::MODE, 0x16).unwrap();
+        finish(&mut m).unwrap();
+        m.player = Some(runtime());
+        affiche(&mut m).unwrap();
+        assert_eq!(
+            sounds(&m),
+            vec![(0x4583ab, vec![1, 0x41, 0x40100, 0x496cd0, 0, 1, 0x100])]
+        );
+        assert_eq!(m.u8(0x4e1b0e).unwrap(), 0);
+
+        let mut m = world(true);
+        m.declare(0x52137c, vec![0; 44 * 50]).unwrap();
+        message_box_run(&mut m).unwrap();
+        m.player = Some(runtime());
+        stop_event(&mut m).unwrap();
+        assert_eq!(
+            sounds(&m),
+            vec![(0x4580cb, vec![1, 0x41, 0x40100, 0x496cd0, 0, 1, 0x100])]
+        );
     }
 
     #[test]

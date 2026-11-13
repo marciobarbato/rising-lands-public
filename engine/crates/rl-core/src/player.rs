@@ -224,6 +224,22 @@ pub fn fixture_text_requests(m: &MemoriaJogo) -> Vec<[u32; 3]> {
         .collect()
 }
 
+/// The kind-10 sound requests a fixture published: call site, then post, the
+/// four request registers, the volume flag and the volume (`sound`).
+pub fn fixture_sound_requests(m: &MemoriaJogo) -> Vec<[u32; 8]> {
+    m.player
+        .as_ref()
+        .into_iter()
+        .flat_map(|r| r.events.iter())
+        .filter(|e| e.kind == 10)
+        .map(|e| {
+            let mut v = [e.site, 0, 0, 0, 0, 0, 0, 0];
+            v[1..].copy_from_slice(&e.values[..7]);
+            v
+        })
+        .collect()
+}
+
 /// Offline routine adapter. It supplies exactly the declared answer table and
 /// exposes semantic returns only; register leftovers are not invented.
 pub fn fixture(
@@ -567,6 +583,9 @@ pub fn fixture(
         | "ChercheIndiceBatiment" => {
             Some(crate::player_input::selection_leaf(m, name, ax, dx, bx)?)
         }
+        // One routine of the CalculGame frame body (frame::call), with the
+        // play-mode player runtime the body runs under: "frame:NAME".
+        _ if name.starts_with("frame:") => Some(crate::frame::call(m, &name[6..], &[ax, dx])?),
         _ => return stop("unported player routine fixture", 0x429278),
     };
     Ok(out)

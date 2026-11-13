@@ -413,14 +413,17 @@ fn fire(m: &mut MemoriaJogo, index: u16, r: u32, kind: u8, mode: u8, target: u16
     };
     crate::frame_core::call(m, "BatimentDecouvre", &[u32::from(index), player])?;
     if m.u8(r + 4)? == m.u8(0x508041)? {
-        // BatimentGetVolume reads the viewport only; its result is the stack
-        // argument of PlaySnd_PostSound, outside the typed request.
-        let _volume = crate::projectile_building_impact::volume(m, index)?;
+        // BatimentGetVolume 0x41a0ab reads the viewport only; its result is the
+        // stack volume of PlaySnd_PostSound (0x4272a3 type 10, 0x42799e type 11).
+        let volume = crate::projectile_building_impact::volume(m, index)?;
         if m.u32(r + 0x100)? == u32::MAX {
-            crate::player_audio::request(
+            let site = if kind == 11 { 0x42799e } else { 0x4272a3 };
+            crate::player::sound(
                 m,
+                site,
                 true,
                 [0x42, (u32::from(kind) << 16) | 0x2300, r + 0x100, 0],
+                Some(volume),
             )?;
         }
     }

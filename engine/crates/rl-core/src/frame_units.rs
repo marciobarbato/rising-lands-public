@@ -194,14 +194,21 @@ fn next_unit(m: &mut MemoriaJogo, unit: u16) -> Result<u32> {
     } else if kind == 0x10 && m.u32(r + 0x104)? == u32::MAX {
         // 0x454602..0x454680: with the sound handle free, a type-16 unit on a
         // cell TerrainEstDecouvert reports for the local player posts sound
-        // 0x50 with the kind in the high word (EnginGetVolume is read-only;
-        // its result is the stack argument outside the typed request). The
-        // step flag +0xf9 is set either way.
+        // 0x50 with the kind in the high word at 0x45467b, the stack volume
+        // being EnginGetVolume 0x440c5d (read-only). The step flag +0xf9 is
+        // set either way.
         let local = u32::from(m.u8(0x508041)?);
         let cell = u32::from(m.u16(r + 8)?);
         if m.u8(m.u32(0x507d78 + 4 * local)?.wrapping_add(cell))? & 31 == 0 {
+            let volume = crate::player_orders::unit_volume(m, n)?;
             m.set_u8(r + 0xf9, 1)?;
-            crate::player_audio::request(m, true, [0x50, (0x10 << 16) | 0x800, r + 0x104, 1])?;
+            crate::player::sound(
+                m,
+                0x45467b,
+                true,
+                [0x50, (0x10 << 16) | 0x800, r + 0x104, 1],
+                Some(volume),
+            )?;
         }
         m.set_u8(r + 0xf9, 1)?;
     }

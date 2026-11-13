@@ -378,16 +378,22 @@ pub fn next_case(m: &mut MemoriaJogo, i: u32) -> Result<u32> {
     {
         // 0x4490c1..0x4490f8: the local player's war unit (kinds 11..=16,
         // jump table 0x448f38) stepping where TerrainEstDecouvert answers 1.
-        // EnginGetVolume 0x440c5d reads the unit cell, the viewport and the
-        // selection mark only; its result is the stack argument of
-        // PlaySnd_PostSound, outside the typed request. The step flag +0xf9
+        // EnginGetVolume 0x440c5d (read-only: unit cell, viewport, selection
+        // mark) is the stack volume of PlaySnd_PostSound. The step flag +0xf9
         // is set before the handle test; sound 0x50 with the kind in the high
-        // word posts only while the handle +0x104 is free.
+        // word posts at 0x4490f8 only while the handle +0x104 is free.
+        let volume = crate::player_orders::unit_volume(m, i)?;
         let handle = m.u32(u + 0x104)?;
         m.set_u8(u + 0xf9, 1)?;
         if handle == u32::MAX {
             let kind = u32::from(m.u8(u + 1)?);
-            crate::player_audio::request(m, true, [0x50, (kind << 16) | 0x800, u + 0x104, 1])?;
+            crate::player::sound(
+                m,
+                0x4490f8,
+                true,
+                [0x50, (kind << 16) | 0x800, u + 0x104, 1],
+                Some(volume),
+            )?;
         }
     }
     if can_advance(m, u)? {
@@ -604,12 +610,19 @@ pub(crate) fn balloon_animation(m: &mut MemoriaJogo, i: u32) -> Result<()> {
         }
         // EnginGetVolume 0x440c5d / EnginEstSelectionne 0x472174 only read the
         // unit cell, the viewport and the selection mark; the volume is the
-        // stack argument of PlaySnd_PostSound, outside the typed request.
+        // stack argument of PlaySnd_PostSound 0x447d72.
+        let volume = crate::player_orders::unit_volume(m, i)?;
         let handle = m.u32(r + 0x104)?;
         m.set_u8(r + 0xf9, 0)?;
         if handle == u32::MAX {
             let kind = u32::from(m.u8(r + 1)?);
-            crate::player_audio::request(m, true, [0x50, (kind << 16) | 0x800, r + 0x104, 0])?;
+            crate::player::sound(
+                m,
+                0x447d72,
+                true,
+                [0x50, (kind << 16) | 0x800, r + 0x104, 0],
+                Some(volume),
+            )?;
         }
         return Ok(());
     }

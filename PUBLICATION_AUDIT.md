@@ -407,3 +407,23 @@ No private change copied. READMEs (PT and EN) and `docs/ROADMAP.md` now say the 
 and better paths are in pre-alpha 3, instead of "in the current source" (round of 2026-11-13, first). The release
 binaries are the CI artifacts of the commit that carries this entry, with their SHA-256 in the release notes; no game
 data is bundled.
+
+### 2026-11-13 (day): private `main` `4d21d416`
+
+Previous synchronisation: public `b46bb70` (private `main` `98cf2914`); `5f3f416` changed only documentation.
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `ed4e8194` five PostSound sites that skipped `player::sound` now reach the host as kind-10 events, with the original call site and stack volume: the event FLC's opening and end sounds (`0x4583ab`, `0x4580cb`, volume 0x100), three unit sounds (`0x4490f8`, `0x447d72`, `0x45467b`, EnginGetVolume) and the turret impact (`0x4272a3` / `0x42799e`, BatimentGetVolume). Before, the engine kept these requests in game memory and the host never played them | `engine/crates/rl-core/src/event_flc.rs`, `frame_movement.rs`, `frame_units.rs`, `player.rs`, `turret_structure_chain.rs` |
+| `d485ec36` `player::fixture` routes `frame:NAME` to one routine of the CalculGame body (used only by the private differential tools) | `engine/crates/rl-core/src/player.rs` |
+
+Left out, and why: the native receipts (`sound_sites_turret-v1` 2560/2560 and `sound_sites_unit-v1` 1148/1148, no mismatch in
+site, selector, flags, reference, ECX or volume; the AI-with-a-human-ally receipts, 33,900 cases equal), the private
+fixture and `play_bot` binaries (`--load`), `HANDOFF.md`, and the player's own saves used as checkpoints (never
+published). `frame_units.rs` keeps its public form (no `validation-trace` observer lines).
+
+Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (with `RL_CD_ROOT`;
+all passed, including `event_flc::tests::event_sounds_are_published_as_kind_10`). In the private repository: the MONDE01
+gate kept its SHA-256 and `validate.sh` passed.
