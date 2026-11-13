@@ -131,10 +131,19 @@ int rlw_options_input(RlwDriver *d, const RlShellInput *input, uint32_t keys, Rl
 uint32_t rlw_options_open(const RlwDriver *d);
 int rlw_options_button(RlwDriver *d, int32_t rect[4]);
 /* Rule set (RL_REGRA_*) for worlds created afterwards: "Atalhos modernos" turns
- * on the Shift+click order queue (RL_REGRA_FILA_ORDENS), as on macOS. The menu
+ * on the Shift+click order queue (RL_REGRA_FILA_ORDENS) and "Caminhos melhores"
+ * the modern unit paths (RL_REGRA_CAMINHOS_MELHORES), as on macOS. The menu
  * world takes it too while its load tail has not run. Default 0 (original). */
 void rlw_driver_default_rules(uint32_t rules);
 int rlw_driver_set_rules(RlwDriver *d, uint32_t rules);
+/* NativeEngineRules.current(): the rule set of the two Opções items. */
+uint32_t rlw_options_rules(unsigned atalhos, unsigned caminhos);
+/* Rule set of the current world (rl_regras; macos_live_rules), 0 on error. */
+uint32_t rlw_driver_rules(const RlwDriver *d);
+/* "Atalhos modernos" read-only snapshot (macos_live_peek): in play only (no
+ * shell, not stopped), between frames. Copies each (address, size) range of one
+ * complete projection to out, concatenated in request order. 0 or an error. */
+int rlw_driver_peek(RlwDriver *d, const uint32_t *addresses, const uint32_t *sizes, uint32_t count, uint8_t *out);
 /* Preset (0..2) of the next stage start: New game, Restart or Next stage. */
 int rlw_driver_set_difficulty(RlwDriver *d, uint32_t difficulty);
 #endif

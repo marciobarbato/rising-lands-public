@@ -32,6 +32,10 @@ if [ "${1:-}" = test ]; then
     "$HERE/tests/test_saves.c" "$HERE/src/rlw_saves.c" "$HERE/src/rlw_fs.c" \
     $TEST_LIBS -o "$OUT/test_saves"
   "$OUT/test_saves" "$OUT"
+  "$HOST_CC" -std=c11 -O1 -g -Wall -Wextra -Werror -Wno-format-truncation -I"$HERE/src" \
+    "$HERE/tests/test_hotkeys.c" "$HERE/src/rlw_hotkeys.c" "$HERE/src/rlw_modern.c" \
+    $TEST_LIBS -o "$OUT/test_hotkeys"
+  "$OUT/test_hotkeys"
 fi
 
 echo "== engine ($TARGET)"
@@ -47,7 +51,7 @@ echo "== host ($CC)"
   -I"$REPO/engine/include" -I"$HERE/src" \
   "$HERE/src/rlw_main.c" "$HERE/src/rlw_driver.c" "$HERE/src/rlw_cd.c" "$HERE/src/rlw_fs.c" "$HERE/src/rlw_sha256.c" \
   "$HERE/src/rlw_menu.c" "$HERE/src/rlw_menu_ops.c" "$HERE/src/rlw_menu_demo.c" "$HERE/src/rlw_flc.c" \
-  "$HERE/src/rlw_saves.c" "$LIB" \
+  "$HERE/src/rlw_saves.c" "$HERE/src/rlw_hotkeys.c" "$HERE/src/rlw_modern.c" "$HERE/src/rlw_keys_dialog.c" "$LIB" \
   -static -static-libgcc \
   -lgdi32 -lcomdlg32 -lshell32 -lole32 -luuid -lwinmm \
   -lkernel32 -lntdll -luserenv -lws2_32 -ldbghelp \

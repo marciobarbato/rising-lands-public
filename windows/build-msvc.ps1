@@ -73,7 +73,8 @@ if ($Test) {
   $suites = @(
     @{ Name = 'test_cd'; Defines = @('/DRLW_TESTING'); Files = @('tests\test_cd.c', 'src\rlw_cd.c', 'src\rlw_fs.c', 'src\rlw_sha256.c') },
     @{ Name = 'test_menu'; Defines = @(); Files = @('tests\test_menu.c', 'src\rlw_menu.c', 'src\rlw_flc.c', 'src\rlw_fs.c') },
-    @{ Name = 'test_saves'; Defines = @(); Files = @('tests\test_saves.c', 'src\rlw_saves.c', 'src\rlw_fs.c') }
+    @{ Name = 'test_saves'; Defines = @(); Files = @('tests\test_saves.c', 'src\rlw_saves.c', 'src\rlw_fs.c') },
+    @{ Name = 'test_hotkeys'; Defines = @(); Files = @('tests\test_hotkeys.c', 'src\rlw_hotkeys.c', 'src\rlw_modern.c') }
   )
   foreach ($s in $suites) {
     Write-Host "== $($s.Name) (cl $Arch)"
@@ -87,6 +88,7 @@ if ($Test) {
     Invoke-Checked (Join-Path $T 'test_cd.exe') @((Join-Path $T 'test-work'))
     Invoke-Checked (Join-Path $T 'test_menu.exe') @()
     Invoke-Checked (Join-Path $T 'test_saves.exe') @($T)
+    Invoke-Checked (Join-Path $T 'test_hotkeys.exe') @()
   } else {
     Write-Host "== tests built for $Arch; not run on this $HostArch machine"
   }
@@ -110,7 +112,7 @@ Write-Host "== host (cl $Arch)"
 $obj = Join-Path $Out 'obj'
 New-Item -ItemType Directory -Force -Path $obj | Out-Null
 $Sources = @('rlw_main.c', 'rlw_driver.c', 'rlw_cd.c', 'rlw_fs.c', 'rlw_sha256.c', 'rlw_menu.c', 'rlw_menu_ops.c',
-  'rlw_menu_demo.c', 'rlw_flc.c', 'rlw_saves.c') | ForEach-Object { Join-Path $Src $_ }
+  'rlw_menu_demo.c', 'rlw_flc.c', 'rlw_saves.c', 'rlw_hotkeys.c', 'rlw_modern.c', 'rlw_keys_dialog.c') | ForEach-Object { Join-Path $Src $_ }
 # Win32 libraries of the host, then what the Rust std needs on windows-msvc
 # (rustc --print native-static-libs).
 $Libs = @('user32.lib', 'gdi32.lib', 'comdlg32.lib', 'shell32.lib', 'ole32.lib', 'uuid.lib', 'winmm.lib',

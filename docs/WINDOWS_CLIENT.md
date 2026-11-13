@@ -7,12 +7,14 @@
 > documento lista o que cada parte faz, onde está no código macOS, as chamadas da ABI em ordem e o que ainda é
 > específico do macOS. Nenhum dado do jogo pode ser incluído: tudo vem do CD original do jogador.
 
-> **Estado (2026-11-12).** O cliente Windows já existe em [`windows/`](../windows/README.md) (Win32 + GDI em C, motor
+> **Estado (2026-11-13).** O cliente Windows já existe em [`windows/`](../windows/README.md) (Win32 + GDI em C, motor
 > estático, um único `RisingLands.exe`): importa o CD, abre no menu principal original, joga a campanha, salva e
-> carrega no mesmo formato do macOS e tem a tela de Opções, com paridade quadro a quadro com o macOS. Compila com
-> mingw-w64 (x64) e com MSVC (x64 e ARM64). Faltam áudio e filmes (#4), os atalhos modernos e os caminhos melhores no
-> host (#7) e um teste num PC com Windows de verdade (#6), que fica com quem tem Windows. Os binários não são
-> assinados, e não há plano de assiná-los. Este guia continua valendo como mapa da camada de host.
+> carrega no mesmo formato do macOS e tem a tela de Opções, com paridade quadro a quadro com o macOS. Desde a #7 também
+> tem os caminhos melhores, os atalhos modernos (N duas vezes, Home, ponto, vírgula, H) e a janela de configurar
+> teclas, com os mesmos padrões do macOS (atalhos modernos ligados, caminhos melhores desligados). Compila com
+> mingw-w64 (x64) e com MSVC (x64 e ARM64). Faltam áudio e filmes (#4) e um teste num PC com Windows de verdade (#6),
+> que fica com quem tem Windows. Os binários não são assinados, e não há plano de assiná-los. Este guia continua
+> valendo como mapa da camada de host.
 
 This guide is for a contributor who wants to build a Windows host over the same engine. Each statement points to the
 macOS file that implements it. Items not checked against the code are marked **unverified**.
@@ -30,18 +32,60 @@ and the parity checks run on macOS. Testing on Windows is left to the community 
 | Window, 800x600 indexed presentation with palette, aspect-fit, fullscreen | `NativeLiveWindow.swift`, `NativeViewportPolicy.swift` | `rlw_main.c`: 8-bit DIB + `StretchDIBits`, black letterbox bars, borderless fullscreen (F11) — done |
 | Frame pacing, 1x = 30 frames/s, 0.5x/2x/4x, pause | `NativeGameSpeed.swift` (`NativeFramePacer`) | `rlw_main.c`: QPC deadline, debt above 0.25 s forgiven; P/Pause, +/− — done |
 | Mouse and keyboard (the 23 virtual keys, held drags, edge zones, F11 never delivered) | `NativeLiveWindow.swift`, `NativeHotkeyInputRouter.swift`, `macos_live_driver.c` | `rlw_main.c`, `rlw_driver.c` (same queue and click gesture) — done |
+| Key bindings and router: actions, aliases, optional modifiers, conflicts, digit double tap | `NativeHotkeyBindings.swift`, `NativeHotkeyInputRouter.swift` | `rlw_hotkeys.c` (portable C, `tests/test_hotkeys.c`) — done; with the default bindings the game gets exactly the keys it got before |
 | Mission start, renderer from the CD, per-frame phases | `macos_live_driver.c` | `rlw_driver.c` — done, per-tick frame hashes equal to the macOS driver's |
 | First-run CD import (BIN/CUE/ISO/folder, SHA-256) | `NativeCDImport.swift`, `NativePlayerImport.swift` | `rlw_cd.c` — done (no audio decoding yet) |
 | Original menus, briefing, pause, result, credits | `macos_campaign_shell.inc`, `NativeLiveWindow.swift` shell paths, `NativeFLC.swift` | `rlw_shell.inc`, `rlw_menu.c`, `rlw_flc.c` — done, menu walk equal to the macOS driver's |
 | Saves and loads: slots + `.view` companion, background write, stage autosave, the original save/load lists, "Partida" menu (F5/F9) | `macos_live_driver.c` (`snapshot_capture`, `macos_live_save*`, `macos_live_load`, `macos_live_autosave`), `macos_campaign_shell.inc`, `NativeLiveWindow.swift`, `main.swift` | `rlw_save.inc`, `rlw_saves.c`, `rlw_fs.c` (durable replace with `FlushFileBuffers`) — done, same files as macOS, saved files equal to the macOS driver's |
 | Sound effects, CD music, event pictures (FLC), movies (AVI) | `NativeAudio.swift`, `NativeCDMusic*.swift`, `NativeEventFLCPlayback.swift`, `NativeDefeatMovie.swift` | **open** (#4): in-game FLC events end at once; movies complete as unavailable |
-| "Opções" screen over the main and pause menus, settings kept between runs | `macos_options.inc`, `NativeLiveWindow.swift` | `rlw_options.inc`, `rlw_main.c` (`opcoes.ini` beside `Dados` and `Partidas`) — done; "Configurar teclas" is shown unavailable (no key dialog yet) |
+| "Opções" screen over the main and pause menus, settings kept between runs | `macos_options.inc`, `NativeLiveWindow.swift` | `rlw_options.inc`, `rlw_main.c` (`opcoes.ini` beside `Dados` and `Partidas`) — done, with the macOS defaults (section 0.1) |
+| Key window ("Configurar teclas"): one row per action, alternatives, capture field, defaults, apply/cancel | `NativeHotkeyPreferences.swift` | `rlw_keys_dialog.c` (plain Win32 controls), editor and `teclas.ini` format in `rlw_hotkeys.c` — done; opened from the Opções item and **Partida → Configurar teclas…** |
 | MSVC x64 and ARM64 builds | — | `build-msvc.ps1`, CI jobs `msvc-x64`, `msvc-arm64`, `arm64-run` — done (section 1) |
-| Modern shortcuts (N twice, Home, period/comma, H) | `NativeModernHotkeys.swift` | **open** (#7): no modern hotkey layer yet |
+| Modern shortcuts (N twice, Home, period/comma, H) | `NativeModernHotkeys.swift`, `NativeLiveWindow.swift` (`startModern`, `stepModern`), `macos_live_peek` | `rlw_modern.c` (portable C: read-only snapshot, planner, command job), `rlw_main.c`, `rlw_driver.c` (`rlw_driver_peek`) — done; they follow the "Atalhos modernos" item |
 | Shift+click order queue (`RL_REGRA_FILA_ORDENS`, rule bit 1) | `macos_live_default_rules`, `NativeModernHotkeys.swift` | done: "Atalhos modernos" in the Opções screen turns the rule on for worlds created afterwards |
-| Better unit paths (`RL_REGRA_CAMINHOS_MELHORES`, rule bit 0) | `macos_live_default_rules`, menu Jogo > Caminhos melhores | **open** (#7): the Opções item is stored in `opcoes.ini` but the host does not pass the rule yet |
+| Better unit paths (`RL_REGRA_CAMINHOS_MELHORES`, rule bit 0) | `macos_live_default_rules`, menu Jogo > Caminhos melhores | done: "Caminhos melhores" in the Opções screen turns the rule on for worlds created afterwards; `windows/parity.sh` checks `rl_regras` of the created world |
 | DPI awareness, a D3D11 presenter | — | open |
 | Code signing | — | not planned (section 6) |
+
+### 0.1 Opções defaults and rules
+
+When `opcoes.ini` lacks a key the Windows host uses the macOS app's defaults (`NativeModernHotkeys`, `NativeModernPaths`,
+`NativeDifficulty`, `NativeGameSpeed`): **Atalhos modernos on**, Caminhos melhores off, difficulty Normal, speed 1x.
+Before 2026-11-13 Atalhos modernos was off on Windows; a saved `atalhos=0` keeps it off. The two rule items work as on
+macOS (`NativeEngineRules.current()`): every world created afterwards (menu or stage) gets `regras` = bit 1
+(`RL_REGRA_FILA_ORDENS`) for Atalhos modernos | bit 0 (`RL_REGRA_CAMINHOS_MELHORES`) for Caminhos melhores, and a
+change also reaches the main-menu world before its load tail (`rl_regras_definir`). A running stage and a loaded save
+keep the rules they were made with. Smoke, demo and parity runs read no `opcoes.ini` and keep every option off.
+
+### 0.2 Modern shortcuts and the key window
+
+With Atalhos modernos on: the same digit twice within 0.35 s centres on that group (the original's Shift+N), **Home**
+goes to the last alert (the original's X), **.** / **,** select the next idle worker / soldier and **H** the sanctuary,
+cycling through each. Each becomes ordinary original input through the player's own path (`rlw_driver_event`),
+planned from a read-only snapshot taken between frames: a right press on the map first if something is selected, a
+minimap press to bring the target into view, then a left click, each stage checked on a fresh snapshot; the pointer
+then returns to the player's. A command waits for a held left button, lasts at most 300 frames and is dropped in
+menus, while paused or stopped. Off, the four keys are not handled and digits are ordinary taps.
+
+The key window edits a draft: Alterar replaces the selected alternative and Adicionar alternativa appends one, taking
+the next combination pressed in the capture field (Enter, Esc and Tab included). Every action still reaches the game
+only as one of the 23 whitelisted keys; a combination that overlaps another action's is refused, and so are the host's
+own keys (P, Pause, + and −, F5, F9, F11, Alt+F4) and modifier/lock/system keys. Aplicar writes `teclas.ini` beside
+`opcoes.ini` (temporary file + atomic replace) and only then installs the set. File format: `versao=1`, then
+`<action>=<vk>/<mods>/<optional> …` per action (mods 1 Shift, 2 Ctrl, 4 Alt; an empty value unbinds), with the
+macOS file's action names.
+
+### 0.3 Checks
+
+- `windows/build.sh test` (and `build-msvc.ps1 -Test`): portable unit tests, among them `windows/tests/test_hotkeys.c`
+  (bindings, router, the `teclas.ini` format, the editor, the snapshot over a synthetic memory map, planner and job).
+  CI runs them on `windows-latest` and natively on `windows-11-arm`.
+- `windows/parity.sh --cd …` on macOS with the player's CD: the Windows and macOS drivers give the same frames tick by
+  tick, the same menu walk and the same save files, with every option off; then "REGRAS DAS OPÇÕES": each
+  combination of the two items gives the created world exactly those `regras` (with Caminhos melhores on, `rl_regras`
+  has bit 0 after the stage start).
+- The key window and the modern shortcuts are built by CI but have not been tried interactively on a real Windows PC
+  (#6).
 
 The rest of this guide is the original contributor map, kept for anyone working on the open parts.
 

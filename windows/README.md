@@ -39,6 +39,9 @@
 | `src/rlw_driver.c/.h` | Engine orchestration: main-menu or mission start with the explicit EVENTS host, renderer from the CD, load tail, per-frame input phases (port of the macOS driver's production path) |
 | `src/rlw_shell.inc` | Original menus on the prepared shell: session over pause 16 / result 19 / main menu, backgrounds decoded from the CD, briefing VFS, "Novo jogo", restart, next stage, resume, credits (port of `macos_campaign_shell.inc` and the driver's campaign continuation) |
 | `src/rlw_options.inc` | The port's "Opções" screen over the main and pause menus (port of `macos_options.inc`): creation from the CD's TITRE.PIE, input before the shell, the button overlay |
+| `src/rlw_hotkeys.c/.h` | Keyboard bindings and the physical-key router, portable (port of `NativeHotkeyBindings.swift` and `NativeHotkeyInputRouter.swift`): actions, the 23-key whitelist, aliases, optional modifiers, conflicts, the digit double tap |
+| `src/rlw_keys_dialog.c/.h` | The "Atalhos de teclado" window (Win32, port of `NativeHotkeyPreferencesController`): one row per action, alternatives, capture field, defaults, apply/cancel |
+| `src/rlw_modern.c/.h` | "Atalhos modernos", portable (port of `NativeModernHotkeys.swift`): read-only snapshot, target planner, the command job that turns a shortcut into ordinary input across frames |
 | `src/rlw_menu.c/.h` | Menu input routing, portable: keys on release, coalesced moves, one page per click, request dispatch (port of `NativeLiveWindow.swift`'s shell paths) |
 | `src/rlw_menu_ops.c/.h` | The Windows driver behind that routing |
 | `src/rlw_menu_demo.c/.h` | The fixed scripted walk through the menus (smoke and parity) |
@@ -48,6 +51,7 @@
 | `src/rlw_demo.h` | The fixed synthetic input used by smoke and parity runs |
 | `tests/test_cd.c` | Portable unit tests: SHA-256 vectors and a synthetic ISO 9660 image as ISO, BIN MODE1 via CUE, BIN MODE2 and folder; import success, pinned-hash refusals, atomic replacement |
 | `tests/test_menu.c` | Portable unit tests: menu routing against a simulated driver, FLC decoding of a synthetic file |
+| `tests/test_hotkeys.c` | Portable unit tests: bindings, router (double tap, aliases, modern keys on/off), snapshot over a synthetic memory map, planner and job |
 | `tests/parity.c`, `parity.sh` | Driver parity: the Windows driver vs the macOS driver over the same engine, per-tick frame hashes and the scripted menu walk |
 | `tests/import_cli.c` | `rlw-import`, the same importer as a portable CLI |
 | `../.github/workflows/windows-client.yml` | GitHub Actions workflow: jobs `mingw-x64`, `msvc-x64`, `msvc-arm64` on `windows-latest` and `arm64-run` on `windows-11-arm`; each build uploads its `.exe` with a SHA-256 |
@@ -66,7 +70,7 @@ From macOS (Homebrew) or Linux:
 rustup target add x86_64-pc-windows-gnu
 brew install mingw-w64            # Debian/Ubuntu: apt install gcc-mingw-w64-x86-64
 windows/build.sh             # -> windows/build/RisingLands.exe
-windows/build.sh test        # also builds and runs tests/test_cd.c and tests/test_menu.c with the host compiler
+windows/build.sh test        # also builds and runs the portable tests (tests/test_*.c) with the host compiler
 ```
 
 On Windows, from Git Bash or MSYS2 with mingw-w64 `gcc` on `PATH`:
@@ -95,7 +99,7 @@ target (`x86_64-pc-windows-msvc` / `aarch64-pc-windows-msvc`), builds the engine
 and the host with `cl /std:c11 /utf-8 /MT` (the C sources carry PT-BR UTF-8 messages), links `rising_engine.lib` with
 the Win32 libraries and the Rust std's native set (`kernel32 ntdll userenv ws2_32 dbghelp`), and fails if
 `dumpbin /dependents` shows anything besides system DLLs (no vcruntime/UCRT redistributable). With `-Test` it builds
-the three portable test programs with `cl /W3 /WX` (C4244/C4267 off, the gcc build's `-Wall -Wextra` has no
+the four portable test programs with `cl /W3 /WX` (C4244/C4267 off, the gcc build's `-Wall -Wextra` has no
 `-Wconversion` either) and runs them when the target matches the machine. `-Out` changes the output folder.
 
 ### Code signing
@@ -123,7 +127,18 @@ RisingLands.exe [--cd CAMINHO] [--data PASTA] [--mission MONDE01.ETA] [--difficu
   15/30/60/120 frames/s), **F11** toggles fullscreen. Alt+F4 closes.
 - Game keys: exactly the macOS host's 23 virtual keys (13, 16, 17, 18, 27, 32, 37–40, 46, 88, 48–57, 9) with the
   original scan codes and `lParam` bits; every other key is dropped. Auto-repeat is ignored; left/right Shift,
-  Control and Alt map to the single VK 16/17/18 channels.
+  Control and Alt map to the single VK 16/17/18 channels. The other 20 channels go through the bindings
+  (`src/rlw_hotkeys.c`, the macOS app's actions and rules): by default each is its own key with optional modifiers,
+  so the game receives exactly what it did before the bindings existed.
+- "Atalhos modernos" (Opções; on by default, as on macOS), as on macOS (`NativeModernHotkeys.swift`): the same digit
+  twice within 0.35 s centres on that group (the original's Shift+N), **Home** the last alert (the original's X),
+  **.** the next idle worker, **,** the next idle soldier, **H** the sanctuary (cycling through each). Each becomes
+  ordinary original input through the player's own path, planned from a read-only snapshot (`rlw_driver_peek`)
+  between frames: a right press on the map first if something is selected, a minimap press to bring the target into
+  view, then a left click on it, each stage verified on a fresh snapshot; the pointer returns to the player's. A
+  command waits for a held left button, lasts at most 300 frames, is dropped in menus, while paused or stopped, and
+  lets the player's mouse only move the remembered pointer while it clicks. Exact chords: Shift/Control/Alt+Home
+  etc. stay free. With the item off nothing changes: the four keys are not handled and digits are ordinary taps.
 - Mouse: `0x200`–`0x205` in original pixels; a left press is held across frames until its release (drag selection,
   `MK_LBUTTON`), never released before the k/k+1/k+3 click gesture; right clicks keep the fixed gesture; Shift/Control
   become `MK_SHIFT`/`MK_CONTROL`. Clicks on the letterbox bars are ignored; moves and held drags clamp to the nearest
@@ -155,12 +170,38 @@ The port's "Opções" screen (not in the original; `engine/include/options-scree
 original menu material (TITRE.PIE, MENU.CMP, the menu fonts), the same screen as on macOS. An "OPÇÕES" caption on the
 wooden floor of the main and pause menus opens it; only a click that starts on it is taken, every other input reaches
 the original shell unchanged. Up/Down/Enter/Escape and Left/Right (only while it is open) or the mouse choose:
-"Atalhos modernos" (here: the Shift+click order queue rule, `RL_REGRA_FILA_ORDENS`, for worlds created afterwards;
-Windows has no modern hotkey layer yet), "Caminhos melhores" (stored; rule bit 0 belongs to the pathing front),
-difficulty (next stage start) and speed (at once, like `+`/`-`). "Configurar teclas" is shown unavailable: Windows has
-no key dialog yet. The settings live in `opcoes.ini` beside `Dados` and `Partidas` (`atalhos`, `caminhos`,
-`dificuldade`, `velocidade`); `--difficulty`/`--speed` override them for one run. Smoke and demo runs neither read
-nor show them, except the menu walk, which opens and closes the screen on both drivers.
+"Atalhos modernos" (the modern shortcuts below, and the Shift+click order queue rule, `RL_REGRA_FILA_ORDENS`, for
+worlds created afterwards), "Caminhos melhores" (the engine's modern unit paths,
+`RL_REGRA_CAMINHOS_MELHORES`, for worlds created afterwards), difficulty (next stage start) and speed (at once, like `+`/`-`). "Configurar teclas" opens the "Atalhos de teclado"
+window (below). The settings live in `opcoes.ini` beside `Dados` and `Partidas` (`atalhos`, `caminhos`,
+`dificuldade`, `velocidade`); `--difficulty`/`--speed` override them for one run. Defaults when a key is missing
+are the macOS app's: Atalhos modernos on, Caminhos melhores off, Normal, 1x (since 2026-11-12; before, Atalhos
+modernos was off on Windows). The two rule items work as on
+macOS (`NativeEngineRules.current()`): every world created afterwards (menu or stage) gets `regras` = bit 1 for
+"Atalhos modernos" | bit 0 for "Caminhos melhores", and a change also reaches the main-menu world before its load tail
+(`rl_regras_definir`); a running stage and a loaded save keep the rules they were made with. Smoke and demo runs neither read
+nor show them (every option stays off there), except the menu walk, which opens and closes the screen on both
+drivers. `parity.sh` ends with the rule check (`tests/parity.c rules`): for each combination of the two items the
+stage world after its first frame and the menu world have exactly the expected `regras` (`rl_regras`), the menu world
+takes a change before its load tail, and the default stays 0.
+
+### Atalhos de teclado
+
+"Configurar teclas" (Opções screen) or **Partida → Configurar teclas…** opens the port of the macOS app's key window
+(`NativeHotkeyPreferences.swift`): one row per action (Enter, Esc, Espaço, the four arrows, Delete, X, Tab, 0–9 and
+the four modern commands), each with its current shortcuts. Alterar replaces the selected alternative, Adicionar
+alternativa appends one: the next key combination pressed in the capture field is taken (Enter, Esc and Tab
+included; modifier keys alone are not a combination). Remover, Cancelar captura, Restaurar padrões, Cancelar and
+Aplicar work as on macOS, with its messages. Every action reaches the game only as one of the same 23 virtual keys
+(the 20 channels; Shift/Control/Alt stay independent channels), so no binding can send the game a key the original
+does not accept. A new combination is exact (no optional modifiers); a combination that overlaps another action's is
+refused and named; the host's own keys (P, Pause, + and −, F5, F9, F11, Alt+F4) and modifier/lock/system keys cannot
+be used. Changes are a draft until Aplicar, which writes `teclas.ini` beside `opcoes.ini` (temporary file + atomic
+replace) and only then installs the set; a failed save changes nothing. `teclas.ini`: `versao=1`, then
+`<action>=<vk>/<mods>/<optional> …` per action (mods: 1 Shift, 2 Ctrl, 4 Alt; an empty value unbinds), the action
+names of the macOS file; an action missing from the file takes its default unless that key is taken; an invalid file
+is reported on the console and the defaults stay. The game window is disabled while the key window is open. Key
+names come from the current keyboard layout for character keys. Smoke and demo runs neither read nor offer it.
 
 ### Saves
 
@@ -243,6 +284,4 @@ then resumes through `rl_shell_resume`; the save list slots are the exact origin
   `rl_evento_flc_terminar_v1` (the call the macOS host makes when its picture ends), so play continues without the picture.
 - Position names only for 1–5 in the "Partida" menu (6–10 through the original lists, unnamed), as on macOS.
 - A D3D11 presenter and DPI awareness (MSVC x64 and ARM64 builds are done).
-- A key dialog ("Configurar teclas" in the Opções screen) and the modern hotkey layer of macOS.
-- "Caminhos melhores" in the Opções screen is stored but not applied yet: the host does not pass
-  `RL_REGRA_CAMINHOS_MELHORES` (rule bit 0) to new worlds.
+- The Shift+click order queue markers macOS draws over the map (the rule itself is on with "Atalhos modernos").

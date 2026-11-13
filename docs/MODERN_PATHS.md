@@ -6,7 +6,7 @@
 > desistir. Combate, IA, velocidades e o teste de passagem não mudam: só as decisões de para onde ir, quando esperar e
 > quando parar. Desligada, o jogo é o original byte a byte. A regra vale a partir do início de uma fase; o save guarda as
 > regras da partida. No macOS: menu **Jogo → Caminhos melhores** ou o item CAMINHOS MELHORES da tela de Opções. No
-> Windows o item das Opções é guardado, mas o host ainda não passa a regra (#7).
+> Windows: o item CAMINHOS MELHORES da tela de Opções.
 
 ## What it is
 
@@ -59,8 +59,8 @@ campaign inherit them.
 
 - **macOS:** menu **Jogo → Caminhos melhores**, or the CAMINHOS MELHORES item of the Opções screen (both drive the same
   setting). It applies from the next stage start.
-- **Windows:** the Opções screen stores the item in `opcoes.ini`, but the host does not pass the rule to new worlds yet
-  (#7).
+- **Windows:** the CAMINHOS MELHORES item of the Opções screen (kept in `opcoes.ini`, off by default as on macOS). It
+  applies to worlds created afterwards; `windows/parity.sh` checks the rule in the created world.
 
 ## How it was checked
 

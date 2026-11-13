@@ -30,13 +30,14 @@ O que já funciona:
 - importação do CD (.BIN/.CUE, .ISO ou a pasta do CD);
 - os menus originais: "Um jogador", "Novo jogo", briefing e objetivos, pausa (continuar, objetivos, abandonar, reiniciar), tela de resultado e próxima fase, créditos e "Sair";
 - **saves**: as listas originais de salvar e carregar e o menu "Partida" (**F5** salva rápido, **F9** carrega rápido), com o autosave do início da fase. O formato é o mesmo do macOS: a pasta `Partidas` serve nos dois. Os saves entram a partir da pré-alfa 2;
-- a **tela de Opções** no estilo original, nos menus principal e de pausa: dificuldade, velocidade e a fila de ordens com Shift+clique (o item **Atalhos modernos**), guardadas entre uma partida e outra;
+- a **tela de Opções** no estilo original, nos menus principal e de pausa: dificuldade, velocidade, **Atalhos modernos** (os atalhos de tecla e a fila de ordens com Shift+clique) e **Caminhos melhores**, guardadas entre uma partida e outra, com os mesmos padrões do macOS (atalhos modernos ligados, caminhos melhores desligados; no código atual, entram na próxima pré-alfa do Windows);
+- os **atalhos modernos** do macOS: o mesmo número duas vezes centraliza o grupo, **Home** vai ao último alerta, **.** e **,** escolhem o próximo trabalhador ou militar ocioso e **H** seleciona o santuário (no código atual, entram na próxima pré-alfa do Windows);
+- a **janela de configurar teclas** (item "Configurar teclas" das Opções ou menu **Partida → Configurar teclas…**), com as mesmas regras do macOS: o jogo continua recebendo só as 23 teclas do original (no código atual, entra na próxima pré-alfa do Windows);
 - a campanha, com mouse e teclado iguais aos do macOS, rolagem pela borda, tela cheia (**F11**), pausa (**P**) e velocidades (**+** e **−**: 0,5x, 1x, 2x e 4x).
 - Paridade com o macOS: com a mesma entrada, o driver do Windows e o do macOS produzem os mesmos quadros, tick a tick, e o mesmo passeio pelos menus e os mesmos arquivos de save.
 
 O que ainda falta:
-- **áudio** (efeitos e música do CD), as figuras de evento (FLC) durante o jogo e os **filmes** ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4));
-- os atalhos de tecla modernos do macOS, a janela de configurar teclas e os caminhos melhores: o item **Caminhos melhores** das Opções é guardado, mas ainda não vale no jogo ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)).
+- **áudio** (efeitos e música do CD), as figuras de evento (FLC) durante o jogo e os **filmes** ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)).
 
 Importante: a paridade foi verificada no macOS, compilando o driver do Windows contra o mesmo motor. No Windows de verdade, o CI testa só a compilação, os testes unitários, o autoteste do motor e a recusa de um arquivo que não é o CD. **Ainda ninguém jogou essa build num PC com Windows.** Quem tiver Windows e o CD pode ajudar muito: conte na [#6](https://github.com/marciobarbato/rising-lands-public/issues/6) o que funcionou e o que não funcionou, ou abra uma issue pelo modelo **Problema no jogo** e diga que é o Windows.
 
@@ -50,7 +51,7 @@ A imagem do CD original brasileiro pode ser encontrada no **Internet Archive**. 
 - Ninguém terminou a campanha inteira ainda. É aí que os testes de vocês ajudam.
 - Se o jogo chegar a um trecho ainda não portado, ele não trava em silêncio: mostra um **painel de parada** com o endereço da rotina do original. Esse texto é o que mais ajuda num relato.
 - macOS: alfa `v0.1.0-alpha.2`. O código já tem novidades que entram na próxima versão: o relógio do mosteiro com o painel lateral escondido, o balão saindo do hangar, os atalhos modernos e a fila de ordens com Shift+clique, a **tela de Opções** e os **caminhos melhores** (veja "Controles").
-- Windows: pré-alfa, em andamento; jogo, menus, saves e tela de Opções feitos, com builds x64 e ARM64 (veja "Windows (pré-alfa)").
+- Windows: pré-alfa, em andamento; jogo, menus, saves, tela de Opções, atalhos modernos, configurar teclas e caminhos melhores feitos, com builds x64 e ARM64 (veja "Windows (pré-alfa)").
 - Só a versão brasileira do jogo, em português, é suportada.
 
 ## Controles
@@ -116,12 +117,12 @@ Os testes que precisam dos arquivos originais do jogo pulam quando eles não est
 
 ## Frentes de trabalho
 
-O que está sendo feito, o estado de cada frente e onde alguém de fora pode ajudar: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Feitos desde as últimas versões publicadas: os saves e a tela de Opções no Windows, os builds MSVC x64 e ARM64, a tela de Opções e os caminhos melhores no macOS. As frentes abertas têm uma issue: o cliente Windows ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)), áudio e filmes no Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)), teste num PC com Windows ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), Opções, atalhos modernos e caminhos melhores no host Windows ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)), outros CDs e idiomas ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) e testes em jogo ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Antes de começar algo grande, comente na issue da frente.
+O que está sendo feito, o estado de cada frente e onde alguém de fora pode ajudar: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Feitos desde as últimas versões publicadas: os saves, a tela de Opções, os atalhos modernos, a janela de configurar teclas e os caminhos melhores no Windows, os builds MSVC x64 e ARM64, a tela de Opções e os caminhos melhores no macOS. As frentes abertas têm uma issue: o cliente Windows ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)), áudio e filmes no Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)), teste num PC com Windows ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), outros CDs e idiomas ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) e testes em jogo ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Antes de começar algo grande, comente na issue da frente.
 
 ## Ajuda bem-vinda
 
 - **Testar o Windows num PC de verdade:** ninguém jogou a pré-alfa num PC com Windows ainda, e o autor não vai testar no Windows ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)).
-- **Host Windows:** os atalhos de tecla modernos, a janela de configurar teclas e ligar os caminhos melhores, que hoje só existem no macOS ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)). Para áudio, música e filmes ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) já há uma contribuição externa em discussão: combine na issue antes. O guia [docs/WINDOWS_CLIENT.md](docs/WINDOWS_CLIENT.md) mostra onde cada parte fica no código do macOS.
+- **Host Windows:** áudio, música do CD e filmes ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)); já há uma contribuição externa em discussão: combine na issue antes. O guia [docs/WINDOWS_CLIENT.md](docs/WINDOWS_CLIENT.md) mostra onde cada parte fica no código do macOS.
 - **Testes em jogo:** a magia ESPELHO, o druida e o mosteiro de fusão, e a campanha completa ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)).
 - **Outros idiomas:** hoje só o CD brasileiro funciona. Se você tem outro CD original (inglês, francês...), conte qual na [#8](https://github.com/marciobarbato/rising-lands-public/issues/8). Nada traduzido do jogo pode ir ao repositório.
 

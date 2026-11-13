@@ -10,10 +10,10 @@ Estado em 2026-11-12. / State on 2026-11-12.
 | Windows: builds MSVC x64 e ARM64 / MSVC x64 and ARM64 builds | Feito; sem assinatura de código, por decisão / Done; no code signing, by decision | — | — |
 | Windows: teste num PC de verdade / test on a real PC | Fica com a comunidade / Left to the community | [#6](https://github.com/marciobarbato/rising-lands-public/issues/6) | **Bem-vinda / Welcome** |
 | Windows: áudio, música do CD, FLC, filmes / audio, CD music, FLC, movies | Aberto; contribuição externa em discussão / Open; outside contribution under discussion | [#4](https://github.com/marciobarbato/rising-lands-public/issues/4) | Combinar na issue antes / Agree on the issue first |
-| Host Windows: atalhos modernos, configurar teclas, caminhos melhores / Windows host: modern shortcuts, key setup, better paths | Aberto / Open | [#7](https://github.com/marciobarbato/rising-lands-public/issues/7) | **Bem-vinda / Welcome** |
-| Atalhos modernos e fila de ordens (macOS) / Modern shortcuts and order queue (macOS) | Feito / Done | — | — |
+| Host Windows: atalhos modernos, configurar teclas, caminhos melhores / Windows host: modern shortcuts, key setup, better paths | Feito; entra na próxima pré-alfa / Done; in the next pre-alpha | [#7](https://github.com/marciobarbato/rising-lands-public/issues/7) (fechada / closed) | — |
+| Atalhos modernos e fila de ordens / Modern shortcuts and order queue | Feito (macOS e Windows) / Done (macOS and Windows) | — | — |
 | Tela de Opções no estilo original / Options screen in the original style | Feito (macOS e Windows) / Done (macOS and Windows) | — | — |
-| Caminhos melhores (opcional) / Better unit paths (opt-in) | Feito no motor e no macOS / Done in the engine and on macOS | [#7](https://github.com/marciobarbato/rising-lands-public/issues/7) (Windows) | No Windows / On Windows |
+| Caminhos melhores (opcional) / Better unit paths (opt-in) | Feito no motor, no macOS e no Windows / Done in the engine, on macOS and on Windows | — | — |
 | Outros CDs e idiomas / Other CDs and languages | Pesquisa / Research | [#8](https://github.com/marciobarbato/rising-lands-public/issues/8) | **Bem-vinda, de quem tem outras versões / Welcome, from owners of other versions** |
 | Testes em jogo / In-game checks | Aberto / Open | [#9](https://github.com/marciobarbato/rising-lands-public/issues/9) | **Bem-vinda, de testadores / Welcome, from testers** |
 
@@ -46,19 +46,18 @@ macOS.
   [Releases](https://github.com/marciobarbato/rising-lands-public/releases) e conte na issue o que funcionou.
 - **Áudio, música do CD, figuras de evento (FLC) e filmes ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)):**
   há uma contribuição externa em discussão. Combine na issue antes de começar.
-- **O que falta no host ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)):** os atalhos de tecla
-  modernos do macOS, a janela de configurar teclas e ligar os caminhos melhores. A tela de Opções já guarda o item
-  **Caminhos melhores** em `opcoes.ini`, mas o host ainda não passa a regra (bit 0 de `regras`) para os mundos novos. A
-  fila de ordens com Shift+clique já funciona pelo item **Atalhos modernos**.
+- **Atalhos modernos, configurar teclas e caminhos melhores no host
+  ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), fechada):** feitos no código atual, com os
+  mesmos padrões do macOS; entram na próxima pré-alfa. Detalhes em [`WINDOWS_CLIENT.md`](WINDOWS_CLIENT.md).
 
 ### Atalhos modernos (estilo Age of Empires II)
 
 Feito no macOS: N duas vezes centraliza no grupo, Home vai ao último alerta, ponto e vírgula escolhem o próximo
 trabalhador ou militar ocioso, H seleciona o Santuário, e a **fila de ordens com Shift+clique** (pontos de passagem
 marcados com bandeirinhas). Cada atalho vira uma entrada que o original já aceita; a fila é uma regra opcional do motor
-(`RL_REGRA_FILA_ORDENS`), desligada no jogo original. No Windows falta a camada de teclas
-([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)); a referência é
-`macos/src/NativeModernHotkeys.swift`.
+(`RL_REGRA_FILA_ORDENS`), desligada no jogo original. No Windows os mesmos atalhos e a janela de configurar teclas
+estão no código atual (`windows/src/rlw_modern.c`, `rlw_hotkeys.c`, `rlw_keys_dialog.c`); faltam lá as bandeirinhas da
+fila sobre o mapa.
 
 ### Tela de Opções no estilo original
 
@@ -71,8 +70,8 @@ velocidade e configurar teclas. O jogo original não tem essa tela; sem ela, o s
 
 Feito no motor e no macOS (menu **Jogo → Caminhos melhores** ou o item das Opções). As unidades planejam o caminho
 inteiro antes de andar, um grupo espalha os destinos e uma unidade bloqueada espera e recalcula em vez de desistir.
-Desligada, o jogo é o original byte a byte. Detalhes em [`MODERN_PATHS.md`](MODERN_PATHS.md). No Windows falta ligar a
-regra ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)).
+Desligada, o jogo é o original byte a byte. Detalhes em [`MODERN_PATHS.md`](MODERN_PATHS.md). No Windows, pelo item
+das Opções (no código atual).
 
 ### Outros CDs e idiomas
 
@@ -112,19 +111,18 @@ The client is in [`windows/`](../windows/README.md): Win32 + GDI in C, with the 
   [Releases](https://github.com/marciobarbato/rising-lands-public/releases) and say on the issue what worked.
 - **Audio, CD music, event pictures (FLC) and movies ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)):**
   an outside contribution is under discussion. Agree on the issue before starting.
-- **What the host still lacks ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)):** the macOS modern
-  key shortcuts, the key dialog, and turning on better unit paths. The Options screen already stores **Caminhos
-  melhores** in `opcoes.ini`, but the host does not pass the rule (bit 0 of `regras`) to new worlds yet. The Shift+click
-  order queue already works through the **Atalhos modernos** item.
+- **Modern shortcuts, key dialog and better paths in the host
+  ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), closed):** done in the current source, with the
+  macOS defaults; they come with the next pre-alpha. Details in [`WINDOWS_CLIENT.md`](WINDOWS_CLIENT.md).
 
 ### Modern shortcuts (Age of Empires II style)
 
 Done on macOS: N twice centres on the group, Home goes to the last alert, period and comma pick the next idle worker or
 military unit, H selects the Sanctuary, and the **Shift+click order queue** (waypoints marked with small flags). Each
 shortcut becomes input the original already accepts; the queue is an optional engine rule (`RL_REGRA_FILA_ORDENS`),
-off in the original game. Windows still lacks the key layer
-([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)); the reference is
-`macos/src/NativeModernHotkeys.swift`.
+off in the original game. On Windows the same shortcuts and the key dialog are in the current source
+(`windows/src/rlw_modern.c`, `rlw_hotkeys.c`, `rlw_keys_dialog.c`); the queue's flags over the map are still missing
+there.
 
 ### Options screen in the original style
 
@@ -137,8 +135,8 @@ Contract: [`engine/include/options-screen.md`](../engine/include/options-screen.
 
 Done in the engine and on macOS (menu **Jogo → Caminhos melhores** or the Options item). Units plan the whole path
 before walking, a group spreads its goals, and a blocked unit waits and replans instead of giving up. Off, the game is
-the original byte for byte. Details in [`MODERN_PATHS.md`](MODERN_PATHS.md). Windows still has to turn the rule on
-([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)).
+the original byte for byte. Details in [`MODERN_PATHS.md`](MODERN_PATHS.md). On Windows, through the Options item (in
+the current source).
 
 ### Other CDs and languages
 

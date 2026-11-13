@@ -52,6 +52,8 @@ struct RlwDriver {
  /* Saves (rlw_save.inc): the presentation and pointer captured with the stage's
   * first draw (its autosave companion) and the last serialisation size. */
  uint8_t *stage_presentation; int32_t stage_cursor_x, stage_cursor_y; uint32_t save_capacity;
+ /* "Atalhos modernos" read-only snapshot buffer (rlw_driver_peek), play only. */
+ uint8_t *peek; uint32_t peek_capacity;
 };
 
 static uint8_t *file(const char *root, const char *name, uint32_t *length) {
@@ -190,6 +192,10 @@ static int capture_presentation(RlwDriver *d, uint8_t *out) {
 static uint32_t default_rules;
 void rlw_driver_default_rules(uint32_t rules) { default_rules = rules; }
 int rlw_driver_set_rules(RlwDriver *d, uint32_t rules) { return d && d->world ? rl_regras_definir(d->world, rules) : RL_INVALID_ARGUMENT; }
+uint32_t rlw_options_rules(unsigned atalhos, unsigned caminhos) {
+ return (atalhos ? (uint32_t)RL_REGRA_FILA_ORDENS : 0u) | (caminhos ? (uint32_t)RL_REGRA_CAMINHOS_MELHORES : 0u);
+}
+uint32_t rlw_driver_rules(const RlwDriver *d) { uint32_t rules = 0; return d && d->world && !rl_regras(d->world, &rules) ? rules : 0; }
 int rlw_driver_set_difficulty(RlwDriver *d, uint32_t difficulty) {
  if (!d || difficulty > 2) return RL_INVALID_ARGUMENT; d->difficulty = difficulty; return 0;
 }
@@ -278,7 +284,7 @@ void rlw_driver_free(RlwDriver *d) {
  if (d->shell) rl_shell_free(d->shell);
  if (d->renderer) rl_render_liberar(d->renderer);
  if (d->world) rl_liberar_mundo(d->world);
- free(d->root); free(d->events_directory); free(d->events_bytes); free(d->pause_presentation); free(d->stage_presentation); free(d);
+ free(d->root); free(d->events_directory); free(d->events_bytes); free(d->pause_presentation); free(d->stage_presentation); free(d->peek); free(d);
 }
 
 static int check_render(RlwDriver *d, const RlRenderResult *out, uint64_t generation) {
@@ -471,3 +477,26 @@ const uint8_t *rlw_driver_palette(const RlwDriver *d) { return d ? d->palette : 
 #include "rlw_save.inc"
 #include "rlw_shell.inc"
 #include "rlw_options.inc"
+
+/* macos_live_peek(): "Atalhos modernos" read-only snapshot in play. One complete
+ * projection, then each (address, size) range is copied to out, concatenated in
+ * request order. It never writes the world, its RNG/permutation cursors, input
+ * queue or clock; the host calls it between frames. 1: bad call/shell/stopped;
+ * 3: a range is outside every projected block; else the ABI code. */
+int rlw_driver_peek(RlwDriver *d, const uint32_t *addresses, const uint32_t *sizes, uint32_t count, uint8_t *out) {
+ if (!d || !addresses || !sizes || !out || !count || d->shell || d->status.stopped || !d->world) return 1;
+ uint32_t n = 0; int c = rl_projetar_tudo(d->world, NULL, 0, &n); if (c != RL_BUFFER_TOO_SMALL) return c ? c : 3;
+ if (n > d->peek_capacity) { uint8_t *grown = realloc(d->peek, n); if (!grown) return 1; d->peek = grown; d->peek_capacity = n; }
+ c = rl_projetar_tudo(d->world, d->peek, d->peek_capacity, &n); if (c) return c;
+ uint64_t written = 0;
+ for (uint32_t r = 0; r < count; r++) {
+  uint32_t address = addresses[r], size = sizes[r], off = 4, found = 0; if (!size) return 1;
+  for (uint32_t i = 0; n >= 4 && i < le32(d->peek) && off + 8 <= n; i++) {
+   uint32_t base = le32(d->peek + off), len = le32(d->peek + off + 4); off += 8; if ((uint64_t)off + len > n) return 3;
+   if (address >= base && (uint64_t)address + size <= (uint64_t)base + len) { memcpy(out + written, d->peek + off + address - base, size); found = 1; break; }
+   off += len;
+  }
+  if (!found) return 3; written += size;
+ }
+ return 0;
+}

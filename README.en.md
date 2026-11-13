@@ -30,13 +30,14 @@ What works:
 - CD import (.BIN/.CUE, .ISO or the CD folder);
 - the original menus: "Um jogador", "Novo jogo", briefing and objectives, pause (resume, objectives, abandon, restart), the result screen and next stage, credits and "Sair";
 - **saves**: the original save and load lists and a "Partida" menu (**F5** quick save, **F9** quick load), with the stage-start autosave. The format is the macOS one: the `Partidas` folder works on both. Saves are in pre-alpha 2 and later;
-- the **Options screen** in the original style, on the main and pause menus: difficulty, speed and the Shift+click order queue (the **Atalhos modernos** item), kept between games;
+- the **Options screen** in the original style, on the main and pause menus: difficulty, speed, **Atalhos modernos** (the key shortcuts and the Shift+click order queue) and **Caminhos melhores** (better unit paths), kept between games, with the macOS defaults (modern shortcuts on, better paths off; in the current source, coming in the next Windows pre-alpha);
+- the macOS **modern shortcuts**: the same digit twice centres on that group, **Home** goes to the last alert, **.** and **,** pick the next idle worker or soldier, **H** selects the sanctuary (in the current source, coming in the next Windows pre-alpha);
+- the **key dialog** (the Options screen's "Configurar teclas" item or **Partida → Configurar teclas…**), with the macOS rules: the game still receives only the original's 23 keys (in the current source, coming in the next Windows pre-alpha);
 - the campaign, with the macOS host's mouse and keyboard, edge scrolling, fullscreen (**F11**), pause (**P**) and speeds (**+** and **−**: 0.5x, 1x, 2x and 4x).
 - Parity with macOS: with the same input, the Windows driver and the macOS driver produce the same frames, tick by tick, the same menu walk and the same save files.
 
 Still missing:
 - **audio** (sound effects and CD music), in-game event pictures (FLC) and **movies** ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4));
-- the macOS modern key shortcuts, the key dialog and better unit paths: the Options screen stores **Caminhos melhores**, but it does not take effect in the game yet ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)).
 
 Note: parity was checked on macOS, by building the Windows driver against the same engine. On real Windows, CI only checks the build, the unit tests, the engine self-test and the refusal of a file that is not the CD. **Nobody has played this build on a Windows PC yet.** If you have Windows and the CD, you can help a lot: say on [#6](https://github.com/marciobarbato/rising-lands-public/issues/6) what worked and what did not, or open an issue with the **Problema no jogo / Game problem** template and say it is Windows.
 
@@ -50,7 +51,7 @@ The original Brazilian CD image can be found on the **Internet Archive**. Downlo
 - Nobody has finished the whole campaign yet. That is where your testing helps.
 - If the game reaches something not ported yet, it does not freeze silently: it shows a **stop panel** with the original routine's address. That text is the most useful part of a report.
 - macOS: alpha `v0.1.0-alpha.2`. The source already has new work for the next release: the monastery clock with the side panel hidden, the balloon leaving the hangar, the modern shortcuts and the Shift+click order queue, the **Options screen** and **better unit paths** (see "Controls").
-- Windows: pre-alpha, in progress; game, menus, saves and the Options screen done, with x64 and ARM64 builds (see "Windows (pre-alpha)").
+- Windows: pre-alpha, in progress; game, menus, saves, the Options screen, modern shortcuts, the key dialog and better unit paths done, with x64 and ARM64 builds (see "Windows (pre-alpha)").
 - Only the Brazilian Portuguese release of the game is supported.
 
 ## Controls
@@ -116,12 +117,12 @@ Tests that need the original game files are skipped when the files are absent. W
 
 ## Work fronts
 
-What is being worked on, the state of each front and where outside help fits: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Done since the last published releases: saves and the Options screen on Windows, the MSVC x64 and ARM64 builds, the Options screen and better unit paths on macOS. The open fronts each have an issue: the Windows client ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)), audio and movies on Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)), testing on a Windows PC ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), Options, modern shortcuts and better paths in the Windows host ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)), other CDs and languages ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) and in-game checks ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Before starting anything large, comment on the front's issue.
+What is being worked on, the state of each front and where outside help fits: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Done since the last published releases: saves, the Options screen, modern shortcuts, the key dialog and better unit paths on Windows, the MSVC x64 and ARM64 builds, the Options screen and better unit paths on macOS. The open fronts each have an issue: the Windows client ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)), audio and movies on Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)), testing on a Windows PC ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), other CDs and languages ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) and in-game checks ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Before starting anything large, comment on the front's issue.
 
 ## Help wanted
 
 - **Test Windows on a real PC:** nobody has played the pre-alpha on a Windows PC yet, and the author will not test on Windows ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)).
-- **Windows host:** the modern key shortcuts, the key dialog and turning on better unit paths, which today exist only on macOS ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7)). For audio, music and movies ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) an outside contribution is already under discussion: agree on the issue first. [docs/WINDOWS_CLIENT.md](docs/WINDOWS_CLIENT.md) maps each part to the macOS code.
+- **Windows host:** audio, CD music and movies ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)); an outside contribution is already under discussion: agree on the issue first. [docs/WINDOWS_CLIENT.md](docs/WINDOWS_CLIENT.md) maps each part to the macOS code.
 - **In-game checks:** the ESPELHO spell, the druid and the fusion monastery, and the full campaign ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)).
 - **Other languages:** only the Brazilian CD works today. If you own another original CD (English, French...), say which on [#8](https://github.com/marciobarbato/rising-lands-public/issues/8). No translated game text may go into the repository.
 

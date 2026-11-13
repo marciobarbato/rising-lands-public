@@ -26,8 +26,11 @@
 #include "rlw_demo.h"
 #include "rlw_driver.h"
 #include "rlw_fs.h"
+#include "rlw_hotkeys.h"
+#include "rlw_keys_dialog.h"
 #include "rlw_menu.h"
 #include "rlw_menu_ops.h"
+#include "rlw_modern.h"
 #include "rlw_saves.h"
 #include "rlw_sha256.h"
 #include "rising_engine.h"
@@ -58,6 +61,14 @@ static struct {
  /* The port's "Opções" screen: settings kept in <user data>/opcoes.ini (players'
   * runs only; "" in smoke/demo runs, which keep the original defaults). */
  char options_path[4200]; unsigned atalhos, caminhos;
+ /* Keyboard bindings and "Atalhos modernos" (rlw_hotkeys.h, rlw_modern.h): the
+  * router, the running command (between frames, on the driver it started on),
+  * the player's pointer, a command waiting for the left button's release. */
+ RlwRouter router; RlwModernJob job; RlwPlanner planner; RlwDriver *job_driver; int job_active;
+ double synthetic_until; int32_t pointer_x, pointer_y; int pending_modern; uint32_t pending_digit;
+ RlwSnapshot snapshot;
+ /* Bindings file beside opcoes.ini (players' runs only). */
+ char keys_path[4200];
 } G = {0};
 
 /* ---------- utilities ---------- */
@@ -201,19 +212,28 @@ static void synchronize_modifiers(void) {
  }
 }
 
+static int synthetic_active(void);
+static void start_modern(int command, uint32_t digit);
 static void mouse(uint32_t msg, LPARAM lp, int held, int hover) {
  int32_t x, y;
  if (!original_pixel(GET_X_LPARAM(lp), GET_Y_LPARAM(lp), held || hover, &x, &y)) return;
+ G.pointer_x = x; G.pointer_y = y;
+ /* While a synthetic mouse command runs, the player's mouse only moves the
+  * remembered pointer, so no player event interleaves with it. */
+ if (synthetic_active()) return;
  synchronize_modifiers();
  if (msg == 0x201 || msg == 0x203) G.left_held = 1; else if (msg == 0x202) G.left_held = 0;
  G.last_x = x; G.last_y = y;
  send_event(1, msg, x, y, mouse_wparam(), 0, 0);
+ /* A modern command waits for the player's held button to be released. */
+ if (msg == 0x202 && G.pending_modern) { int command = G.pending_modern; G.pending_modern = 0; start_modern(command, G.pending_digit); }
 }
 
 /* Focus loss: release a held press at its last pixel, release every held key,
  * and pull a pointer resting in an edge-scroll zone 2 px inward. */
 static void release_all(void) {
  if (!G.driver) return;
+ rlw_router_reset(&G.router); G.pending_modern = 0;
  if (G.left_held) { G.left_held = 0; send_event(1, 0x202, G.last_x, G.last_y, 0, 0, 0); }
  for (uint32_t vk = 0; vk < 256; vk++) if (rlw_driver_key_held(G.driver, vk)) send_event(2, 0, 0, 0, 0, vk, 0);
  int32_t x = G.last_x < 2 ? 2 : G.last_x > 797 ? 797 : G.last_x, y = G.last_y < 2 ? 2 : G.last_y > 597 ? 597 : G.last_y;
@@ -221,10 +241,65 @@ static void release_all(void) {
  if (GetCapture() == G.hwnd) ReleaseCapture();
 }
 
-static int accepted_vk(uint32_t vk) {
- static const uint32_t keys[] = {13, 16, 17, 18, 27, 32, 37, 38, 39, 40, 46, 88, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 9};
- for (unsigned i = 0; i < 23; i++) if (keys[i] == vk) return 1;
+static int accepted_vk(uint32_t vk) { return rlw_accepted_vk(vk); }
+static uint32_t held_modifiers(void) {
+ return ((GetKeyState(VK_SHIFT) & 0x8000) ? RLW_MOD_SHIFT : 0u) | ((GetKeyState(VK_CONTROL) & 0x8000) ? RLW_MOD_CONTROL : 0u) |
+        ((GetKeyState(VK_MENU) & 0x8000) ? RLW_MOD_ALT : 0u);
+}
+/* The router's game channel: no duplicate down, no up without down. */
+static void router_emit(void *ctx, uint32_t vk, int down) {
+ (void)ctx; if (!G.driver || down == rlw_driver_key_held(G.driver, vk)) return;
+ send_event(2, 0, 0, 0, 0, vk, (uint32_t)down);
+}
+static void router_modern(void *ctx, int command, uint32_t digit) { (void)ctx; start_modern(command, digit); }
+
+/* ---------- "Atalhos modernos" (NativeLiveWindow's startModern/stepModern) ---------- */
+
+/* Ignored in menus/briefing/pause (shell), while paused or stopped. */
+static int modern_allowed(void) {
+ if (!G.driver || G.menu_failed || G.paused || rlw_shell_mode(G.driver) != 0) return 0;
+ RlwStatus s; rlw_driver_status(G.driver, &s); return !s.stopped;
+}
+static int synthetic_active(void) { return G.job_active && rlw_job_uses_mouse(&G.job) && now_seconds() < G.synthetic_until; }
+static int modern_peek(void *ctx, const uint32_t *a, const uint32_t *sz, uint32_t n, uint8_t *out) { (void)ctx; return rlw_driver_peek(G.driver, a, sz, n, out); }
+static const RlwSnapshot *modern_snapshot(void *ctx) { (void)ctx; return rlw_snapshot_read(modern_peek, NULL, &G.snapshot) ? NULL : &G.snapshot; }
+/* The player's own input path (rlw_driver_event) for synthetic input. */
+static int modern_deliver(void *ctx, const RlwStep *step) {
+ (void)ctx; if (!modern_allowed()) return 1;
+ int c = step->type == RLW_STEP_KEY ? rlw_driver_event(G.driver, 2, 0, 0, 0, 0, step->code, step->down)
+                                    : rlw_driver_event(G.driver, 1, step->code, step->x, step->y, 0, 0, 0);
+ if (c) { report_stop(); return 1; }
  return 0;
+}
+static uint32_t modern_pending(void *ctx) { (void)ctx; return rlw_driver_pending_input(G.driver); }
+static uint64_t modern_frames(void *ctx) { (void)ctx; RlwStatus s; rlw_driver_status(G.driver, &s); return s.frames; }
+static void modern_pointer(void *ctx, int *x, int *y) { (void)ctx; *x = G.pointer_x; *y = G.pointer_y; }
+static const RlwModernHost MODERN_HOST = {NULL, modern_deliver, modern_pending, modern_frames, modern_snapshot, modern_pointer};
+
+/* After every advance: the next stage of the running command. Menus, a stop, a
+ * pause or a replaced driver end it; nothing more is delivered. */
+static void step_modern(void) {
+ if (!G.job_active) return;
+ if (G.job_driver != G.driver) { G.job_active = 0; return; }
+ int allowed = modern_allowed();
+ if (allowed) rlw_job_pump(&G.job, &MODERN_HOST);
+ if (allowed && G.job.state == RLW_JOB_RUNNING) return;
+ G.job_active = 0;
+}
+static void start_modern(int command, uint32_t digit) {
+ if (G.left_held) { G.pending_modern = command; G.pending_digit = digit; return; }
+ if (G.job_active || !modern_allowed()) return;
+ RlwStep steps[5]; int n = 0;
+ if (command == RLW_MODERN_CENTER_GROUP) n = rlw_modern_center_group(digit, steps);
+ else if (command == RLW_MODERN_LAST_ALERT) n = rlw_modern_last_alert(steps);
+ if (n) rlw_job_steps(&G.job, steps, n);
+ else {
+  RlwTarget target; const RlwSnapshot *s = modern_snapshot(NULL);
+  if (!s || !rlw_planner_choose(&G.planner, command, s, &target)) return;
+  rlw_job_target(&G.job, target); G.synthetic_until = now_seconds() + 3;
+ }
+ G.job_active = 1; G.job_driver = G.driver;
+ step_modern();
 }
 
 /* ---------- "Opções" settings (opcoes.ini beside Dados and Partidas) ---------- */
@@ -234,7 +309,7 @@ static void options_store(void) {
                                   G.atalhos, G.caminhos, G.opt.difficulty, G.speed);
  if (n > 0) (void)rlw_durable_write(G.options_path, (const uint8_t *)text, (size_t)n, NULL, 0);
 }
-/* Missing file or keys keep the defaults (original rules, Normal, 1x). */
+/* Missing file or keys keep the defaults (set by the caller: the macOS app's). */
 static void options_load(void) {
  FILE *f = G.options_path[0] ? rlw_fopen(G.options_path, "rb") : NULL; if (!f) return;
  char line[96];
@@ -247,19 +322,53 @@ static void options_load(void) {
  }
  fclose(f);
 }
-static uint32_t options_rules(void) { return G.atalhos ? RL_REGRA_FILA_ORDENS : 0; }
+/* NativeEngineRules.current(): "Atalhos modernos" = the Shift+click order queue
+ * (bit 1), "Caminhos melhores" = modern unit paths (bit 0). Smoke/demo runs keep
+ * both off (no opcoes.ini), so the original rules stay byte for byte. */
+static uint32_t options_rules(void) { return rlw_options_rules(G.atalhos, G.caminhos); }
+static void apply_rules(void) { rlw_driver_default_rules(options_rules()); (void)rlw_driver_set_rules(G.driver, options_rules()); }
+
+/* ---------- key bindings (teclas.ini) and the "Atalhos de teclado" window ---------- */
+/* loadHotkeys(): a missing file keeps the defaults; an invalid one too (reported). */
+static void keys_load(void) {
+ if (!G.keys_path[0] || !rlw_exists(G.keys_path)) return;
+ uint32_t n = 0; uint8_t *text = rlw_read_file(G.keys_path, &n, 65536);
+ RlwBindings b; RlwBindError e = {RLW_BIND_INVALID_FILE, -1, -1};
+ if (text && !rlw_bindings_parse((const char *)text, n, &b, &e)) rlw_router_install(&G.router, &b);
+ else { char why[512]; rlw_bind_error_message(&e, why, sizeof(why)); attach_console(); fprintf(stderr, "teclas.ini: %s\n", why); }
+ free(text);
+}
+/* prepareInstallation + save: written first; only a saved set is installed. */
+static int keys_commit(void *ctx, const RlwBindings *candidate) {
+ (void)ctx; char text[4096]; rlw_bindings_format(candidate, text, sizeof(text));
+ if (rlw_durable_write(G.keys_path, (const uint8_t *)text, strlen(text), NULL, 0)) return 1;
+ release_all(); rlw_router_install(&G.router, candidate);
+ return 0;
+}
+static void keys_closed(void *ctx) { (void)ctx; G.deadline = now_seconds(); SetFocus(G.hwnd); }
+static void show_keys(void) {
+ if (!G.keys_path[0] || !G.hwnd) return;
+ RlwKeysDialogHost host = {NULL, keys_commit, keys_closed};
+ if (rlw_keys_dialog_open(G.hwnd, &G.router.bindings, &host)) message_box("Não foi possível abrir a janela de atalhos.", "Rising Lands", MB_ICONWARNING | MB_OK);
+}
 
 static void set_speed(unsigned speed) { G.speed = speed > 3 ? 3 : speed; G.deadline = now_seconds(); update_title(); options_store(); }
 static void command(unsigned id);
-enum { ID_QUICK_SAVE = 100, ID_QUICK_LOAD, ID_STAGE_LOAD, ID_SAVE_POSITION = 110, ID_LOAD_POSITION = 120 };
+enum { ID_QUICK_SAVE = 100, ID_QUICK_LOAD, ID_STAGE_LOAD, ID_SAVE_POSITION = 110, ID_LOAD_POSITION = 120, ID_KEYS = 130 };
 
 /* Host keys never reach the game: F11 (fullscreen; also never delivered per the
  * host contract), P/Pause (pause), +/- (speed), F5/F9 (quick save/load, the
- * macOS app's Cmd+S/Cmd+L). Everything outside the 23 accepted keys is
- * dropped. Returns 1 when handled. */
+ * macOS app's Cmd+S/Cmd+L). Shift/Control/Alt are the game's own channels.
+ * Every other key goes through the bindings (rlw_hotkeys.h): a bound action
+ * emits one of the 23 accepted keys, a modern action starts its command when
+ * "Atalhos modernos" is on. Returns 1 when handled. */
 static int key(WPARAM wp, LPARAM lp, int down) {
  uint32_t vk = (uint32_t)wp;
- if (down && (lp & (1 << 30))) return accepted_vk(vk == VK_LSHIFT || vk == VK_RSHIFT ? 16 : vk) || vk == VK_F11 || vk == VK_F5 || vk == VK_F9; /* auto-repeat */
+ if (down && (lp & (1 << 30))) { /* auto-repeat: never emits */
+  uint32_t k = vk == VK_LSHIFT || vk == VK_RSHIFT ? 16 : vk;
+  if (k == VK_F11 || k == VK_F5 || k == VK_F9 || (k >= 16 && k <= 18)) return 1;
+  return rlw_router_key_down(&G.router, k, held_modifiers(), 1, now_seconds()) || accepted_vk(k);
+ }
  if (vk == VK_F11) { if (down) set_fullscreen(!G.fullscreen); return 1; }
  if (vk == VK_F5 || vk == VK_F9) { if (down) command(vk == VK_F5 ? ID_QUICK_SAVE : ID_QUICK_LOAD); return 1; }
  if (vk == VK_PAUSE || vk == 'P') { if (down) { G.paused = !G.paused; G.deadline = now_seconds(); update_title(); } return 1; }
@@ -268,8 +377,12 @@ static int key(WPARAM wp, LPARAM lp, int down) {
  if (vk == VK_LSHIFT || vk == VK_RSHIFT) vk = VK_SHIFT;
  if (vk == VK_LCONTROL || vk == VK_RCONTROL) vk = VK_CONTROL;
  if (vk == VK_LMENU || vk == VK_RMENU) vk = VK_MENU;
- if (!accepted_vk(vk) || !G.driver) return 0;
- if (!down && vk >= 16 && vk <= 18 && (GetKeyState((int)vk) & 0x8000)) return 1; /* the other side still held */
+ if (!G.driver) return 0;
+ if (vk < 16 || vk > 18) {
+  int handled = down ? rlw_router_key_down(&G.router, vk, held_modifiers(), 0, now_seconds()) : rlw_router_key_up(&G.router, vk);
+  return handled || accepted_vk(vk);
+ }
+ if (!down && (GetKeyState((int)vk) & 0x8000)) return 1; /* the other side still held */
  if (down == rlw_driver_key_held(G.driver, vk)) return 1; /* no duplicate down, no up without down */
  send_event(2, 0, 0, 0, 0, vk, (uint32_t)down);
  return 1;
@@ -289,8 +402,8 @@ static void menu_attach(void) {
  if (G.options_path[0]) {
   RlOpcoesValores v; memset(&v, 0, sizeof(v));
   v.version = RL_OPCOES_VERSION; v.atalhos = G.atalhos; v.caminhos = G.caminhos; v.dificuldade = G.opt.difficulty; v.velocidade = G.speed;
-  /* No key dialog on Windows yet: "configurar teclas" is shown unavailable. */
-  v.disponivel = RL_OPCOES_TODOS & ~(1u << RL_OPCOES_TECLAS); v.idioma = 0;
+  /* "Configurar teclas" opens the "Atalhos de teclado" window (show_keys). */
+  v.disponivel = RL_OPCOES_TODOS; v.idioma = 0;
   (void)rlw_options_sync(G.driver, &v);
  }
  /* startShell(): the first shellTick comes 50 ms after the session opens. */
@@ -491,10 +604,12 @@ static void build_menu(void) {
  AppendMenuW(game, MF_STRING, ID_QUICK_LOAD, L"Carregar rápido\tF9");
  AppendMenuW(game, MF_POPUP, (UINT_PTR)G.save_menu, L"Salvar partida…");
  AppendMenuW(game, MF_POPUP, (UINT_PTR)G.load_menu, L"Carregar partida");
+ if (G.keys_path[0]) { AppendMenuW(game, MF_SEPARATOR, 0, NULL); AppendMenuW(game, MF_STRING, ID_KEYS, L"Configurar teclas…"); }
  AppendMenuW(G.menubar, MF_POPUP, (UINT_PTR)game, L"Partida");
  SetMenu(G.hwnd, G.menubar); refresh_save_menus();
 }
 static void command(unsigned id) {
+ if (id == ID_KEYS) { show_keys(); return; }
  if (!G.driver || !G.saves[0]) return;
  char slot[32];
  if (id == ID_QUICK_SAVE) save_now("rapido", 0, NULL);
@@ -561,15 +676,16 @@ static void menu_result(int r) {
   if (e->kind == RL_OPCOES_MUDOU) {
    switch (e->item) {
    case RL_OPCOES_ATALHOS:
-    /* Rules follow new worlds, and the menu world before its load tail. */
-    G.atalhos = e->values.atalhos; rlw_driver_default_rules(options_rules()); (void)rlw_driver_set_rules(G.driver, options_rules()); break;
-   case RL_OPCOES_CAMINHOS: G.caminhos = e->values.caminhos; break; /* rule bit 0: pathing front */
+    /* Rules follow new worlds, and the menu world before its load tail; a
+     * running stage or a loaded save keeps its own (rl_regras_definir). */
+    G.atalhos = e->values.atalhos; rlw_router_reset(&G.router); G.router.modern_enabled = G.atalhos != 0; apply_rules(); break;
+   case RL_OPCOES_CAMINHOS: G.caminhos = e->values.caminhos; apply_rules(); break;
    case RL_OPCOES_DIFICULDADE: G.opt.difficulty = e->values.dificuldade; (void)rlw_driver_set_difficulty(G.driver, G.opt.difficulty); break;
    case RL_OPCOES_VELOCIDADE: set_speed(e->values.velocidade); break;
    default: break;
    }
    options_store();
-  }
+  } else if (e->kind == RL_OPCOES_CONFIGURAR_TECLAS) show_keys();
   present_now(); update_title(); break;
  }
  default: break;
@@ -697,7 +813,9 @@ static void usage(void) {
         "  --save-directory PASTA: partidas salvas (padrão: Partidas na pasta de dados do usuário).\n"
         "  --cd: RISING_LANDS_BR_.BIN, .CUE, .ISO ou a pasta do CD (importa na primeira execução).\n"
         "  Teclas do host: P/Pause pausa, +/- velocidade, F5 salvar rápido, F9 carregar rápido, F11 tela cheia.\n"
-        "  As demais 23 teclas vão ao jogo.\n");
+        "  As demais 23 teclas vão ao jogo.\n"
+        "  Atalhos modernos (Opções): 1-9 duas vezes centraliza o grupo, Home último alerta,\n"
+        "  . trabalhador ocioso, , militar ocioso, H santuário.\n");
 }
 
 static int parse(int argc, char **argv, Options *o) {
@@ -783,6 +901,8 @@ int main_utf8(int argc, char **argv) {
  QueryPerformanceFrequency(&G.frequency);
  if (parse(argc, argv, &G.opt)) { usage(); return 64; }
  G.speed = G.opt.speed;
+ rlw_router_init(&G.router, NULL, (RlwRouterSink){NULL, router_emit, router_modern}); rlw_planner_init(&G.planner);
+ G.pointer_x = 400; G.pointer_y = 300;
  char error[1024] = {0};
  if (G.opt.selftest) {
   attach_console();
@@ -828,7 +948,13 @@ int main_utf8(int argc, char **argv) {
  else if (!G.opt.frames && !G.opt.headless) snprintf(G.saves, sizeof(G.saves), "%s" RLW_SEP "Partidas", data_root);
  if (!G.opt.frames && !G.opt.headless) {
   snprintf(G.options_path, sizeof(G.options_path), "%s" RLW_SEP "opcoes.ini", data_root);
+  /* The macOS app's defaults (NativeModernHotkeys/NativeModernPaths,
+   * NativeDifficulty, NativeGameSpeed): Atalhos modernos on, Caminhos melhores
+   * off, Normal, 1x. A key in opcoes.ini wins. */
+  G.atalhos = 1; G.caminhos = 0;
   options_load(); G.speed = G.opt.speed; rlw_driver_default_rules(options_rules());
+  G.router.modern_enabled = G.atalhos != 0;
+  snprintf(G.keys_path, sizeof(G.keys_path), "%s" RLW_SEP "teclas.ini", data_root); keys_load();
  }
  G.driver = G.opt.mission ? rlw_driver_create(dados, G.opt.mission, G.opt.difficulty, error, sizeof(error))
                           : rlw_driver_create_menu(dados, G.opt.difficulty, error, sizeof(error));
@@ -876,6 +1002,7 @@ int main_utf8(int argc, char **argv) {
   MSG m;
   while (PeekMessageW(&m, NULL, 0, 0, PM_REMOVE)) {
    if (m.message == WM_QUIT) { running = 0; break; }
+   if (rlw_keys_dialog_message(&m)) continue;
    TranslateMessage(&m); DispatchMessageW(&m);
   }
   if (!running) break;
@@ -910,6 +1037,7 @@ int main_utf8(int argc, char **argv) {
   int stage_start = rlw_driver_stage_start(G.driver);
   if (rlw_driver_advance(G.driver)) { report_stop(); present_now(); continue; }
   if (stage_start) stage_autosave();
+  step_modern();
   present_now();
   rlw_driver_status(G.driver, &s);
   if (!smoke && open_shell_if_needed()) continue;

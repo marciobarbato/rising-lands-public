@@ -8,6 +8,8 @@
 # through both drivers, compared step by step. Then the save walk (stage
 # autosave, save, load and replay, the pause menu's save and load lists), whose
 # lines include the SHA-256 of every slot and .view file each driver wrote.
+# Last, the Opções rule items: each combination's regras in the created world
+# (Windows driver only; the parity runs above keep every option off).
 #
 #   windows/parity.sh --cd /caminho/RISING_LANDS_BR_.cue [ticks]
 #   windows/parity.sh --data /pasta-com-Dados [ticks]
@@ -67,4 +69,10 @@ if cmp -s "$OUT/windows-save.txt" "$OUT/macos-save.txt"; then
   echo "PARIDADE DOS SAVES OK: $(grep -c '' "$OUT/windows-save.txt") linhas idênticas ($(tail -1 "$OUT/windows-save.txt"))"
 else
   echo "PARIDADE DOS SAVES FALHOU"; diff "$OUT/windows-save.txt" "$OUT/macos-save.txt" | head -20; exit 1
+fi
+# Opções rule items -> regras of the created world (Windows driver; issue #7 item 1).
+if "$OUT/parity-windows" "$DATA/Dados" rules "$OUT/windows-rules.txt"; then
+  echo "REGRAS DAS OPÇÕES OK: $(grep -c ' ok$' "$OUT/windows-rules.txt") casos (caminhos=1 -> bit 0 em rl_regras depois do início da fase)"
+else
+  echo "REGRAS DAS OPÇÕES FALHARAM"; cat "$OUT/windows-rules.txt"; exit 1
 fi

@@ -12,7 +12,11 @@
  * Save parity (milestone 3): the save walk of rlw_menu_demo.c from MONDE01 in
  * play mode (autosave, save, load and replay, pause list save/load), writing in
  * an empty folder; the slot and .view files must be byte-identical too:
- *   parity <Dados> save <walk.txt> <folder> */
+ *   parity <Dados> save <walk.txt> <folder>
+ * Option rules (Windows driver only): every combination of "Atalhos modernos"
+ * and "Caminhos melhores" maps to regras, and the world created for a stage (and
+ * the menu world) has exactly those rules after its start; the default stays 0:
+ *   parity <Dados> rules <rules.txt> */
 #include "rlw_demo.h"
 #include "rlw_menu_demo.h"
 #include "rlw_sha256.h"
@@ -24,6 +28,7 @@
 #else
 #include "rlw_driver.h"
 #include "rlw_menu_ops.h"
+#include "rising_engine.h"
 #endif
 
 #ifdef PARITY_MACOS
@@ -112,8 +117,46 @@ static int save_walk(const char *root, const char *path, const char *directory) 
  return 0;
 }
 
+#ifndef PARITY_MACOS
+static int rules_check(const char *root, const char *path) {
+ FILE *out = fopen(path, "w"); if (!out) return 2;
+ int failures = 0; char error[1024] = {0};
+ for (unsigned combo = 0; combo < 4; combo++) {
+  unsigned atalhos = combo >> 1, caminhos = combo & 1;
+  uint32_t expected = rlw_options_rules(atalhos, caminhos);
+  int bits_ok = ((expected & RL_REGRA_CAMINHOS_MELHORES) != 0) == (caminhos != 0) && ((expected & RL_REGRA_FILA_ORDENS) != 0) == (atalhos != 0);
+  rlw_driver_default_rules(expected);
+  RlwDriver *d = rlw_driver_create(root, "MONDE01.ETA", 1, error, sizeof(error));
+  uint32_t stage = 0, menu = 0; int advanced = 0;
+  if (d) { advanced = !rlw_driver_advance(d); stage = rlw_driver_rules(d); rlw_driver_free(d); }
+  RlwDriver *m = rlw_driver_create_menu(root, 1, error, sizeof(error));
+  if (m) { menu = rlw_driver_rules(m); rlw_driver_free(m); }
+  int ok = bits_ok && d && advanced && m && stage == expected && menu == expected;
+  failures += !ok;
+  fprintf(out, "atalhos=%u caminhos=%u regras=%u fase=%u menu=%u %s\n", atalhos, caminhos, expected, stage, menu, ok ? "ok" : "FALHOU");
+ }
+ /* The menu world takes a change before its load tail (the Opções items). */
+ rlw_driver_default_rules(0);
+ RlwDriver *m = rlw_driver_create_menu(root, 1, error, sizeof(error));
+ int set = m ? rlw_driver_set_rules(m, rlw_options_rules(0, 1)) : -1; uint32_t after = m ? rlw_driver_rules(m) : 0; rlw_driver_free(m);
+ int ok = set == 0 && after == RL_REGRA_CAMINHOS_MELHORES; failures += !ok;
+ fprintf(out, "menu definir caminhos=1 regras=%u %s\n", after, ok ? "ok" : "FALHOU");
+ /* Without opcoes.ini choices the parity runs keep the original rules. */
+ RlwDriver *d = rlw_driver_create(root, "MONDE01.ETA", 1, error, sizeof(error));
+ uint32_t original = 1; if (d) { if (!rlw_driver_advance(d)) original = rlw_driver_rules(d); rlw_driver_free(d); }
+ ok = d && original == 0; failures += !ok;
+ fprintf(out, "padrao regras=%u %s\n", original, ok ? "ok" : "FALHOU");
+ fclose(out);
+ printf("windows: rules %s\n", failures ? "FAILED" : "ok");
+ return failures ? 6 : 0;
+}
+#endif
+
 int main(int argc, char **argv) {
- if (argc < 4) { fprintf(stderr, "usage: parity <Dados> <frames>|menu|save <hashes.txt> [--demo-input|<folder>]\n"); return 64; }
+ if (argc < 4) { fprintf(stderr, "usage: parity <Dados> <frames>|menu|save|rules <hashes.txt> [--demo-input|<folder>]\n"); return 64; }
+#ifndef PARITY_MACOS
+ if (!strcmp(argv[2], "rules")) return rules_check(argv[1], argv[3]);
+#endif
  if (!strcmp(argv[2], "menu")) return menu_walk(argv[1], argv[3]);
  if (!strcmp(argv[2], "save")) { if (argc < 5) { fprintf(stderr, "usage: parity <Dados> save <walk.txt> <folder>\n"); return 64; } return save_walk(argv[1], argv[3], argv[4]); }
  const char *root = argv[1]; unsigned frames = (unsigned)strtoul(argv[2], NULL, 10);

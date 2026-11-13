@@ -253,3 +253,35 @@ Checked before the push: `cargo fmt --all --check`, `cargo build --release --loc
 `./build-macos.sh`, the portable Windows tests (`test_cd`, `test_menu` with the options screen, `test_saves`), and
 `windows/parity.sh` with the CD: game 301 identical ticks, menus 386 identical lines (the walk now opens and closes
 the Opções screen), saves 379 identical lines (`end complete`). The MSVC builds run only in CI.
+
+### 2026-11-13: private `main` `e3915938`
+
+Previous synchronisation: public `313dab6` (private `main` `81cc0f6e`). Only the Windows host changed (public issue #7).
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `183e723b` "Caminhos melhores" passes rule bit 0 (`RL_REGRA_CAMINHOS_MELHORES`) to new worlds and to the menu world before its load tail | `windows/src/rlw_main.c`, `rlw_driver.c/.h` |
+| `e434eb10`, `eca5d74f` modern shortcuts ("Atalhos modernos": N twice, Home, period, comma, H) and the bindings router | `windows/src/rlw_hotkeys.c/.h`, `rlw_modern.c/.h` (new), `rlw_driver.c/.h` (`rlw_driver_peek`), `rlw_main.c`; `windows/tests/test_hotkeys.c` (new); `windows/build.sh`, `build-msvc.ps1` |
+| `d66264a4` the key window ("Configurar teclas", `teclas.ini`) | `windows/src/rlw_keys_dialog.c/.h` (new), `rlw_hotkeys.c`, `rlw_main.c`; `windows/README.md` |
+| `e0fd61f7` the macOS defaults for the Opções items (Atalhos modernos on) and the rule check of the created world | `windows/src/rlw_main.c`, `rlw_driver.c/.h` (`rlw_options_rules`, `rlw_driver_rules`); `windows/tests/parity.c` (`rules` mode), `windows/parity.sh` ("REGRAS DAS OPÇÕES") |
+| CI: `test_hotkeys.exe` in the `arm64-run` job | `.github/workflows/windows-client.yml` (one line) |
+
+Public-only changes in this round:
+
+- `windows/README.md`: the public workflow path, no signing paragraph or `ci/sign.ps1` row, the toolchain under
+  `engine/`, the CD SHA-256 pointer to `src/rlw_cd.h`.
+- `docs/WINDOWS_CLIENT.md`: issue #7 items done, sections 0.1 (Opções defaults and rules), 0.2 (modern shortcuts and
+  the key window) and 0.3 (checks). `docs/MODERN_PATHS.md`, `docs/ROADMAP.md` and the READMEs: #7 done; the new
+  Windows features are marked "in the current source", since no new Windows pre-alpha was built.
+- Path comments mapped as in the earlier rounds (`apps/windows/` → `windows/`, `apps/macos-preview/src/native/` →
+  `macos/src/`, `motor/` → `engine/`).
+
+Left out, and why: `apps/windows/tests/test_windows_host.py` (the private `scripts/check.py` harness),
+`apps/windows/ci/sign.ps1` (no signing), `HANDOFF.md` notes.
+
+Checked before the push: the four portable Windows tests (`test_cd`, `test_menu`, `test_saves`, `test_hotkeys`) and
+`windows/parity.sh` with the CD in this tree: game 301 identical ticks, menus 386 identical lines, saves 379 identical
+lines, and the rule check, 6 cases. The private CI run of `e0fd61f7` passed all four jobs; the public CI builds the
+same four on push.

@@ -135,5 +135,6 @@ jobs:
           arm64/tests/test_cd.exe "$RUNNER_TEMP/test-work"
           arm64/tests/test_menu.exe
           arm64/tests/test_saves.exe "$RUNNER_TEMP"
+          arm64/tests/test_hotkeys.exe
       - name: Self-test and import refusal (ARM64)
         run: windows/ci/smoke.sh arm64/RisingLands.exe
