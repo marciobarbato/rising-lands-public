@@ -14,6 +14,19 @@ enum NativePlayerData {
     static var manifest: URL { resources.appendingPathComponent("import-manifest.json") }
     static var ready: Bool { NativeCDImport.installed(manifestURL: manifest, folder: folder) }
 
+    /// An import interrupted by quitting (Sair, or the app ending mid-copy) leaves its
+    /// `Dados.importando-*` staging folder behind; `install` only removes it on errors.
+    /// Called at launch, before any import of this process can have started.
+    @discardableResult
+    static func removeInterruptedImports() -> Int {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        var removed = 0
+        for name in names where name.hasPrefix("Dados.importando-") {
+            if (try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))) != nil { removed += 1 }
+        }
+        return removed
+    }
+
     /// `RisingLands --import-only SOURCE [--data-dir FOLDER]`: imports without any
     /// window or activation (build verification) and prints a JSON receipt.
     static func headless(_ args: [String]) -> Int32 {
@@ -40,7 +53,9 @@ final class NativePlayerImportWindow: NSObject, NSWindowDelegate {
     let choose = NSButton(title: "Escolher o CD…", target: nil, action: nil)
     let quit = NSButton(title: "Sair", target: nil, action: nil)
     var finished: ((NativeCDImport.Report) -> Void)?
-    private var busy = false
+    private(set) var busy = false
+    /// The last refusal shown on this window (read by the first-use smoke).
+    private(set) var alert: NSAlert?
 
     override init() {
         super.init()
@@ -111,7 +126,7 @@ final class NativePlayerImportWindow: NSObject, NSWindowDelegate {
             finished?(report)
         case .failure(let error):
             progress.isHidden = true; status.stringValue = ""
-            let alert = NSAlert(); alert.alertStyle = .warning
+            let alert = NSAlert(); alert.alertStyle = .warning; self.alert = alert
             alert.messageText = "Não foi possível importar o CD"
             alert.informativeText = error.localizedDescription
             alert.addButton(withTitle: "OK")

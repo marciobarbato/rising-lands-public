@@ -513,7 +513,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         return FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("RisingLands-ptbr/Partidas",isDirectory:true)
     }
     /// Smokes, benchmarks and Test B never read or write the player's saves or preferences.
-    static let diagnosticRun=CommandLine.arguments.contains(where:{["--smoke-test","--play-smoke","--play-stop-smoke","--native-benchmark","--native-horizon","--test-b-session","--player-smoke","--save-smoke","--campaign-smoke","--defeat-smoke","--menu-smoke","--pause-smoke","--ux-menu-trace","--save-load-smoke"].contains($0)})
+    static let diagnosticRun=CommandLine.arguments.contains(where:{["--smoke-test","--play-smoke","--play-stop-smoke","--native-benchmark","--native-horizon","--test-b-session","--player-smoke","--save-smoke","--autosave-smoke","--campaign-smoke","--defeat-smoke","--menu-smoke","--pause-smoke","--ux-menu-trace","--save-load-smoke","--save-manager-smoke"].contains($0)})
     static var initialSpeed:NativeGameSpeed { diagnosticRun ? .normal:NativeGameSpeed.load() }
     static var initialDifficulty:NativeDifficulty { diagnosticRun ? .normal:NativeDifficulty.load() }
     static var initialDisplay:NativeDisplayOptions { diagnosticRun ? NativeDisplayOptions():NativeDisplayOptions.load() }
@@ -525,6 +525,63 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         applyMusicLevel()
         let gain=value.effectsGain
         work.async{[weak self] in self?.audio?.setOutputGain(gain)}
+    }
+    /// Periodic autosave (Jogo → Salvamento automático). Diagnostic runs start with
+    /// it off and never store it; `--autosave-test-frames N` (diagnostic runs only)
+    /// sets a short interval in game frames for the autosave smoke.
+    static var initialAutosave:NativeAutosaveInterval { diagnosticRun ? .off:NativeAutosaveInterval.load() }
+    static var autosaveTestFrames:UInt64? {
+        let args=CommandLine.arguments
+        guard diagnosticRun,let i=args.firstIndex(of:"--autosave-test-frames"),args.count>i+1,let n=UInt64(args[i+1]),n>0 else{return nil}
+        return n
+    }
+    /// Main thread: the chosen interval, for the menu.
+    private(set) var autosaveInterval=NativeLiveWindow.initialAutosave
+    /// Worker only: when the next periodic autosave is due.
+    var autosaveSchedule=NativeAutosaveSchedule(intervalFrames:NativeLiveWindow.autosaveTestFrames ?? NativeLiveWindow.initialAutosave.frames)
+    /// Worker only: periodic autosaves written in this session (smokes read it).
+    var autosaveCount=0
+    var autosaveFrames=[UInt64]()
+    @MainActor func setAutosave(_ value:NativeAutosaveInterval){
+        autosaveInterval=value;if !Self.diagnosticRun{value.store()}
+        let frames=value.frames
+        work.async{[weak self] in self?.autosaveSchedule.setInterval(frames:frames)}
+    }
+    /// Worker, after a completed frame: only the game in progress counts — not the
+    /// original menus, briefing or pause (shell), the result screen, an event FLC,
+    /// an engine stop, validation or an input recording. A paused game runs no frames.
+    func autosaveEligible(code:Int32,status s:MacOSLiveStatus)->Bool{
+        guard code==0,running,!validationMode,!recording,stoppedReason==nil,s.stopped==0,s.phase_index != UInt32.max,
+              macos_live_shell_mode(driver)==0 else{return false}
+        var screen:UInt32=0
+        if macos_live_campaign_screen(driver,&screen)==0 && (screen==UInt32(RL_SHELL_PAUSE) || screen==19){return false}
+        var event=MacOSEventFlcState()
+        if macos_live_event_flc_state(driver,&event)==0 && event.running != 0{return false}
+        return true
+    }
+    /// Worker, at the frame boundary the quick save uses: capture here, write off the
+    /// game queue. Busy (input queued for the next frame, a held button) retries at the
+    /// next eligible frame; an earlier autosave still being written waits for it.
+    func attemptAutosave(frame:UInt64){
+        let path=saveURL(NativeAutosaveInterval.slot).path
+        guard pendingSaves[path]==nil else{return}
+        var job:OpaquePointer?
+        var code:Int32=0
+        do{try FileManager.default.createDirectory(at:saveDirectory,withIntermediateDirectories:true)}catch{code=Int32(RL_IO_ERROR)}
+        if code==0{code=macos_live_save_begin(driver,path,&job)}
+        if code==Int32(RL_SAVE_BUSY){return}
+        guard code==0,let job else{
+            autosaveSchedule.failed()
+            saveNotice="Falha no salvamento automático";deliver()
+            return
+        }
+        autosaveSchedule.saved()
+        commitSave(job,path:path){[weak self] failure in
+            guard let self else{return}
+            if failure==nil{self.autosaveCount+=1;self.autosaveFrames.append(frame)}
+            self.saveNotice=failure==nil ? "Salvamento automático":"Falha no salvamento automático";self.deliver()
+            DispatchQueue.main.async{self.savesChanged?()}
+        }
     }
     @MainActor func applyMusicLevel(){
         guard let player=cdMusic?.player,player.state != .closed else{return}
@@ -607,7 +664,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 DispatchQueue.main.async{self.defeatMovie.cancel()}
                 self.runID &+= 1;self.running=false;self.stoppedReason=nil;self.presenter?.clear();self.audio?.reset()
                 DispatchQueue.main.async{self.cdMusic?.beginStage()}
-                self.campaignEnd=nil;self.refreshSelection()
+                self.campaignEnd=nil;self.refreshSelection();self.autosaveSchedule.restart()
                 self.playStarted=0;self.playEnded=0;self.frameMicros.removeAll();self.startFrames=self.status().frames;self.startLogic=0;self.startRender=0;self.startProof=0;self.startMetal=self.metalSeconds
                 self.saveNotice="Partida carregada"
                 if let pixels=macos_live_pixels(self.driver),let palette=macos_live_palette(self.driver){
@@ -722,6 +779,8 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         work.async{[weak self] in self?.gameFPS=selected.frameRate;self?.deliver()}
     }
     var isRunning:Bool{running}
+    /// The original screen shown (RL_SHELL_*), 0 during play.
+    var originalShellMode:UInt32{macos_live_shell_mode(driver)}
     @objc func toggleRecording(){inputBarrier{[weak self] frame in guard let self=self else{return};if frame<129 && !self.recording{self.label.stringValue="Gravação disponível após o quadro 128"}else{self.recordingAction?()}}}
     @objc func exportRecording(){exportAction?()}
     @objc func copyStopReport(){
@@ -929,6 +988,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         if stageStart && code==0 {
             do {
                 try FileManager.default.createDirectory(at:saveDirectory,withIntermediateDirectories:true)
+                autosaveSchedule.restart()
                 let saved=macos_live_autosave(driver,saveURL("inicio-fase").path)
                 guard saved==0 else{throw saveError(saved)}
                 DispatchQueue.main.async{self.savesChanged?()}
@@ -959,6 +1019,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 DispatchQueue.main.async{self.cdMusic?.result()}
             }
         }
+        if autosaveSchedule.frame(eligible:autosaveEligible(code:code,status:s)){attemptAutosave(frame:s.frames)}
         // The shortcut's Escape did not pause (the original took it otherwise): release it.
         if let deadline=optionsAfterPause,running,macos_live_shell_mode(driver)==0,s.frames>=deadline {
             optionsAfterPause=nil;_=deliverSynthetic(["kind":"key","vkey":27,"down":false])
@@ -1265,16 +1326,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     /// Worker. Captions of the modern saves posicao-1..10 for the original lists
     /// (save1.sav..save9.sav,save0.sav); the engine never reads save files here.
     func publishSlots()->Int32{
-        let names=(try? PropertyListSerialization.propertyList(from:Data(contentsOf:saveDirectory.appendingPathComponent("nomes.plist")),format:nil)) as? [String:String] ?? [:]
-        let formatter=DateFormatter();formatter.dateFormat="dd/MM HH:mm"
-        var table=[UInt8](repeating:0,count:330)
-        for slot in 0..<10 {
-            let url=saveURL("posicao-\(slot+1)")
-            guard let date=(try? FileManager.default.attributesOfItem(atPath:url.path))?[.modificationDate] as? Date else{continue}
-            let caption="\(names[String(slot+1)] ?? "Posição \(slot+1)") · \(formatter.string(from:date))"
-            let bytes=Array((caption.data(using:.windowsCP1252,allowLossyConversion:true) ?? Data()).prefix(31))
-            table[33*slot]=1;for (i,b) in bytes.enumerated(){table[33*slot+1+i]=b}
-        }
+        let table=NativeSaveLibrary(directory:saveDirectory).originalListTable()
         return macos_live_shell_slots(driver,table,UInt32(table.count))
     }
     /// The pending LOAD_SLOT request is the host boundary: the modern load replaces
@@ -1474,6 +1526,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
             // entry request before the first game frame replaces the event log.
             pumpCDMusic()
             playStarted=0;playEnded=0;startFrames=0;startLogic=0;startRender=0;startProof=0;startMetal=metalSeconds
+            autosaveSchedule.restart()
             do {
                 try FileManager.default.createDirectory(at:saveDirectory,withIntermediateDirectories:true)
                 let saved=macos_live_autosave(driver,saveURL("inicio-fase").path)

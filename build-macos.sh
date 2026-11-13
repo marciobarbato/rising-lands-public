@@ -46,8 +46,8 @@ SWIFT_SOURCES=""
 for name in NativeCampaignMenu NativeAudio NativeCDMusicDisc NativeCDMusicPlayer NativeCDMusicHost \
             NativeHotkeyBindings NativeHotkeyInputRouter NativeModernHotkeys NativeHotkeyPreferences NativeHotkeyLabels \
             NativeViewportPolicy NativeGameSpeed NativePlayerOptions NativeBenchmarkArguments NativeDefeatMovie \
-            NativeFLC NativeEventFLCPlayback NativeLiveWindow NativePlayerEdition NativeCDImport \
-            NativePlayerImport NativePlayerApp SmokeReadiness main; do
+            NativeFLC NativeEventFLCPlayback NativeSaveLibrary NativeLiveWindow NativePlayerEdition NativeCDImport \
+            NativePlayerImport NativePlayerApp NativeFirstUseSmoke NativeSaveManager NativeSaveManagerSmoke SmokeReadiness main; do
     SWIFT_SOURCES="$SWIFT_SOURCES $name.swift"
 done
 # Source names are relative to $SRC (no spaces), so the list may be split by the shell.

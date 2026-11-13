@@ -11,7 +11,10 @@ extension AppDelegate {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 10, height: 10), styleMask: [.titled], backing: .buffered, defer: true)
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--player-smoke"), args.count > i + 1 { playerSmokeOutput = URL(fileURLWithPath: args[i + 1]) }
+        if let i = args.firstIndex(of: "--save-manager-smoke"), args.count > i + 1 { saveManagerSmokeOutput = URL(fileURLWithPath: args[i + 1]) }
         NSApp.activate(ignoringOtherApps: true)
+        interruptedImportsRemoved = NativePlayerData.removeInterruptedImports()
+        if let i = args.firstIndex(of: "--first-use-smoke"), args.count > i + 1 { startFirstUseSmoke(URL(fileURLWithPath: args[i + 1])); return }
         if NativePlayerData.ready { beginPlayer() } else { showPlayerImport() }
     }
 
@@ -21,7 +24,10 @@ extension AppDelegate {
         importer.finished = { [weak self] _ in self?.beginPlayer() }
         importer.show()
         let args = CommandLine.arguments
-        if let i = args.firstIndex(of: "--import-from"), args.count > i + 1 { importer.start(URL(fileURLWithPath: args[i + 1])) }
+        if let i = args.firstIndex(of: "--import-from"), args.count > i + 1 {
+            importer.start(URL(fileURLWithPath: args[i + 1]))
+            if let q = args.firstIndex(of: "--first-use-quit-at"), args.count > q + 1, let fraction = Double(args[q + 1]) { quitImportMidCopy(importer, at: fraction) }
+        }
     }
 
     func beginPlayer() {
@@ -29,6 +35,9 @@ extension AppDelegate {
         beginGame(CampaignSelection(mission: CampaignSelection.menu, difficulty: NativeLiveWindow.initialDifficulty.rawValue))
         if let output = playerSmokeOutput {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.startPlayerSmoke(output) }
+        }
+        if let output = saveManagerSmokeOutput {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.startSaveManagerSmoke(output) }
         }
     }
 
@@ -82,6 +91,8 @@ extension AppDelegate {
             slots.delegate = self; slots.autoenablesItems = false; item.submenu = slots; gameMenu.addItem(item)
             if save { savingMenu = slots } else { loadingMenu = slots }
         }
+        gameMenu.addItem(withTitle: "Gerenciar partidas salvas…", action: #selector(manageSaves), keyEquivalent: "").target = self
+        addAutosaveMenu(gameMenu)
         gameMenu.addItem(.separator())
         gameMenu.addItem(withTitle: "Opções…", action: #selector(showOptions), keyEquivalent: "o").target = self
         gameMenu.addItem(withTitle: "Configurar teclas…", action: #selector(showHotkeys), keyEquivalent: ",").target = self

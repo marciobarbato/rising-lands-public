@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     var savingMenu:NSMenu?
     var loadingMenu:NSMenu?
     var saveOperationInProgress=false
+    var saveManager:NativeSaveManager?
     var testBOutput: URL?
     var testBRecordOnly=false
     var horizonOutput: URL?
@@ -40,6 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     var directPlay = false
     var forwardedInspectorUpdates = 0
     var playerSmokeOutput: URL?
+    var saveManagerSmokeOutput: URL?
+    var interruptedImportsRemoved = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if risingPlayerEdition { startPlayerEdition(); return }
@@ -86,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                 // reaches an unported logic rule (any exact named stop is accepted).
                 beginGame(CampaignSelection(mission:"MONDE12.ETA",difficulty:1))
             }
-            else if args.contains("--save-smoke") || args.contains("--save-load-smoke") || args.contains("--campaign-smoke") || args.contains("--defeat-smoke") || args.contains("--pause-smoke") || args.contains("--ux-menu-trace") {beginGame(CampaignSelection(mission:"MONDE01.ETA",difficulty:1))}
+            else if args.contains("--save-smoke") || args.contains("--autosave-smoke") || args.contains("--save-load-smoke") || args.contains("--campaign-smoke") || args.contains("--defeat-smoke") || args.contains("--pause-smoke") || args.contains("--ux-menu-trace") {beginGame(CampaignSelection(mission:"MONDE01.ETA",difficulty:1))}
             else if args.contains("--play-smoke") {
                 // Direct stage chooser (Jogo → Nova partida…) remains its own diagnostic.
                 showCampaignChooser()
@@ -98,6 +101,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         if let index=args.firstIndex(of:"--save-smoke"),args.count>index+1 {
             let output=URL(fileURLWithPath:args[index+1])
             DispatchQueue.main.asyncAfter(deadline:.now()+4){[weak self] in self?.startSaveSmoke(output)}
+        }
+        if let index=args.firstIndex(of:"--autosave-smoke"),args.count>index+1 {
+            let output=URL(fileURLWithPath:args[index+1])
+            DispatchQueue.main.asyncAfter(deadline:.now()+4){[weak self] in self?.startAutosaveSmoke(output)}
         }
         if let index=args.firstIndex(of:"--save-load-smoke"),args.count>index+2 {
             let save=URL(fileURLWithPath:args[index+1]),output=URL(fileURLWithPath:args[index+2])
@@ -190,6 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             slots.delegate=self;slots.autoenablesItems=false;item.submenu=slots;gameMenu.addItem(item)
             if save{savingMenu=slots}else{loadingMenu=slots}
         }
+        addAutosaveMenu(gameMenu)
         refreshSaveMenus()
         let musicItem=NSMenuItem();main.addItem(musicItem)
         let musicMenu=NSMenu(title:"Música do CD");musicItem.submenu=musicMenu
@@ -268,16 +276,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     }
     func validateMenuItem(_ item:NSMenuItem)->Bool {
         if let audio=validateAudioItem(item){return audio}
+        if item.action == #selector(selectAutosave(_:)) {
+            item.state=(nativeLive?.autosaveInterval ?? NativeLiveWindow.initialAutosave).rawValue==item.tag ? .on:.off
+            return true
+        }
         if item.action == #selector(togglePause) {
             item.title=nativeLive?.isRunning == true ? "Pausar":"Continuar"
-            return nativeLive.map{!$0.validationMode && $0.window.isVisible} ?? false
+            return saveManager==nil && (nativeLive.map{!$0.validationMode && $0.window.isVisible} ?? false)
         }
+        if item.action == #selector(manageSaves) {return saveManagerAvailable()}
+        if item.action == #selector(reimportCD) {return saveManager==nil}
         if [#selector(selectSpeed(_:)),#selector(fasterSpeed),#selector(slowerSpeed)].contains(item.action) {
             guard let live=nativeLive,!live.validationMode else{item.state = .off;return false}
             if item.action == #selector(selectSpeed(_:)){item.state=live.speed.rawValue==item.tag && NativeGameSpeed(frameRate:live.gameFPS) != nil ? .on:.off}
             return item.action == #selector(fasterSpeed) ? live.speed != .quadruple : item.action == #selector(slowerSpeed) ? live.speed != .half : true
         }
-        if item.action == #selector(showOptions) {return nativeLive.map{!$0.validationMode && $0.window.isVisible} ?? false}
+        if item.action == #selector(showOptions) {return saveManager==nil && (nativeLive.map{!$0.validationMode && $0.window.isVisible} ?? false)}
         if item.action == #selector(toggleModernHotkeys(_:)) {item.state=NativeModernHotkeys.isEnabled() ? .on:.off;return true}
         if item.action == #selector(toggleModernPaths(_:)) {item.state=NativeModernPaths.isEnabled() ? .on:.off;return true}
         if item.action == #selector(selectDifficulty(_:)) {
@@ -311,6 +325,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         guard let url=nativeLive?.saveURL("posicao-\(slot)"),let date=(try? FileManager.default.attributesOfItem(atPath:url.path))?[.modificationDate] as? Date else{return "\(name) · vazia"}
         return "\(name) · \(DateFormatter.localizedString(from:date,dateStyle:.short,timeStyle:.short))"
     }
+    /// The periodic autosave slot in Carregar partida (it is not one of the original
+    /// list's ten positions, so the in-game original lists do not show it).
+    func autosaveTitle()->String {
+        guard let url=nativeLive?.saveURL(NativeAutosaveInterval.slot),let date=(try? FileManager.default.attributesOfItem(atPath:url.path))?[.modificationDate] as? Date else{return "Salvamento automático · vazio"}
+        let format=DateFormatter();format.dateFormat="dd/MM HH:mm"
+        return "Salvamento automático · \(format.string(from:date))"
+    }
+    /// Jogo → Salvamento automático: Desligado / A cada 5, 10 ou 15 minutos.
+    func addAutosaveMenu(_ gameMenu:NSMenu){
+        let item=NSMenuItem(title:"Salvamento automático",action:nil,keyEquivalent:"");let menu=NSMenu(title:"Salvamento automático")
+        item.submenu=menu;gameMenu.addItem(item)
+        for interval in NativeAutosaveInterval.allCases {
+            let choice=menu.addItem(withTitle:interval.title,action:#selector(selectAutosave(_:)),keyEquivalent:"");choice.target=self;choice.tag=interval.rawValue
+        }
+        menu.addItem(.separator())
+        menu.addItem(withTitle:"Conta o tempo de jogo, só com a partida em andamento",action:nil,keyEquivalent:"").isEnabled=false
+    }
+    @objc func selectAutosave(_ item:NSMenuItem){
+        guard let interval=NativeAutosaveInterval(rawValue:item.tag) else{return}
+        if let live=nativeLive{live.setAutosave(interval)}else if !NativeLiveWindow.diagnosticRun{interval.store()}
+    }
+    @objc func loadAutosave(){loadSlot(NativeAutosaveInterval.slot)}
     func refreshSaveMenus(){
         let usable = nativeLive.map{!$0.validationMode && !$0.recording} ?? false
         for (menu,save) in [(savingMenu,true),(loadingMenu,false)] {
@@ -324,6 +360,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                 menu.addItem(.separator())
                 let auto=menu.addItem(withTitle:"Início da fase · salvamento automático",action:#selector(loadStageStart),keyEquivalent:"");auto.target=self
                 auto.isEnabled = !saveOperationInProgress && usable && FileManager.default.fileExists(atPath:nativeLive!.saveURL("inicio-fase").path)
+                let periodic=menu.addItem(withTitle:autosaveTitle(),action:#selector(loadAutosave),keyEquivalent:"");periodic.target=self
+                periodic.isEnabled = !saveOperationInProgress && usable && FileManager.default.fileExists(atPath:nativeLive!.saveURL(NativeAutosaveInterval.slot).path)
             }
         }
     }
@@ -426,6 +464,103 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                                             self.loadSlot("inicio-fase"){ok in
                                                 checks["loadStageStart"]=ok
                                                 DispatchQueue.main.asyncAfter(deadline:.now()+0.5){finish()}
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    /// Periodic autosave on a real MONDE01 (`--autosave-smoke REPORT --autosave-test-frames N`,
+    /// disposable save folder): the menu, three autosaves N game frames apart at 4x, the
+    /// slot and its single `.view`, the player's slots and the stage-start autosave left
+    /// alone, nothing written while paused, then the slot loaded back through Jogo →
+    /// Carregar partida at the saved frame, and play continuing with no stop.
+    func startAutosaveSmoke(_ output:URL){
+        guard let live=nativeLive else{return}
+        var checks=[String:Bool](),detail=[String:Any](),finished=false
+        let files=FileManager.default
+        let slot=live.saveURL(NativeAutosaveInterval.slot),stage=live.saveURL("inicio-fase")
+        let interval=NativeLiveWindow.autosaveTestFrames ?? 0
+        func modified(_ url:URL)->Date?{(try? files.attributesOfItem(atPath:url.path))?[.modificationDate] as? Date}
+        func views()->[String]{((try? files.contentsOfDirectory(atPath:live.saveDirectory.path)) ?? []).filter{$0.hasPrefix(NativeAutosaveInterval.slot+".rls.") && $0.hasSuffix(".view")}}
+        let game=NSApp.mainMenu?.items.first(where:{$0.submenu?.title=="Jogo"})?.submenu
+        let choices=game?.items.first(where:{$0.title=="Salvamento automático"})?.submenu?.items.filter{$0.action == #selector(selectAutosave(_:))} ?? []
+        checks["autosaveMenu"]=choices.map(\.title)==["Desligado","A cada 5 minutos","A cada 10 minutos","A cada 15 minutos"]
+        checks["offByDefault"]=live.autosaveInterval == .off && choices.first.map{validateMenuItem($0) && $0.state == .on}==true
+        checks["testInterval"]=interval>0
+        checks["emptyAtStart"] = !files.fileExists(atPath:slot.path) && autosaveTitle()=="Salvamento automático · vazio"
+        let stageDate=modified(stage)
+        checks["stageStartAutosave"]=stageDate != nil
+        func finish(_ error:String?=nil){
+            guard !finished else{return};finished=true
+            live.perform("live-pause"){value in
+                checks["continuesAfterLoad"]=value["live_stop"] is NSNull && live.stoppedReason==nil
+                var result:[String:Any]=["passed":error==nil && checks.values.allSatisfy{$0},"checks":checks,"checksPassed":checks.values.filter{$0}.count,"checksTotal":checks.count,"commit":Bundle.main.object(forInfoDictionaryKey:"RisingLandsSourceCommit") as? String ?? "","nativeWindowVisible":live.window.isVisible,"state":value,"autosave":detail]
+                if let error{result["error"]=error}
+                do{try JSONSerialization.data(withJSONObject:result,options:[.prettyPrinted,.sortedKeys]).write(to:output,options:.atomic)}catch{fputs("Autosave smoke report: \(error)\n",stderr)}
+                NSApp.terminate(nil)
+            }
+        }
+        /// Worker values read on the game queue.
+        func written(_ next:@escaping(Int,[UInt64])->Void){live.work.async{let count=live.autosaveCount,frames=live.autosaveFrames;DispatchQueue.main.async{next(count,frames)}}}
+        func waitFor(_ condition:@escaping(@escaping(Bool)->Void)->Void,_ left:Int,_ what:String,_ next:@escaping()->Void){
+            condition{ok in
+                if ok{next();return}
+                guard left>0 else{checks[what]=false;finish("timeout: "+what);return}
+                DispatchQueue.main.asyncAfter(deadline:.now()+0.25){waitFor(condition,left-1,what,next)}
+            }
+        }
+        live.setSpeed(.quadruple)
+        // Three periodic autosaves: 3 x N frames at 4x (120 frames/s); budget 75 s.
+        waitFor({done in written{count,_ in done(count>=3)}},300,"threeAutosaves"){
+            written{count,frames in
+                checks["threeAutosaves"]=count>=3
+                let gaps=zip(frames.dropFirst(),frames).map{$0-$1}
+                detail["frames"]=frames;detail["gaps"]=gaps;detail["intervalFrames"]=interval
+                checks["gapsAreTheInterval"]=gaps.count>=2 && gaps.allSatisfy{$0>=interval && $0<interval+60}
+                let data=try? Data(contentsOf:slot)
+                let hash=data.map{SHA256.hash(data:$0).map{String(format:"%02x",$0)}.joined()} ?? ""
+                checks["slotWithOneView"]=data != nil && views()==[NativeAutosaveInterval.slot+".rls.\(hash).view"]
+                let others=((try? files.contentsOfDirectory(atPath:live.saveDirectory.path)) ?? []).filter{$0.hasPrefix("posicao-") || $0.hasPrefix("rapido")}
+                checks["playerSlotsUntouched"]=others.isEmpty && modified(stage)==stageDate
+                self.refreshSaveMenus()
+                let entry=self.loadingMenu?.items.first(where:{$0.action == #selector(self.loadAutosave)})
+                checks["loadEntry"]=entry?.isEnabled==true && entry?.title.range(of:#"^Salvamento automático · \d\d/\d\d \d\d:\d\d$"#,options:.regularExpression) != nil
+                detail["loadEntry"]=entry?.title ?? ""
+                // Paused: no frames, no autosave, for longer than one interval at 4x.
+                live.perform("live-pause"){_ in
+                    DispatchQueue.main.asyncAfter(deadline:.now()+0.5){
+                        written{pausedCount,_ in
+                            let pausedDate=modified(slot)
+                            DispatchQueue.main.asyncAfter(deadline:.now()+Double(interval)/120+2){
+                                written{laterCount,_ in
+                                    checks["noAutosaveWhilePaused"]=laterCount==pausedCount && modified(slot)==pausedDate
+                                    live.work.async{
+                                        let world=live.status().world
+                                        DispatchQueue.main.async{
+                                            guard let entry,let index=self.loadingMenu?.index(of:entry) else{checks["loadsBack"]=false;finish("no load entry");return}
+                                            self.loadingMenu?.performActionForItem(at:index)
+                                            waitFor({done in done(!self.saveOperationInProgress)},120,"loadsBack"){
+                                                live.work.async{
+                                                    let s=live.status(),saved=live.autosaveFrames.last ?? 0
+                                                    var mission=[CChar](repeating:0,count:16),difficulty:UInt32=0
+                                                    macos_live_selection(live.driver,&mission,16,&difficulty)
+                                                    let name=String(cString:mission)
+                                                    DispatchQueue.main.async{
+                                                        detail["loadedFrames"]=s.frames;detail["lastAutosaveFrame"]=saved;detail["mission"]=name
+                                                        checks["loadsBack"]=s.world != world && name=="MONDE01.ETA"
+                                                        // loadSlot restarts play right after its completion, so this read
+                                                        // lands a few frames later: the loaded world starts at the saved
+                                                        // frame and has run less than one second at 4x since.
+                                                        checks["resumesAtSavedFrame"]=saved>0 && s.frames>=saved && s.frames<saved+120
+                                                        DispatchQueue.main.asyncAfter(deadline:.now()+2){finish()}
+                                                    }
+                                                }
                                             }
                                         }
                                     }

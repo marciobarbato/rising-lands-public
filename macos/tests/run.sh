@@ -20,6 +20,7 @@ run ModernHotkeysTests NativeHotkeyBindings NativeHotkeyInputRouter NativeModern
 run ViewportPolicyTests NativeViewportPolicy
 run GameSpeedTests NativeGameSpeed
 run PlayerOptionsTests NativePlayerOptions
+run SaveLibraryTests NativeSaveLibrary
 run BenchmarkArgumentsTests NativeBenchmarkArguments
 # Production view objects (NativeMetalGameView, layout, mouse and focus handling) linked against the native driver.
 # Opens no window and needs no game data.
@@ -30,7 +31,7 @@ xcrun clang -O3 -dynamiclib -arch arm64 -mmacosx-version-min=13.0 -Wno-deprecate
 consumer=""
 for s in NativeCampaignMenu NativeAudio NativeCDMusicDisc NativeCDMusicPlayer NativeCDMusicHost NativeHotkeyBindings \
          NativeHotkeyInputRouter NativeModernHotkeys NativeHotkeyPreferences NativeHotkeyLabels NativeViewportPolicy NativeGameSpeed \
-         NativePlayerOptions NativeDefeatMovie NativePlayerEdition NativeFLC NativeEventFLCPlayback NativeLiveWindow; do
+         NativePlayerOptions NativeDefeatMovie NativePlayerEdition NativeFLC NativeEventFLCPlayback NativeSaveLibrary NativeLiveWindow; do
     consumer="$consumer $s.swift"
 done
 cd "$SRC"

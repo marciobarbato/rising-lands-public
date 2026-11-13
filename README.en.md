@@ -57,6 +57,7 @@ The original Brazilian CD image can be found on the **Internet Archive**. Downlo
 ## Controls
 
 - **Speed:** menu **Jogo → Velocidade**, with 0,5x, 1x, 2x and 4x (15, 30, 60 and 120 frames per second). Normal speed (1x) is 30 frames per second. Shortcuts: **⌘]** faster, **⌘[** slower, **⌘P** pause and resume.
+- **Saved games** (in the current source, coming in the next macOS release): **Jogo → Gerenciar partidas salvas…** lists the saves with name, stage and date, to **rename** them (the name shows in the game's lists) or **delete** them (to the Trash). The game pauses while the window is open. **Jogo → Salvamento automático** (off by default): every 5, 10 or 15 game minutes, in its own slot that never takes one of your positions; it shows in **Jogo → Carregar partida**.
 - **Sound:** menu **Áudio**, with mute and volume (100%, 75%, 50%, 25%) for effects and music, kept and applied at once (in the current source, coming in the next macOS release).
 - **Fullscreen:** menu **Janela → Tela cheia** (**⌃⌘F**). Fullscreen shows only the game, on black.
 - **Moving around the map:** push the mouse against the edge. In fullscreen, move the mouse to the edge of the screen. In a window, the map scrolls while the mouse is inside the window, at its edge. The arrow keys also scroll.

@@ -70,3 +70,66 @@ struct NativeAudioSettings: Equatable, Sendable {
         defaults.set(musicMuted, forKey: Self.musicMutedKey)
     }
 }
+
+/// Periodic autosave (menu Jogo → Salvamento automático). Host only: it writes the
+/// ordinary save of the game in progress to its own slot (`autosave.rls` + `.view`),
+/// never to the player's slots or the stage-start autosave. Off by default, as in
+/// the original game, which has no periodic autosave.
+enum NativeAutosaveInterval: Int, CaseIterable, Sendable {
+    case off = 0, five = 5, ten = 10, fifteen = 15
+    static let preferenceKey = "RisingLandsAutosaveMinutes"
+    /// The slot name; the file is `<saveDirectory>/autosave.rls` beside its `.view`.
+    static let slot = "autosave"
+    /// Game frames in one minute of game time: 60 s at the 1x pace of 30 frames/s
+    /// (NativeGameSpeed.normalFrameRate). Counting frames makes the interval follow
+    /// the chosen speed: at 2x a 10-minute interval passes in 5 wall-clock minutes.
+    static let framesPerGameMinute: UInt64 = 1800
+
+    var minutes: Int { rawValue }
+    var frames: UInt64 { UInt64(rawValue) * Self.framesPerGameMinute }
+    var title: String { self == .off ? "Desligado" : "A cada \(rawValue) minutos" }
+
+    static func load(_ defaults: UserDefaults = .standard) -> NativeAutosaveInterval {
+        guard defaults.object(forKey: preferenceKey) != nil,
+              let value = NativeAutosaveInterval(rawValue: defaults.integer(forKey: preferenceKey)) else { return .off }
+        return value
+    }
+    func store(_ defaults: UserDefaults = .standard) { defaults.set(rawValue, forKey: Self.preferenceKey) }
+}
+
+/// When the periodic autosave is due. Pure bookkeeping, owned by the game worker:
+/// `frame(eligible:)` is called once per completed game frame and counts only the
+/// frames of the game in progress (not menus, briefing, pause, an event FLC or a
+/// stopped engine; paused games run no frames at all). Once `intervalFrames`
+/// eligible frames have passed the save is due; it stays due, without counting
+/// further, until `saved()` (success) or `failed()` (an error: wait one more full
+/// interval instead of retrying every frame). A busy boundary (a click still queued
+/// for the next frame) simply retries at the next eligible frame. `restart()` runs
+/// at every stage start and load, so a fresh game never autosaves at once.
+struct NativeAutosaveSchedule: Equatable, Sendable {
+    private(set) var intervalFrames: UInt64
+    private(set) var elapsed: UInt64 = 0
+
+    init(intervalFrames: UInt64) { self.intervalFrames = intervalFrames }
+    init(_ interval: NativeAutosaveInterval) { self.init(intervalFrames: interval.frames) }
+
+    var enabled: Bool { intervalFrames > 0 }
+    var due: Bool { enabled && elapsed >= intervalFrames }
+
+    /// One completed game frame. Returns true when the autosave should be attempted
+    /// at this frame boundary.
+    mutating func frame(eligible: Bool) -> Bool {
+        guard enabled, eligible else { return false }
+        if elapsed < intervalFrames { elapsed += 1 }
+        return due
+    }
+    /// A new interval keeps the frames already played, so shortening it may make
+    /// the save due at the next eligible frame; turning it off forgets them.
+    mutating func setInterval(frames: UInt64) {
+        intervalFrames = frames
+        if frames == 0 { elapsed = 0 } else { elapsed = min(elapsed, frames) }
+    }
+    mutating func saved() { elapsed = 0 }
+    mutating func failed() { elapsed = 0 }
+    mutating func restart() { elapsed = 0 }
+}

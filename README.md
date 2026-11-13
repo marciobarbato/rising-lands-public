@@ -57,6 +57,7 @@ A imagem do CD original brasileiro pode ser encontrada no **Internet Archive**. 
 ## Controles
 
 - **Velocidade:** menu **Jogo → Velocidade**, com 0,5x, 1x, 2x e 4x (15, 30, 60 e 120 quadros por segundo). A velocidade normal (1x) é 30 quadros por segundo. Atalhos: **⌘]** mais rápido, **⌘[** mais devagar, **⌘P** pausa e continua.
+- **Partidas salvas** (no código atual, entra na próxima versão do macOS): **Jogo → Gerenciar partidas salvas…** lista as partidas com nome, fase e data, para **renomear** (o nome aparece nas listas do jogo) ou **apagar** (vai para a Lixeira). Com a janela aberta o jogo fica pausado. **Jogo → Salvamento automático** (desligado por padrão): a cada 5, 10 ou 15 minutos de jogo, num slot próprio que nunca ocupa as suas posições; ele aparece em **Jogo → Carregar partida**.
 - **Som:** menu **Áudio**, com silenciar e volume (100%, 75%, 50%, 25%) dos efeitos e da música, guardados e valendo na hora (no código atual, entra na próxima versão do macOS).
 - **Tela cheia:** menu **Janela → Tela cheia** (**⌃⌘F**). Em tela cheia aparece só o jogo, sobre fundo preto.
 - **Andar pelo mapa:** encoste o mouse na borda. Em tela cheia, basta levar o mouse até a borda da tela. Em janela, o mapa rola enquanto o mouse estiver dentro da janela, junto à borda. As setas do teclado também rolam o mapa.

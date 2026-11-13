@@ -484,3 +484,24 @@ player's saves.
 
 Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (103 passed).
 In the private repository: the MONDE01 gate kept its SHA-256 and `validate.sh` passed.
+
+### 2026-11-13 (day, fifth): private `main` `66ec8404`
+
+Previous synchronisation: public `c149410` (private `main` `bf4d8cb4`).
+
+Copied (player edition host only; no engine change):
+
+| Private change | Public files |
+|---|---|
+| `eb791572` interrupted CD imports: the player removes leftover `Dados.importando-<UUID>` staging folders at launch (a Quit during the copy used to leave them forever); `--first-use-smoke` | `macos/src/NativePlayerImport.swift`, `NativePlayerApp.swift`, `NativeFirstUseSmoke.swift` (new) |
+| `71c8d548`, `52fed592`, `4bbb34bc` **Jogo → Gerenciar partidas salvas…**: list, rename (names kept by the host in `Partidas/nomes.plist`, read by the original lists; no save-format or engine change) and delete to the Trash (`trashItem`), with the game paused while the sheet is open; `--save-manager-smoke` | `macos/src/NativeSaveLibrary.swift`, `NativeSaveManager.swift`, `NativeSaveManagerSmoke.swift` (new), `NativeLiveWindow.swift`, `NativePlayerApp.swift`, `main.swift`; `macos/tests/SaveLibraryTests.swift` (new) |
+| `0476a337`, `1c0c78a5` **Jogo → Salvamento automático** (off by default; 5, 10 or 15 game minutes, counted in frames): its own `autosave.rls` slot, never a player position, listed in Jogo → Carregar partida | `macos/src/NativePlayerOptions.swift`, `NativeLiveWindow.swift`, `NativePlayerApp.swift`, `main.swift`; `macos/tests/PlayerOptionsTests.swift` |
+| Build and test lists for the new sources | `build-macos.sh`, `macos/tests/run.sh` |
+
+Left out, and why: the private Filtro/Resolução (HD) code around the same lines (the public files keep their public
+form; the public `PlayerOptionsTests.swift` takes the audio-settings and autosave tests but not the private display-filter
+ones), the private build/smoke scripts and `docs/MACOS_*`. READMEs (PT and EN): the saved-games and autosave items.
+
+Checked before the push: `./macos/tests/run.sh` (all passed, including `PlayerOptionsTests` and `SaveLibraryTests`) and
+`./build-macos.sh` (ad hoc). In the private repository: every UI smoke of the macOS front passed on `be80c4a0` (defeat
+17/17, player 22/22, autosave, save manager 23/23) and `check.py --domain macos` 233 OK.
