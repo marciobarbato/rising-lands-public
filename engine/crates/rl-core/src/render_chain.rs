@@ -53,8 +53,41 @@ impl Context<'_> {
         }
         Ok(())
     }
+    /// AffWorkEngin 0x414b31: EnginGetTaille 0x44106c (table 441004), the
+    /// large marker 0x2a1f at (-32, -32) for kinds 3, 11..16, 25, else the
+    /// small 0x2a1e in place.
+    fn selection_marker(&mut self, r: &[u8], x: i32, y: i32) -> Result<()> {
+        let (px, py) = (x + r[0x86] as i8 as i32, y + r[0x87] as i8 as i32);
+        if matches!(r[1], 3 | 11..=16 | 25) {
+            self.bob(i16(px - 32), i16(py - 32), 0x2a1f, true, None)
+        } else {
+            self.bob(i16(px), i16(py), 0x2a1e, true, None)
+        }
+    }
+    /// AffWorkEngin 0x414b04: the selection and order markers, only for the
+    /// local player's selected units.
+    fn work_selection(&mut self, r: &[u8], x: i32, y: i32) -> Result<()> {
+        if r[0xbd] != 0 && r[0] as u32 == self.camera {
+            self.selection_marker(r, x, y)?;
+            self.order_markers(r)?;
+        }
+        Ok(())
+    }
     pub fn work_body(&mut self, r: &[u8], x: i32, y: i32, index: u32, overlay: bool) -> Result<()> {
         let (kind, task) = (r[1], r[0x89]);
+        if !matches!(kind, 5 | 6 | 7 | 13) {
+            // 414d33: kinds other than 5/6/7/13 have no work body. 414b04 drew
+            // the local player's selection and order markers; 4152c9 goes to
+            // the shared info/fatigue tail with the prelude's coordinates,
+            // still (0, 0) (+0x24 = BX ^ BX, +0x20 = 0), as AffAttaqueEngin's
+            // body-less kinds do. No count or direction is read.
+            self.work_selection(r, x, y)?;
+            let info = overlay
+                && ((r[0] as u32 == self.camera && r[0xbd] != 0)
+                    || self.u16(0x496ac2)? == index
+                    || self.u8(0x508f8f)? != 0);
+            return self.tail_at(r, 0, 0, index, overlay, info);
+        }
         // AffWorkEngin414a8a: the body goes through AffCorpsEngin411147, whose
         // palette dispatch covers owners0..4 and the neutral owner200.
         // AffWorkEngin never reads the +0x99 jitter (no permutation read).
@@ -69,21 +102,47 @@ impl Context<'_> {
             );
         }
         if kind == 7 && matches!(task, 1 | 2) {
-            return Ok(());
+            // 4151c9: tasks 1/2 clear the tail flag after 414b04 drew the
+            // local player's selection and order markers (this route comes
+            // straight from AffEngin, before AffDeplaceEngin's overlay block).
+            return self.work_selection(r, x, y);
         }
         // Native4152c1/415089 (farmer) and4151a0 (builder): unlisted tasks
         // draw no body and continue to the shared info/fatigue tail at414f7c.
         let body = if kind == 5 {
             match task {
-                0 | 2 | 3 => Some((if w(r, 10) == 0 { 1594 } else { 1690 }, 8, 11)),
-                1 => Some((1662, 4, 11)),
+                0 | 2 | 3 => Some((if w(r, 10) == 0 { 1594 } else { 1690 }, 8, 11, 11)),
+                1 => Some((1662, 4, 11, 11)),
                 _ => None,
             }
         } else if kind == 7 {
             match task {
-                0 | 3..=5 => Some((if w(r, 10) == 0 { 1338 } else { 1466 }, 8, 26)),
+                0 | 3..=5 => Some((if w(r, 10) == 0 { 1338 } else { 1466 }, 8, 26, 26)),
                 // 415168: builder task12 body0x57a without the bag test.
-                12 => Some((0x57a, 8, 26)),
+                12 => Some((0x57a, 8, 26, 26)),
+                _ => None,
+            }
+        } else if kind == 6 {
+            // 414b04: the selection marker comes first; kind 6 reaches here
+            // straight from AffEngin's state dispatch, not through
+            // AffDeplaceEngin's overlay block as the camera's workers do.
+            if r[0xbd] != 0 && r[0] as u32 == self.camera {
+                self.selection_marker(r, x, y)?;
+            }
+            // 4152a8 (mechanic): tasks 0/1 -> 4151d4, the body 0xb9a with an
+            // empty bag (BagVide +0x0a), else 0xbda; task 2 -> 415289, always
+            // 0xbda; task 3 -> 41529d clears the tail flag (+0x3c): no body
+            // and no tail; other tasks draw no body and keep the tail. The
+            // body sits at the AffCorpsEnginDecalage offsets (-16, -20).
+            match task {
+                0 | 1 => Some((if w(r, 10) == 0 { 0xb9a } else { 0xbda }, 8, 16, 20)),
+                2 => Some((0xbda, 8, 16, 20)),
+                3 => {
+                    if r[0] as u32 == self.camera {
+                        self.order_markers(r)?;
+                    }
+                    return Ok(());
+                }
                 _ => None,
             }
         } else if kind == 13 {
@@ -116,12 +175,12 @@ impl Context<'_> {
         if r[0] as u32 == self.camera {
             self.order_markers(r)?;
         }
-        if let Some((base, stride, anchor)) = body {
+        if let Some((base, stride, ax, ay)) = body {
             let (px, py) = (x + r[0x86] as i8 as i32, y + r[0x87] as i8 as i32);
             self.shadow(i16(px + 2), i16(py + 26), 10784, false)?;
             self.corps_unit(
-                i16(px - anchor),
-                i16(py - anchor),
+                i16(px - ax),
+                i16(py - ay),
                 base + (r[0x91] as u32).div_ceil(2) * stride + r[0xa4] as u32,
                 r,
             )?;

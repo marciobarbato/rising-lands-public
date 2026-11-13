@@ -134,6 +134,11 @@ impl Context<'_> {
         }
         let overlay =
             r[0xba] != 0 || r[0xbd] != 0 || self.u16(0x496ac2)? == index || self.u8(0x508f8f)? != 0;
+        // AffEngin 0x415a0a: state 5 calls AffWorkEngin 0x414a8a for every
+        // kind, not only the workers (an AI soldier in state 5, MONDE10A).
+        if state == 5 && !matches!(kind, 5 | 7 | 13) {
+            return self.work_body(r, x, y, index, overlay);
+        }
         let dx = r[0x86] as i8 as i32;
         let dy = r[0x87] as i8 as i32;
         let (px, py) = (x + dx, y + dy);
@@ -516,7 +521,7 @@ impl Context<'_> {
         self.tail_at(r, px - tx, py - ty, index, overlay, info)
     }
     /// The shared info/blink/experience tail at the coordinates the body saved.
-    fn tail_at(
+    pub(crate) fn tail_at(
         &mut self,
         r: &[u8],
         ax: i32,
@@ -559,6 +564,11 @@ impl Context<'_> {
         Ok(())
     }
     fn experience(&mut self, r: &[u8], x: i32, y: i32, info: bool) -> Result<()> {
+        // TypeEnginGagneXP 0x4422b0 admits kinds 0..10 and 25 only; vehicles,
+        // flyers and monsters (11..24) never draw the level stars.
+        if !(r[1] <= 10 || r[1] == 25) {
+            return Ok(());
+        }
         let level = r[0xaf] >> 5;
         if level != 0 && (info || r[0xba] != 0) && (r[0xba] == 0 || self.u32(0x508f7c)? % 5 == 0) {
             self.bob(i16(x - 8), i16(y - 2), 0x1e46 + level as u32, true, None)?;

@@ -347,3 +347,21 @@ Checked before the push: `cargo fmt --all --check` and `cargo test --release --l
 all passed). In the private repository: the MONDE01 gate (rule off) kept its SHA-256, `validate.sh` passed, 24 runs
 of 72,000 frames with rules 1 and 3 on six stages had no stop and no replay mismatch, and save/load continuations on
 MONDE13 and MONDE17 gave the same state, random state and pixels.
+
+### 2026-11-13 (fifth round): private `main` `063411c9`
+
+Previous synchronisation: public `a44ca52` (private `main` `3112b226`).
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `29ac8e52` AffEngin (`0x41591f`) sends state 5 of any unit type to AffWorkEngin (`0x414a8a`), as the original does: for types other than 5/6/7/13 it draws no body, only the selection and order markers and the footer. Also the mechanic's body (type 6), the selected builder's markers in tasks 1 and 2, and the TypeEnginGagneXP test of the level stars. Found by a bot census (MONDE10A, an AI soldier in state 5, app fill 0); the stage now reaches 36,000 frames | `engine/crates/rl-core/src/render_chain.rs`, `render_units.rs` |
+
+Left out, and why: `bbd1e489` (`--fill` for the private research bots, section 2); `motor/validation/claude-20261113/`
+(native receipt `work_kinds-v4`: native 1576/0/0, Rust 1576 equal, 0 stops, 0 mismatches); `HANDOFF.md`, `PLAY_BOT.md`.
+
+Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (with `RL_CD_ROOT`;
+all passed). In the private repository: the MONDE01 gate kept its SHA-256 and `validate.sh` passed. Five stop
+censuses on 2026-11-12/13 (797 runs, about 525 game hours, fills 0xa7 and 0, rules 0, 1 and 3) end with no engine stop
+after this port and the better-paths fix.
