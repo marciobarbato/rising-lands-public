@@ -173,7 +173,16 @@ pub fn state23(m: &mut MemoriaJogo, u: u16) -> Result<()> {
         let cave = find_structure(m, thief, 3)?;
         let amount = stock / 2;
         crate::chain_restore::debit(m, resource as u8, amount as u16, owner as u8)?;
-        crate::chain_entry::credit(m, resource as u8, amount as u16, thief as u8, cave as u16)?;
+        // Deliberate defensive modernization approved by the user for
+        // RL-THEFT-001 (2026-11-13): when the thief owns no type-3 structure,
+        // RechercheTypeBatiment returns 0xffff and the original still calls
+        // BatimentAjouteMatiere 0x42340f with it, reading the type byte at
+        // 0x15d9fbc (pc 0x42343f), beyond the structure table. Only that credit
+        // is skipped; the victim's debit and everything after run as in the
+        // original. Every thief with a cave keeps the exact native call.
+        if cave != 0xffff {
+            crate::chain_entry::credit(m, resource as u8, amount as u16, thief as u8, cave as u16)?;
+        }
         halve = true;
         if thief == m.b(LOCAL)? {
             message(m, 0x1f5)?;

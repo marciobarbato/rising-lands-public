@@ -466,3 +466,21 @@ the private edition), the user's saves the smoke was run on, `docs/MACOS_*` and 
 Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (103 passed),
 `./macos/tests/run.sh` (all passed) and `./build-macos.sh` (ad hoc). In the private repository: MONDE01 gate kept its
 SHA-256, `validate.sh` passed, and the macOS app passed every UI smoke (defeat 17/17, player 22/22) and the real-save smoke.
+
+### 2026-11-13 (day, fourth): private `main` `bf4d8cb4`
+
+Previous synchronisation: public `7b10a00` (private `main` `d16d0e64`).
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `e7972961` RL-THEFT-001, a deviation the user approved on 2026-11-13: a resource theft (tag 34, EnginNextEtape state 23) by a player who owns no type-3 structure (RechercheTypeBatiment returns 0xffff) skips only the thief's credit BatimentAjouteMatiere `0x42340f`; the original reads beyond the structure table there (0x15d9fbc, pc 0x42343f) and the engine used to stop. The victim's debit, MAJSympathie, the message and the thief's withdrawal stay as in the original | `engine/crates/rl-core/src/player_spy.rs` |
+
+Left out, and why: the native receipts of the same day (`ai_reaction_theft-v3` 28000/28000 with the guard modelled on
+the native side, `-v3b` 4000/4000; market `ai_reaction_market-v2` 23040/23040 and `market_ai-v1` 49478 equal; spells,
+nova and messengers 67212 equal; tag 29 shown unreachable by player input), the harnesses, `HANDOFF.md` and the
+player's saves.
+
+Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (103 passed).
+In the private repository: the MONDE01 gate kept its SHA-256 and `validate.sh` passed.
