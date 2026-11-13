@@ -285,3 +285,26 @@ Checked before the push: the four portable Windows tests (`test_cd`, `test_menu`
 `windows/parity.sh` with the CD in this tree: game 301 identical ticks, menus 386 identical lines, saves 379 identical
 lines, and the rule check, 6 cases. The private CI run of `e0fd61f7` passed all four jobs; the public CI builds the
 same four on push.
+
+### 2026-11-13 (second round): private `main` `035121c5`
+
+Previous synchronisation: public `f640481` (private `main` `e3915938`). Only the macOS host changed.
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `8c7f7d1d` **Jogo → Opções…** (⌘O): opens the Opções screen from the main or pause menu, or pauses a running game with the player's own Esc first | `macos/src/MacOSLiveDriver.h`, `macos_live_driver.c` (`rl_opcoes_abrir` as an optional symbol), `macos_options.inc` (`macos_live_options_show`), `NativeLiveWindow.swift`, `NativePlayerApp.swift`, `main.swift` |
+
+Public-only changes in this round:
+
+- `NativePlayerApp.swift`: the player smoke's check count is that of the public edition (19), without the personal-use
+  display checks.
+- READMEs: the Opções bullet names ⌘O; fullscreen is ⌃⌘F (the README said ⌘F; the menu item has always used
+  Control-Command-F).
+
+Left out, and why: `apps/macos-preview/testes/OptionsWorldTests.swift` (needs the private build's CD-derived native
+inputs), `docs/MACOS_PLAYABLE.md` (internal notes), the personal-use display code (unchanged by this round).
+
+Checked before the push: `sh macos/tests/run.sh` (all component tests passed) and `./build-macos.sh` (exit 0). The
+private build of `8c7f7d1d` passed its UI smokes 10/10, including the new Opções checks (main menu and pause).

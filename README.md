@@ -57,7 +57,7 @@ A imagem do CD original brasileiro pode ser encontrada no **Internet Archive**. 
 ## Controles
 
 - **Velocidade:** menu **Jogo → Velocidade**, com 0,5x, 1x, 2x e 4x (15, 30, 60 e 120 quadros por segundo). A velocidade normal (1x) é 30 quadros por segundo. Atalhos: **⌘]** mais rápido, **⌘[** mais devagar, **⌘P** pausa e continua.
-- **Tela cheia:** menu **Janela → Tela cheia** (**⌘F**). Em tela cheia aparece só o jogo, sobre fundo preto.
+- **Tela cheia:** menu **Janela → Tela cheia** (**⌃⌘F**). Em tela cheia aparece só o jogo, sobre fundo preto.
 - **Andar pelo mapa:** encoste o mouse na borda. Em tela cheia, basta levar o mouse até a borda da tela. Em janela, o mapa rola enquanto o mouse estiver dentro da janela, junto à borda. As setas do teclado também rolam o mapa.
 - **Teclado:** Enter, Esc, Espaço, setas, Delete, X, Tab (minimapa) e os números 0–9, como no original. As teclas podem ser trocadas em **Jogo → Configurar teclas…**. A tecla F11 do original (trocar para 640x480) não é usada.
 - **Atalhos modernos** (no estilo de Age of Empires II; no código atual, entram na próxima versão do macOS). Cada atalho vira uma entrada que o original já aceita (tecla ou clique), pelo mesmo caminho do jogador; nada mexe no estado do jogo por fora.
@@ -68,7 +68,7 @@ A imagem do CD original brasileiro pode ser encontrada no **Internet Archive**. 
   - **Shift+clique** no chão com unidades selecionadas: enfileira um ponto de passagem. As unidades andam pelos pontos em ordem, e uma ordem comum substitui a fila. Os pontos aparecem como bandeirinhas ligadas por uma linha tracejada. No original, esse clique não faz nada; a fila é uma regra opcional do motor que segue a opção **Atalhos modernos**. Mudar a opção vale para os jogos começados depois; o jogo em andamento e as fases seguintes mantêm as regras com que ele começou, e um save guarda as suas.
   - Vêm ligados. Para desligar, desmarque **Jogo → Atalhos modernos**. As teclas podem ser trocadas em **Jogo → Configurar teclas…**. Os atalhos de tecla não funcionam nos menus, no briefing nem com o jogo pausado.
 - **Caminhos melhores** (opcional, desligado por padrão; no código atual, entra na próxima versão do macOS): menu **Jogo → Caminhos melhores**. As unidades planejam o caminho inteiro antes de andar, um grupo espalha os destinos em vez de brigar por uma célula, e uma unidade bloqueada espera e recalcula em vez de desistir. Combate, IA e velocidades não mudam. Vale a partir do início da próxima fase; um save guarda as regras da partida. Detalhes em [docs/MODERN_PATHS.md](docs/MODERN_PATHS.md).
-- **Tela de Opções** (no código atual, entra na próxima versão do macOS): o item **OPÇÕES**, no chão de madeira dos menus principal e de pausa, abre uma tela no visual do jogo com atalhos modernos, caminhos melhores, dificuldade, velocidade e configurar teclas. São as mesmas opções dos menus do aplicativo. O jogo original não tem essa tela; ela é desenhada só com o material do seu CD.
+- **Tela de Opções** (no código atual, entra na próxima versão do macOS): o item **OPÇÕES**, no chão de madeira dos menus principal e de pausa, ou o menu **Jogo → Opções…** (**⌘O**), abre uma tela no visual do jogo com atalhos modernos, caminhos melhores, dificuldade, velocidade e configurar teclas. Durante a partida, o **⌘O** primeiro pausa o jogo, como o Esc, e abre a tela por cima do menu de pausa. **Esc** ou **Voltar** fecha a tela. São as mesmas opções dos menus do aplicativo. O jogo original não tem essa tela; ela é desenhada só com o material do seu CD.
 
 ## Problemas
 

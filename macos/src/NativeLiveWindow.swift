@@ -916,7 +916,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 // Original in-game pause (MenuInit 16 ran in this frame): the prepared session takes input.
                 running=false;playEnded=ProcessInfo.processInfo.systemUptime
                 let shell=macos_live_shell_begin(driver)
-                if shell==0{startShell()}else{stoppedReason=saveError(shell).localizedDescription}
+                if shell==0{startShell();if optionsAfterPause != nil{optionsAfterPause=nil;showOptionsNow()}}else{stoppedReason=saveError(shell).localizedDescription}
             }
             else if macos_live_campaign_screen(driver,&screen)==0 && screen==19 {
                 running=false;playEnded=ProcessInfo.processInfo.systemUptime
@@ -930,6 +930,10 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 else {stoppedReason=saveError(query).localizedDescription}
                 DispatchQueue.main.async{self.cdMusic?.result()}
             }
+        }
+        // The shortcut's Escape did not pause (the original took it otherwise): release it.
+        if let deadline=optionsAfterPause,running,macos_live_shell_mode(driver)==0,s.frames>=deadline {
+            optionsAfterPause=nil;_=deliverSynthetic(["kind":"key","vkey":27,"down":false])
         }
         if benchmarkInput && code==0 && s.frames>128 {
             let count=macos_live_order_tags(driver,&orderBuffer,32)
@@ -1134,6 +1138,9 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     var shellZones=[UInt32:[Int32]]()
     /// Last values handed to the options screen (atalhos, caminhos, dificuldade, velocidade).
     var optionsSynced:[UInt32]?
+    /// Worker. Jogo > Opções… pressed in play: the synthetic Escape is held in
+    /// the world until the original pause appears (or this frame passes).
+    var optionsAfterPause:UInt64?
     func scheduleShellMove(){
         guard !shellMoveScheduled else{return}
         shellMoveScheduled=true
@@ -1585,6 +1592,39 @@ extension NativeLiveWindow {
         optionsApply(event)
         showShellPicture()
         return true
+    }
+    /// Jogo > Opções… (Command-O). Over the original main or pause menu the
+    /// screen opens at once (rl_opcoes_abrir, the same screen as its button).
+    /// In play, the original pause comes first: the player's own Escape path
+    /// (InputGame polls it as a held key), and the screen opens over MenuInit 16.
+    @MainActor func openOptions(){
+        work.async{[weak self] in
+            guard let self else{return}
+            guard !self.validationMode,self.stoppedReason==nil,!self.movieActive,!self.hostRequest else{self.refuseOptions();return}
+            if macos_live_shell_mode(self.driver) != 0{self.showOptionsNow();return}
+            guard self.optionsAfterPause==nil,self.modernAllowed() else{self.refuseOptions();return}
+            let deadline=self.status().frames+30
+            if self.deliverSynthetic(["kind":"key","vkey":27,"down":true]){self.optionsAfterPause=deadline}
+        }
+    }
+    /// Worker. Opens the screen over the current main/pause shell.
+    func showOptionsNow(){
+        syncOptions()
+        guard macos_live_options_show(driver)==0 else{refuseOptions();return}
+        shellMouseDown=false;shellHeld.removeAll();shellZones.removeAll()
+        showShellPicture()
+    }
+    func refuseOptions(){DispatchQueue.main.async{NSSound.beep()}}
+    /// Smokes: waits (0.1 s steps) until the options screen is open (or
+    /// closed); completion(true) when it reached that state in time.
+    func waitOptions(open wanted:Bool,tries:Int=100,_ completion:@escaping(Bool)->Void){
+        work.async{[weak self] in
+            let open=self.map{macos_live_options_open($0.driver) != 0} ?? !wanted
+            DispatchQueue.main.async{
+                if open==wanted || tries<=0 || self==nil{completion(open==wanted);return}
+                DispatchQueue.main.asyncAfter(deadline:.now()+0.1){self?.waitOptions(open:wanted,tries:tries-1,completion)}
+            }
+        }
     }
     /// Worker. A changed value goes to the same setters as the menu bar.
     func optionsApply(_ event:RlOpcoesEvento){

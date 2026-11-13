@@ -83,6 +83,7 @@ extension AppDelegate {
             if save { savingMenu = slots } else { loadingMenu = slots }
         }
         gameMenu.addItem(.separator())
+        gameMenu.addItem(withTitle: "Opções…", action: #selector(showOptions), keyEquivalent: "o").target = self
         gameMenu.addItem(withTitle: "Configurar teclas…", action: #selector(showHotkeys), keyEquivalent: ",").target = self
         gameMenu.addItem(withTitle: "Atalhos modernos", action: #selector(toggleModernHotkeys(_:)), keyEquivalent: "").target = self
         gameMenu.addItem(withTitle: "Caminhos melhores", action: #selector(toggleModernPaths(_:)), keyEquivalent: "").target = self
@@ -149,7 +150,7 @@ extension AppDelegate {
         func finish(_ error: String? = nil) {
             guard !finished else { return }; finished = true
             live.perform("live-pause") { value in
-                var result: [String: Any] = ["passed": error == nil && checks.values.allSatisfy { $0 } && checks.count == 16, "checks": checks,
+                var result: [String: Any] = ["passed": error == nil && checks.values.allSatisfy { $0 } && checks.count == 19, "checks": checks,
                                              "state": value, "nativeWindowVisible": live.window.isVisible, "edition": "player",
                                              "commit": Bundle.main.object(forInfoDictionaryKey: "RisingLandsSourceCommit") as? String ?? ""]
                 if let error = error { result["error"] = error }
@@ -171,16 +172,17 @@ extension AppDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { poll(left - 1, test, next) }
             }
         }
-        func enter() -> Bool {
+        func press(_ characters: String, _ keyCode: UInt16) -> Bool {
             live.window.makeKeyAndOrderFront(nil)
             guard live.window.makeFirstResponder(live.metal) else { return false }
             for type in [NSEvent.EventType.keyDown, .keyUp] {
                 guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: live.window.windowNumber, context: nil,
-                                                   characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36) else { return false }
+                                                   characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode) else { return false }
                 live.window.sendEvent(event)
             }
             return true
         }
+        func enter() -> Bool { press("\r", 36) }
         func item(_ title: String, in menu: NSMenu? = NSApp.mainMenu) -> NSMenuItem? {
             for candidate in menu?.items ?? [] {
                 if candidate.title == title { return candidate }
@@ -214,6 +216,15 @@ extension AppDelegate {
         poll(150, { mode($0) == 2 }) { main in
             checks["originalMainAtLaunch"] = main["mission"] as? String == CampaignSelection.menu && !live.metal.isHidden && live.stopPanel.isHidden
             exerciseMenus()
+            // Jogo > Opções… (Command-O) over the original main menu; Escape closes it.
+            let options = item("Opções…")
+            checks["optionsShortcut"] = options?.keyEquivalent == "o" && options?.keyEquivalentModifierMask == .command
+            _ = choose("Opções…")
+            live.waitOptions(open: true) { opened in
+            checks["optionsOpenAtMain"] = opened
+            checks["optionsClosedByEscape"] = press("\u{1b}", 53)
+            live.waitOptions(open: false) { closed in
+            checks["optionsClosedByEscape"] = checks["optionsClosedByEscape"] == true && closed
             checks["enterSingle"] = enter()
             poll(100, { mode($0) == 3 }) { _ in
                 checks["enterNewGame"] = enter()
@@ -224,6 +235,8 @@ extension AppDelegate {
                         finish()
                     }
                 }
+            }
+            }
             }
         }
     }

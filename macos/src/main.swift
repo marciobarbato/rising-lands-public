@@ -163,6 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         gameMenu.addItem(withTitle:"Inspecionar",action:#selector(showInspector),keyEquivalent:"2")
         gameMenu.addItem(withTitle:"Menu original",action:#selector(showOriginalMenu),keyEquivalent:"").target=self
         gameMenu.addItem(withTitle:"Nova partida…",action:#selector(showCampaignChooser),keyEquivalent:"n")
+        gameMenu.addItem(withTitle:"Opções…",action:#selector(showOptions),keyEquivalent:"o").target=self
         gameMenu.addItem(withTitle:"Configurar teclas…",action:#selector(showHotkeys),keyEquivalent:",").target=self
         gameMenu.addItem(withTitle:"Atalhos modernos",action:#selector(toggleModernHotkeys(_:)),keyEquivalent:"").target=self
         gameMenu.addItem(withTitle:"Caminhos melhores",action:#selector(toggleModernPaths(_:)),keyEquivalent:"").target=self
@@ -223,6 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         live.savesChanged={ [weak self] in self?.refreshSaveMenus() }
         return live
     }
+    @objc func showOptions(){if let live=nativeLive{live.openOptions()}else{NSSound.beep()}}
     @objc func showHotkeys(){nativeLive?.showHotkeys()}
     @objc func showOriginalMenu(){beginGame(CampaignSelection(mission:CampaignSelection.menu,difficulty:1))}
     @objc func togglePause(){nativeLive?.toggle()}
@@ -270,6 +272,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             if item.action == #selector(selectSpeed(_:)){item.state=live.speed.rawValue==item.tag && NativeGameSpeed(frameRate:live.gameFPS) != nil ? .on:.off}
             return item.action == #selector(fasterSpeed) ? live.speed != .quadruple : item.action == #selector(slowerSpeed) ? live.speed != .half : true
         }
+        if item.action == #selector(showOptions) {return nativeLive.map{!$0.validationMode && $0.window.isVisible} ?? false}
         if item.action == #selector(toggleModernHotkeys(_:)) {item.state=NativeModernHotkeys.isEnabled() ? .on:.off;return true}
         if item.action == #selector(toggleModernPaths(_:)) {item.state=NativeModernPaths.isEnabled() ? .on:.off;return true}
         if item.action == #selector(selectDifficulty(_:)) {
@@ -834,7 +837,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         func finish(_ error:String?=nil){
             guard !finished else{return};finished=true
             live.perform("live-pause"){value in
-                var result:[String:Any]=["passed":error==nil && checks.values.allSatisfy{$0} && checks.count==7,"checks":checks,"state":value,"nativeWindowVisible":live.window.isVisible,
+                var result:[String:Any]=["passed":error==nil && checks.values.allSatisfy{$0} && checks.count==10,"checks":checks,"state":value,"nativeWindowVisible":live.window.isVisible,
                                          "commit":Bundle.main.object(forInfoDictionaryKey:"RisingLandsSourceCommit") as? String ?? ""]
                 if let error=error{result["error"]=error}
                 let screenshot=self.screenshotOutput ?? output.deletingPathExtension().appendingPathExtension("png")
@@ -875,7 +878,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                     poll(100,{mode($0)==0 && $0["native_running"] as? Bool==true && frames($0)>=10}){resumed in
                         checks["resumedPlay"]=resumed["mission"] as? String=="MONDE01.ETA"
                         checks["noStopAfterResume"]=resumed["live_stop"] is NSNull
-                        finish()
+                        // Jogo > Opções… (Command-O) in play: original pause first, then the screen.
+                        checks["optionsShortcutInPlay"]=NSApp.sendAction(#selector(self.showOptions),to:self,from:nil)
+                        poll(100,{mode($0)==16}){_ in
+                            live.waitOptions(open:true){opened in
+                                checks["optionsOverPause"]=opened
+                                checks["optionsEscape"]=escape()
+                                live.waitOptions(open:false){closed in
+                                    checks["optionsEscape"]=checks["optionsEscape"]==true && closed
+                                    finish()
+                                }
+                            }
+                        }
                     }
                 }
             }

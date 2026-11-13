@@ -31,6 +31,19 @@ int32_t macos_live_options_input(MacOSLiveDriver*d,const RlShellInput*input,uint
  else c=shell_copy_picture(d);
  return c?save_result(d,c,"Tela de opções"):0;
 }
+/* Menu/keyboard shortcut: the same screen the button opens, through the
+ * explicit rl_opcoes_abrir. Only over main2/pause16 without a pending request;
+ * the shell session is not touched. Already open: nothing to do. */
+int32_t macos_live_options_show(MacOSLiveDriver*d){
+ if(!d||d->validation||!d->options||!d->shell||!d->rl_opcoes_abrir)return RL_UNSUPPORTED_PATH;
+ if(d->shell_request.kind||(d->shell_mode!=RL_SHELL_MAIN&&d->shell_mode!=RL_SHELL_PAUSE))return RL_INVALID_ARGUMENT;
+ if(d->options_open)return 0;
+ int c=d->rl_opcoes_abrir(d->options,d->shell);
+ if(c)return save_result(d,c,"Tela de opções");
+ d->options_open=1;
+ c=d->rl_opcoes_desenhar(d->options,d->shell,d->pixels,480000,d->palette,768);
+ return c?save_result(d,c,"Tela de opções"):0;
+}
 int32_t macos_live_options_button(MacOSLiveDriver*d,int32_t rect[4]){
  if(!d||!rect||!d->options||!d->shell)return RL_INVALID_ARGUMENT;
  return d->rl_opcoes_botao(d->options,d->shell,rect);

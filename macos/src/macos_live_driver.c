@@ -59,7 +59,7 @@ struct MacOSLiveDriver {
  RlShell shell;uint64_t shell_generation;uint32_t shell_mode;RlShellInput shell_input;RlShellEvent shell_request;
  /* Port-only "Opções" screen (rising_options.h; optional symbols: an engine
   * without them shows no button). One handle for the driver's lifetime. */
- FN(rl_opcoes_versao);FN(rl_opcoes_criar);FN(rl_opcoes_definir);FN(rl_opcoes_entrada);FN(rl_opcoes_sobrepor);FN(rl_opcoes_desenhar);FN(rl_opcoes_botao);FN(rl_opcoes_fechar);FN(rl_opcoes_liberar);
+ FN(rl_opcoes_versao);FN(rl_opcoes_criar);FN(rl_opcoes_definir);FN(rl_opcoes_entrada);FN(rl_opcoes_sobrepor);FN(rl_opcoes_desenhar);FN(rl_opcoes_botao);FN(rl_opcoes_fechar);FN(rl_opcoes_liberar);FN(rl_opcoes_abrir);
  RlOpcoes options;int options_open;
  char mission[16];uint32_t difficulty;
  /* menu_world: started in the original main menu (no frame state, no renderer).
@@ -275,7 +275,7 @@ if(host){
  LOAD(rl_salvar_versao);LOAD(rl_salvar_arquivo);LOAD(rl_salvar_bytes);LOAD(rl_carregar_arquivo);LOAD(rl_render_cache);LOAD(rl_autosalvar_inicio_fase);LOAD(rl_autosalvar_arquivo);LOAD(rl_autosalvar_bytes);
  LOAD(rl_entrada_quantidade_pendente);LOAD(rl_entrada_passo_pendente);
  LOAD_OPTIONAL(rl_regras);LOAD_OPTIONAL(rl_regras_definir);LOAD_OPTIONAL(rl_fila_ordens);
- LOAD_OPTIONAL(rl_opcoes_versao);LOAD_OPTIONAL(rl_opcoes_criar);LOAD_OPTIONAL(rl_opcoes_definir);LOAD_OPTIONAL(rl_opcoes_entrada);LOAD_OPTIONAL(rl_opcoes_sobrepor);LOAD_OPTIONAL(rl_opcoes_desenhar);LOAD_OPTIONAL(rl_opcoes_botao);LOAD_OPTIONAL(rl_opcoes_fechar);LOAD_OPTIONAL(rl_opcoes_liberar);
+ LOAD_OPTIONAL(rl_opcoes_versao);LOAD_OPTIONAL(rl_opcoes_criar);LOAD_OPTIONAL(rl_opcoes_definir);LOAD_OPTIONAL(rl_opcoes_entrada);LOAD_OPTIONAL(rl_opcoes_sobrepor);LOAD_OPTIONAL(rl_opcoes_desenhar);LOAD_OPTIONAL(rl_opcoes_botao);LOAD_OPTIONAL(rl_opcoes_fechar);LOAD_OPTIONAL(rl_opcoes_liberar);LOAD_OPTIONAL(rl_opcoes_abrir);
  LOAD(rl_shell_version);LOAD(rl_shell_create);LOAD(rl_shell_plan);LOAD(rl_shell_enter);LOAD(rl_shell_paint_prepared);LOAD(rl_shell_input);LOAD(rl_shell_draw);LOAD(rl_shell_copy);LOAD(rl_shell_free);LOAD(rl_shell_campaign_prepare);LOAD(rl_shell_campaign_load);LOAD(rl_shell_defeat_finish);LOAD(rl_shell_export_world);
  if(d->rl_shell_version()!=RL_SHELL_VERSION){snprintf(error,capacity,"Prepared shell v1 required");goto bad;}
  if(d->rl_salvar_versao()!=RL_SAVE_FORMAT_VERSION){snprintf(error,capacity,"Save extension v1 required");goto bad;}

@@ -57,7 +57,7 @@ The original Brazilian CD image can be found on the **Internet Archive**. Downlo
 ## Controls
 
 - **Speed:** menu **Jogo → Velocidade**, with 0,5x, 1x, 2x and 4x (15, 30, 60 and 120 frames per second). Normal speed (1x) is 30 frames per second. Shortcuts: **⌘]** faster, **⌘[** slower, **⌘P** pause and resume.
-- **Fullscreen:** menu **Janela → Tela cheia** (**⌘F**). Fullscreen shows only the game, on black.
+- **Fullscreen:** menu **Janela → Tela cheia** (**⌃⌘F**). Fullscreen shows only the game, on black.
 - **Moving around the map:** push the mouse against the edge. In fullscreen, move the mouse to the edge of the screen. In a window, the map scrolls while the mouse is inside the window, at its edge. The arrow keys also scroll.
 - **Keyboard:** Enter, Esc, Space, arrows, Delete, X, Tab (minimap) and the digits 0–9, as in the original. Keys can be remapped in **Jogo → Configurar teclas…**. The original's F11 (switch to 640x480) is not used.
 - **Modern shortcuts** (Age of Empires II style; in the current source, coming in the next macOS release). Each shortcut becomes input the original already accepts (a key or a click), through the same path as the player's own input; nothing changes game state behind the game's back.
@@ -68,7 +68,7 @@ The original Brazilian CD image can be found on the **Internet Archive**. Downlo
   - **Shift+click** on open ground with units selected: queues a waypoint. Units walk the waypoints in order, and a plain order replaces the queue. Waypoints show as small flags joined by a dashed line. In the original this click does nothing; the queue is an optional engine rule that follows the **Atalhos modernos** option. Changing the option applies to games started afterwards; the game in progress and its following stages keep the rules it started with, and a save keeps its own.
   - They are on by default. To turn them off, untick **Jogo → Atalhos modernos**. Keys can be remapped in **Jogo → Configurar teclas…**. The key shortcuts do nothing in menus, in the briefing or while paused.
 - **Better unit paths** (optional, off by default; in the current source, coming in the next macOS release): menu **Jogo → Caminhos melhores**. Units plan the whole path before walking, a group spreads its goals instead of fighting over one cell, and a blocked unit waits and replans instead of giving up. Combat, AI and speeds do not change. It applies from the next stage start; a save keeps the rules of its game. Details in [docs/MODERN_PATHS.md](docs/MODERN_PATHS.md).
-- **Options screen** (in the current source, coming in the next macOS release): the **OPÇÕES** item on the wooden floor of the main and pause menus opens a screen in the game's look with modern shortcuts, better paths, difficulty, speed and key setup. They are the same options as the app menus. The original game has no such screen; it is drawn only with material from your CD.
+- **Options screen** (in the current source, coming in the next macOS release): the **OPÇÕES** item on the wooden floor of the main and pause menus, or the menu **Jogo → Opções…** (**⌘O**), opens a screen in the game's look with modern shortcuts, better paths, difficulty, speed and key setup. During a game, **⌘O** first pauses the game, like Esc, and opens the screen over the pause menu. **Esc** or **Voltar** closes it. They are the same options as the app menus. The original game has no such screen; it is drawn only with material from your CD.
 
 ## Reporting problems
 

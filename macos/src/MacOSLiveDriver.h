@@ -155,6 +155,10 @@ int32_t macos_live_shell_draw(MacOSLiveDriver *,uint32_t animation);
 int32_t macos_live_options_sync(MacOSLiveDriver *,const RlOpcoesValores *);
 int32_t macos_live_options_input(MacOSLiveDriver *,const RlShellInput *,uint32_t keys,RlOpcoesEvento *);
 uint32_t macos_live_options_open(MacOSLiveDriver *);
+/* Opens the screen without the button (menu/keyboard shortcut): 0, or
+ * RL_INVALID_ARGUMENT outside main2/pause16 (or with a pending request),
+ * RL_UNSUPPORTED_PATH without the extension. The picture is ready on 0. */
+int32_t macos_live_options_show(MacOSLiveDriver *);
 int32_t macos_live_options_button(MacOSLiveDriver *,int32_t rect[4]);
 int32_t macos_live_selection(MacOSLiveDriver *,char *mission,uint32_t capacity,uint32_t *difficulty);
 /* Preset (0..2) of the next stage start: New game, Restart or Next stage. */
