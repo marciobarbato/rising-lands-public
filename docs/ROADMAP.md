@@ -10,7 +10,7 @@ Estado em 2026-11-12. / State on 2026-11-12.
 | Windows: builds MSVC x64 e ARM64 / MSVC x64 and ARM64 builds | Feito; sem assinatura de código, por decisão / Done; no code signing, by decision | — | — |
 | Windows: teste num PC de verdade / test on a real PC | Fica com a comunidade / Left to the community | [#6](https://github.com/marciobarbato/rising-lands-public/issues/6) | **Bem-vinda / Welcome** |
 | Windows: áudio, música do CD, FLC, filmes / audio, CD music, FLC, movies | Aberto; contribuição externa em discussão / Open; outside contribution under discussion | [#4](https://github.com/marciobarbato/rising-lands-public/issues/4) | Combinar na issue antes / Agree on the issue first |
-| Host Windows: atalhos modernos, configurar teclas, caminhos melhores / Windows host: modern shortcuts, key setup, better paths | Feito; entra na próxima pré-alfa / Done; in the next pre-alpha | [#7](https://github.com/marciobarbato/rising-lands-public/issues/7) (fechada / closed) | — |
+| Host Windows: atalhos modernos, configurar teclas, caminhos melhores / Windows host: modern shortcuts, key setup, better paths | Feito; na pré-alfa 3 / Done; in pre-alpha 3 | [#7](https://github.com/marciobarbato/rising-lands-public/issues/7) (fechada / closed) | — |
 | Atalhos modernos e fila de ordens / Modern shortcuts and order queue | Feito (macOS e Windows) / Done (macOS and Windows) | — | — |
 | Tela de Opções no estilo original / Options screen in the original style | Feito (macOS e Windows) / Done (macOS and Windows) | — | — |
 | Caminhos melhores (opcional) / Better unit paths (opt-in) | Feito no motor, no macOS e no Windows / Done in the engine, on macOS and on Windows | — | — |
@@ -47,8 +47,8 @@ macOS.
 - **Áudio, música do CD, figuras de evento (FLC) e filmes ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)):**
   há uma contribuição externa em discussão. Combine na issue antes de começar.
 - **Atalhos modernos, configurar teclas e caminhos melhores no host
-  ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), fechada):** feitos no código atual, com os
-  mesmos padrões do macOS; entram na próxima pré-alfa. Detalhes em [`WINDOWS_CLIENT.md`](WINDOWS_CLIENT.md).
+  ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), fechada):** feitos, com os
+  mesmos padrões do macOS; estão na pré-alfa 3. Detalhes em [`WINDOWS_CLIENT.md`](WINDOWS_CLIENT.md).
 
 ### Atalhos modernos (estilo Age of Empires II)
 
@@ -112,8 +112,8 @@ The client is in [`windows/`](../windows/README.md): Win32 + GDI in C, with the 
 - **Audio, CD music, event pictures (FLC) and movies ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)):**
   an outside contribution is under discussion. Agree on the issue before starting.
 - **Modern shortcuts, key dialog and better paths in the host
-  ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), closed):** done in the current source, with the
-  macOS defaults; they come with the next pre-alpha. Details in [`WINDOWS_CLIENT.md`](WINDOWS_CLIENT.md).
+  ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), closed):** done, with the
+  macOS defaults; they are in pre-alpha 3. Details in [`WINDOWS_CLIENT.md`](WINDOWS_CLIENT.md).
 
 ### Modern shortcuts (Age of Empires II style)
 

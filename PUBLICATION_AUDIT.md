@@ -400,3 +400,10 @@ Left out, and why: the native receipt (`hud_counter-v1`: native 314/0/0, Rust 31
 
 Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (with `RL_CD_ROOT`;
 all passed). In the private repository: the MONDE01 gate kept its SHA-256 and `validate.sh` passed.
+
+### 2026-11-13: Windows pre-alpha 3 (`v0.1.0-prealpha.3-windows`)
+
+No private change copied. READMEs (PT and EN) and `docs/ROADMAP.md` now say the Windows modern shortcuts, key dialog
+and better paths are in pre-alpha 3, instead of "in the current source" (round of 2026-11-13, first). The release
+binaries are the CI artifacts of the commit that carries this entry, with their SHA-256 in the release notes; no game
+data is bundled.

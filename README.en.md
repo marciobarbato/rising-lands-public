@@ -30,9 +30,9 @@ What works:
 - CD import (.BIN/.CUE, .ISO or the CD folder);
 - the original menus: "Um jogador", "Novo jogo", briefing and objectives, pause (resume, objectives, abandon, restart), the result screen and next stage, credits and "Sair";
 - **saves**: the original save and load lists and a "Partida" menu (**F5** quick save, **F9** quick load), with the stage-start autosave. The format is the macOS one: the `Partidas` folder works on both. Saves are in pre-alpha 2 and later;
-- the **Options screen** in the original style, on the main and pause menus: difficulty, speed, **Atalhos modernos** (the key shortcuts and the Shift+click order queue) and **Caminhos melhores** (better unit paths), kept between games, with the macOS defaults (modern shortcuts on, better paths off; in the current source, coming in the next Windows pre-alpha);
-- the macOS **modern shortcuts**: the same digit twice centres on that group, **Home** goes to the last alert, **.** and **,** pick the next idle worker or soldier, **H** selects the sanctuary (in the current source, coming in the next Windows pre-alpha);
-- the **key dialog** (the Options screen's "Configurar teclas" item or **Partida → Configurar teclas…**), with the macOS rules: the game still receives only the original's 23 keys (in the current source, coming in the next Windows pre-alpha);
+- the **Options screen** in the original style, on the main and pause menus: difficulty, speed, **Atalhos modernos** (the key shortcuts and the Shift+click order queue) and **Caminhos melhores** (better unit paths), kept between games, with the macOS defaults (modern shortcuts on, better paths off; the modern shortcuts and better paths take effect from pre-alpha 3);
+- the macOS **modern shortcuts**: the same digit twice centres on that group, **Home** goes to the last alert, **.** and **,** pick the next idle worker or soldier, **H** selects the sanctuary (pre-alpha 3 and later);
+- the **key dialog** (the Options screen's "Configurar teclas" item or **Partida → Configurar teclas…**), with the macOS rules: the game still receives only the original's 23 keys (pre-alpha 3 and later);
 - the campaign, with the macOS host's mouse and keyboard, edge scrolling, fullscreen (**F11**), pause (**P**) and speeds (**+** and **−**: 0.5x, 1x, 2x and 4x).
 - Parity with macOS: with the same input, the Windows driver and the macOS driver produce the same frames, tick by tick, the same menu walk and the same save files.
 
@@ -117,7 +117,7 @@ Tests that need the original game files are skipped when the files are absent. W
 
 ## Work fronts
 
-What is being worked on, the state of each front and where outside help fits: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Done since the last published releases: saves, the Options screen, modern shortcuts, the key dialog and better unit paths on Windows, the MSVC x64 and ARM64 builds, the Options screen and better unit paths on macOS. The open fronts each have an issue: the Windows client ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)), audio and movies on Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)), testing on a Windows PC ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), other CDs and languages ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) and in-game checks ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Before starting anything large, comment on the front's issue.
+What is being worked on, the state of each front and where outside help fits: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Done since the last published macOS release: the Options screen and better unit paths (on Windows they are in pre-alpha 3). The open fronts each have an issue: the Windows client ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)), audio and movies on Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)), testing on a Windows PC ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), other CDs and languages ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) and in-game checks ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Before starting anything large, comment on the front's issue.
 
 ## Help wanted
 
