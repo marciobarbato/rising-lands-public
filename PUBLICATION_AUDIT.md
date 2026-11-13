@@ -383,3 +383,20 @@ the original); `UNREACHABLE_REVIEW` notes; `HANDOFF.md`.
 
 Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (with `RL_CD_ROOT`;
 all passed). In the private repository: the MONDE01 gate kept its SHA-256 and `validate.sh` passed.
+
+### 2026-11-13 (seventh round): private `main` `98cf2914`
+
+Previous synchronisation: public `4ddb900` (private `main` `ef16deda`).
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `63946d7e` HUD resource counters above 9999 (AffCompteurMatiere `0x417f38`): IntToBCD keeps the plain thousands quotient (at most 65), drawn as at most four dots, as the original; the engine used to stop at `0x417f6e` | `engine/crates/rl-core/src/render_hud.rs` |
+
+Left out, and why: the native receipt (`hud_counter-v1`: native 314/0/0, Rust 314 equal; before the port 110 equal and
+204 stops, every one above 9999), the private render test matrix and `HANDOFF.md`. The AI receipts of the same night
+(`ai_alliance-v1` 2160/2160, `ai_diplomacy-v1` 4320/4320) changed no engine file.
+
+Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (with `RL_CD_ROOT`;
+all passed). In the private repository: the MONDE01 gate kept its SHA-256 and `validate.sh` passed.

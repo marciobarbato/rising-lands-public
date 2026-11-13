@@ -284,9 +284,10 @@ impl Context<'_> {
         Ok(())
     }
     fn counter(&mut self, value: u32, highlight: u32, mut x: i32, y: i32) -> Result<()> {
-        if value > 9999 {
-            return self.stop(0x417f6e, "AffCompteurMatiere counter value above 9999");
-        }
+        // IntToBCD 0x467cd1 divides by 1000, 100, 10 and 1 and stores each
+        // quotient as a byte: above 9999 the thousands byte is the plain
+        // quotient (at most 65 for the u16 stock word), drawn as at most four
+        // dots below; the other digits are the usual ones.
         let digits = [value / 1000, value / 100 % 10, value / 10 % 10, value % 10];
         let mut leading = true;
         for (i, digit) in digits.into_iter().enumerate() {
