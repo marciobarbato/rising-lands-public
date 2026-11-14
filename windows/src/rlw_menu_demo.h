@@ -29,6 +29,12 @@ typedef struct {
  int (*autosave)(void *driver, const char *path);
  int (*load)(void *driver, const char *path);
  int (*shell_save_slot)(void *driver, const char *path, int32_t *saved);
+ /* After load: the original load lists' MenuInit(18) tail for a pause-list save
+  * (rlw_driver_load_resume / macos_live_load_resume). */
+ int (*load_resume)(void *driver);
+ /* In play: the world's bytes at 0x4e2f78 (menu mode, 18 in game) and 0x4e05a2
+  * (HUD refresh latch), and its clock (rl_relogio). */
+ int (*probe)(void *driver, uint8_t bytes[2], uint64_t *tick, uint32_t *milliseconds);
 } RlwDemoOps;
 /* Returns 0 when the whole walk ran, 1 when it ended early (reason on stderr). */
 int rlw_menu_demo_run(const RlwDemoOps *ops, void *driver, FILE *out);
@@ -38,7 +44,10 @@ int rlw_menu_demo_run(const RlwDemoOps *ops, void *driver, FILE *out);
  * same 60 frames replayed (compared), the autosave loaded and its first 30
  * frames replayed (compared); the pause menu's Salvar list (SAVE_SLOT over the
  * same slot), 20 frames, the pause menu's Carregar list (LOAD_SLOT of that
- * paused save), the reopened pause and "continuar", 20 frames. Lines as in the
- * menu walk, plus the SHA-256 of each slot file and of its .view companion. */
+ * paused save) and the load resume: the game plays on as after the original
+ * load lists (mode 18, HUD latch, the saved clock and picture), 10 + 20 frames
+ * without reopening the pause; then 100 frames under the periodic autosave
+ * schedule (40-frame test interval) saving to the "autosave" slot. Lines as in
+ * the menu walk, plus the SHA-256 of each slot file and of its .view companion. */
 int rlw_save_demo_run(const RlwDemoOps *ops, void *driver, const char *directory, FILE *out);
 #endif

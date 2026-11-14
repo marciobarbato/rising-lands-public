@@ -524,3 +524,32 @@ Checked before the push: `cargo fmt --all --check` and `cargo test --release --l
 `./macos/tests/run.sh` (all passed) and `./build-macos.sh`. In the private repository: MONDE01 gate kept its SHA-256,
 `validate.sh` passed, and the macOS integration ran every UI smoke (pause smoke now saves from the pause list, loads and
 keeps playing).
+
+### 2026-11-14: private `main` `cb046634` (Windows)
+
+Previous synchronisation: public `2a8398e` (private `main` `8dc7eb58`). Windows client work of 2026-11-14 (three
+fronts); no engine or macOS source changed (`git diff 8dc7eb58 cb046634 -- motor apps/macos-preview` is empty).
+
+Copied (`apps/windows/` → `windows/`, path-mapped patch; README and workflow keep their public-only text):
+
+| Private change | Public files |
+|---|---|
+| `fb1c35c1` sound requests captured by the Windows driver (the macOS transport), `audio_parity.sh` | `windows/src/rlw_driver.c/.h`, `windows/audio_parity.sh`, `windows/tests/audio_parity.c` |
+| `51aa7ff9`, `4a1c22e6`, `b0bb235e`, `624127d1` sound effects (waveOut over the portable `macos_audio_mapper.c`), menu Áudio, SOUND bank import, CD music from the player's .BIN/.CUE, in-game event pictures (FLC), intro/defeat/campaign movies (portable Cinepak + MS ADPCM) | `windows/src/rlw_audio*`, `rlw_sound*`, `rlw_cdmusic*`, `rlw_eventflc*`, `rlw_movie*`, `windows/tests/test_audio.c`, `windows/tests/movie_parity.swift` |
+| `c7ed287b` a game saved from the pause list loads in play (as macOS `2f8ad9dd`) | `windows/src/rlw_shell.inc`, `rlw_driver.h`, `rlw_main.c`, `windows/tests/parity.c` |
+| `60504576` saved-games manager (rename, delete to the Recycle Bin), periodic autosave (off; 5/10/15 game minutes), OPÇÕES button check | `windows/src/rlw_savemgr*`, `rlw_autosave*`, `windows/tests/test_savemgr.c` |
+| `3bd49f8c` Jogo menu (macOS order: pause, speed, difficulty, saves, Opções…, keys, modern shortcuts, better paths) | `windows/src/rlw_gamemenu*`, `windows/tests/test_gamemenu.c` |
+| `8304eb7f` Shift+click order-queue flags on the map | `windows/src/rlw_markers*`, `windows/tests/test_markers.c` |
+| `e0d280ae`, `03c4d6fc` CI smokes without game data, DPI mixed mode; **x86-64 only** (user decision 2026-11-14): `msvc-arm64`/`arm64-run` jobs and `-Arch arm64` removed | `windows/ci/smoke.sh`, `windows/src/rlw_smoke*`, `rlw_dpi*`, `windows/build-msvc.ps1`, `.github/workflows/windows-client.yml` |
+
+Docs: `docs/WINDOWS_CLIENT.md`, `windows/README.md`, `README.md`, `README.en.md` and `docs/ROADMAP.md` (Windows parts):
+x86-64 only from now on (pre-alphas 1–3 also shipped ARM64), the new features described as in the source for pre-alpha 4
+(not yet released).
+
+Left out, and why: `tests/test_windows_host.py` (private checker), `ci/sign.ps1` and the signing steps, the private
+pre-alpha 4 notes draft, research catalogue files (`audio_parity.sh` skips that check when absent).
+
+Checked before the push: `windows/build.sh test` (8 suites) and `windows/build.sh` (mingw) in this clone;
+`parity.sh`/`audio_parity.sh --build-only`. In the private repository: `scripts/check.py --domain windows`, `parity.sh`
+300 (PARIDADE 301, MENUS 410, SAVES 481, REGRAS 6), `audio_parity.sh` 600 (SONS OK, movies identical to the macOS
+decoder) and the private CI's two x86-64 jobs.

@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "rlw_keys_dialog.h"
+#include "rlw_dpi.h"
 
 enum { IDC_LIST = 200, IDC_ALIASES, IDC_CHANGE, IDC_ADD, IDC_REMOVE, IDC_RECORDER, IDC_CANCEL_CAPTURE, IDC_FEEDBACK,
        IDC_RESET, IDC_CANCEL, IDC_APPLY, IDC_TITLE, IDC_TEXT };
@@ -217,8 +218,18 @@ static HWND child(const wchar_t *cls, const wchar_t *text, DWORD style, int id, 
 int rlw_keys_dialog_is_open(void) { return K.window != NULL; }
 int rlw_keys_dialog_message(MSG *message) { return K.window && IsDialogMessageW(K.window, message); }
 
+static int open_window(HWND owner, const RlwBindings *applied, const RlwKeysDialogHost *host);
+/* The window has a fixed pixel layout: it is created DPI unaware (rlw_dpi.h), so
+ * Windows scales it as a whole on high-DPI screens while the game window is per-monitor aware. */
 int rlw_keys_dialog_open(HWND owner, const RlwBindings *applied, const RlwKeysDialogHost *host) {
  if (K.window) { SetForegroundWindow(K.window); return 0; }
+ RlwDpiScope dpi = rlw_dpi_begin_unaware();
+ int rc = open_window(owner, applied, host);
+ rlw_dpi_end(dpi);
+ return rc;
+}
+
+static int open_window(HWND owner, const RlwBindings *applied, const RlwKeysDialogHost *host) {
  HINSTANCE instance = GetModuleHandleW(NULL);
  static int registered;
  if (!registered) {

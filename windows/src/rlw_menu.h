@@ -38,6 +38,8 @@ typedef struct {
  uint32_t (*options_open)(void *driver);
  int (*options_sync)(void *driver, const RlOpcoesValores *values);
  int (*options_button)(void *driver, int32_t rect[4]);
+ /* Jogo > Opções… (rlw_options_show / macos_live_options_show); optional. */
+ int (*options_show)(void *driver);
 } RlwMenuOps;
 
 enum {

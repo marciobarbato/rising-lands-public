@@ -6,7 +6,8 @@
 # the presented pixels and palette. Then the scripted menu walk
 # (src/rlw_menu_demo.c: main menu, Novo jogo, briefing, play, pause, restart)
 # through both drivers, compared step by step. Then the save walk (stage
-# autosave, save, load and replay, the pause menu's save and load lists), whose
+# autosave, save, load and replay, the pause menu's save and load lists, the
+# loaded pause-list save playing on, the periodic autosave schedule), whose
 # lines include the SHA-256 of every slot and .view file each driver wrote.
 # Last, the Opções rule items: each combination's regras in the created world
 # (Windows driver only; the parity runs above keep every option off).
@@ -38,10 +39,11 @@ cc_host() { "$CC" -std=c11 -O2 -I"$REPO/engine/include" -I"$HERE/src" "$@"; }
 echo "== parity-windows / parity-macos / rlw-import"
 S="$HERE/src"
 cc_host "$HERE/tests/parity.c" "$S/rlw_driver.c" "$S/rlw_menu_ops.c" "$S/rlw_menu.c" "$S/rlw_menu_demo.c" "$S/rlw_flc.c" "$S/rlw_fs.c" "$S/rlw_sha256.c" \
-  "$LIB" -o "$OUT/parity-windows"
+  "$S/rlw_autosave.c" "$S/rlw_saves.c" "$LIB" -o "$OUT/parity-windows"
 cc_host -Wno-deprecated-declarations -DPARITY_MACOS -DMACOS_STATIC_ENGINE -DMACOS_EVENT_FLC -I"$MAC" \
   "$HERE/tests/parity.c" "$MAC/macos_live_driver.c" "$MAC/macos_projection_codec.c" "$MAC/macos_audio_mapper.c" \
-  "$MAC/events_host_file.c" "$S/rlw_menu.c" "$S/rlw_menu_demo.c" "$S/rlw_flc.c" "$S/rlw_fs.c" "$S/rlw_sha256.c" "$LIB" -o "$OUT/parity-macos"
+  "$MAC/events_host_file.c" "$S/rlw_menu.c" "$S/rlw_menu_demo.c" "$S/rlw_flc.c" "$S/rlw_fs.c" "$S/rlw_sha256.c" \
+  "$S/rlw_autosave.c" "$S/rlw_saves.c" "$LIB" -o "$OUT/parity-macos"
 cc_host "$HERE/tests/import_cli.c" "$HERE/src/rlw_cd.c" "$HERE/src/rlw_fs.c" "$HERE/src/rlw_sha256.c" -o "$OUT/rlw-import"
 [ "$BUILD_ONLY" = 1 ] && exit 0
 if [ -n "$CD" ]; then DATA="$OUT/data"; "$OUT/rlw-import" "$CD" "$DATA"; fi

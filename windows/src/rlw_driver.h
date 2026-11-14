@@ -98,15 +98,23 @@ int rlw_driver_save_begin(RlwDriver *d, const char *path, RlwSaveJob **job);
 /* Stage-start autosave: the world captured by the load tail and the first picture. */
 int rlw_driver_autosave(RlwDriver *d, const char *path);
 /* Replaces world, renderer and picture together (an open shell session is
- * discarded); host input is reset. A pause-list save (mode16) reopens the
- * pause: rlw_driver_advance then reports screen 16 without stepping. */
+ * discarded); host input is reset. A pause-list save (mode16) stays paused
+ * until rlw_driver_load_resume (rlw_driver_advance reports screen 16). */
 int rlw_driver_load(RlwDriver *d, const char *path);
+/* Right after a successful rlw_driver_load (macos_live_load_resume): a game
+ * saved from the original pause list (mode16) continues as after the original
+ * load lists (GameLoad 0x46b88d, then MenuInit(18) + HUD latch 0x4e05a2),
+ * through the pause menu's own "Voltar ao jogo" item. 0 and nothing changed
+ * for any other save. */
+int rlw_driver_load_resume(RlwDriver *d);
 void rlw_driver_save_error(const RlwDriver *d, char *out, size_t capacity);
 /* 1 before a stage's first rlw_driver_advance (its load tail): the host takes the
  * stage autosave right after that advance succeeds. */
 int rlw_driver_stage_start(const RlwDriver *d);
 /* Current stage file name ("MONDE01.ETA"; "MENU" in the original main menu). */
 const char *rlw_driver_mission(const RlwDriver *d);
+/* The current world's clock (rl_relogio): tick and milliseconds. */
+int rlw_driver_clock(const RlwDriver *d, uint64_t *tick, uint32_t *milliseconds);
 /* Host messages queued by rlw_driver_event and not yet given to a frame. */
 uint32_t rlw_driver_pending_input(const RlwDriver *d);
 /* Any thread, one job at a time, no driver: companion first, then the slot
@@ -130,6 +138,10 @@ int rlw_options_sync(RlwDriver *d, const RlOpcoesValores *values);
 int rlw_options_input(RlwDriver *d, const RlShellInput *input, uint32_t keys, RlOpcoesEvento *out);
 uint32_t rlw_options_open(const RlwDriver *d);
 int rlw_options_button(RlwDriver *d, int32_t rect[4]);
+/* Jogo > Opções… (macos_live_options_show): opens the screen over the main or
+ * pause menu; rlw_options_redraw repaints an open screen after a host sync. */
+int rlw_options_show(RlwDriver *d);
+int rlw_options_redraw(RlwDriver *d);
 /* Rule set (RL_REGRA_*) for worlds created afterwards: "Atalhos modernos" turns
  * on the Shift+click order queue (RL_REGRA_FILA_ORDENS) and "Caminhos melhores"
  * the modern unit paths (RL_REGRA_CAMINHOS_MELHORES), as on macOS. The menu
@@ -144,6 +156,38 @@ uint32_t rlw_driver_rules(const RlwDriver *d);
  * shell, not stopped), between frames. Copies each (address, size) range of one
  * complete projection to out, concatenated in request order. 0 or an error. */
 int rlw_driver_peek(RlwDriver *d, const uint32_t *addresses, const uint32_t *sizes, uint32_t count, uint8_t *out);
+/* Pending Shift+click waypoints of one unit (rl_fila_ordens; macos_live_order_queue),
+ * play only (no shell). Read-only; 0 or an error. */
+int rlw_driver_order_queue(RlwDriver *d, uint32_t unit, uint16_t *cells, uint32_t capacity, uint32_t *count);
 /* Preset (0..2) of the next stage start: New game, Restart or Next stage. */
 int rlw_driver_set_difficulty(RlwDriver *d, uint32_t difficulty);
+
+/* ---- Sound requests (front 2, audio) ----
+ * Same contract and record layout as MacOSLiveDriver.h's macos_live_sound_*
+ * (MacOSSoundEvent in MacOSAudioMapper.h): once enabled, every successful play
+ * input phase appends its kind-10 PostSound/StopSound/StopAllSound copies plus
+ * the WinMain loop's PlaySnd_Manage ticks. The host drains them after each
+ * rlw_driver_advance; game state is never touched. A new world clears the queue. */
+enum { RLW_SOUND_MANAGE = 0, RLW_SOUND_POST = 1, RLW_SOUND_STOP = 2, RLW_SOUND_STOP_ALL = 3 };
+typedef struct { uint32_t kind, frame, phase, site, eax, edx, ebx, ecx, volume, has_volume; } RlwSoundEvent;
+int rlw_driver_sound_capture(RlwDriver *d, uint32_t enabled);
+uint32_t rlw_driver_sound_events(RlwDriver *d, RlwSoundEvent *out, uint32_t capacity);
+uint64_t rlw_driver_sound_dropped(const RlwDriver *d);
+/* Identity of the current world (changes on load, next stage, restart, resume):
+ * the host resets its playback when it changes (NativeAudioPlayback.reset). */
+uint64_t rlw_driver_sound_world(const RlwDriver *d);
+/* The current world's frame events (rl_eventos_quadro; macos_live_cd_events):
+ * the CD music requests are kind 2, id 102 (MCICD_Play), registers[0] the track,
+ * registers[1] & 255 the loop flag, site the caller. 0 or the ABI code. */
+int rlw_driver_cd_events(RlwDriver *d, RlFrameEvent *out, uint32_t capacity, uint32_t *required);
+/* In-game FLC events (event-flc.md), MacOSLiveDriver's macos_live_event_flc_*:
+ * with host playback on (the window's default; off in smoke, parity and demo
+ * runs, which keep ending an event at once) the driver leaves a running event
+ * to the host, which polls the state after each frame (idle in a shell
+ * session), asks the name of the declared entry and calls finish once after the
+ * last frame. */
+void rlw_driver_event_flc_host(RlwDriver *d, int enabled);
+int rlw_driver_event_flc_state(RlwDriver *d, RlEventFlcStateV1 *out);
+int rlw_driver_event_flc_finish(RlwDriver *d);
+int rlw_driver_event_flc_name(RlwDriver *d, uint32_t index, char out[16]);
 #endif

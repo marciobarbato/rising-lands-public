@@ -2,6 +2,7 @@
 #include "rlw_demo.h"
 #include "rlw_sha256.h"
 #include "rlw_fs.h"
+#include "rlw_autosave.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -90,6 +91,16 @@ static int options_walk(Walk *w) {
  if (c) { line(w, "options-sync", "failed"); return end_walk(w, "options sync"); }
  line(w, "options-sync", "ok");
  int32_t r[4]; if (m->options_button(w->d, r)) return end_walk(w, "options button");
+ /* Aligned with the menu column (engine 645c2f17): centred on AffText's axis
+  * x = 400, on the row below the items, overlapping no item zone (1..7). */
+ int overlap = 0;
+ for (uint32_t z = 1; z < 8; z++) {
+  int32_t q[4]; if (m->zone(w->d, z, q)) return end_walk(w, "menu zone");
+  fprintf(w->out, "%u zone %u %d %d %d %d\n", w->step++, z, q[0], q[1], q[2], q[3]);
+  if (q[2] > q[0] && q[3] > q[1] && q[0] < r[2] && r[0] < q[2] && q[1] < r[3] && r[1] < q[3]) overlap = 1;
+ }
+ fprintf(w->out, "%u options-button %d %d %d %d %s\n", w->step++, r[0], r[1], r[2], r[3], (r[0] + r[2]) / 2 == 400 && !overlap ? "aligned" : "MISPLACED");
+ if ((r[0] + r[2]) / 2 != 400 || overlap) return end_walk(w, "the options button is off the menu column or over an item");
  uint32_t x = (uint32_t)((r[0] + r[2]) / 2), y = (uint32_t)((r[1] + r[3]) / 2);
  if (act(w, "options-move", rlw_menu_mouse(&w->menu, 0x200, x, y, 0), RLW_MENU_IDLE) ||
      act(w, "options-flush", rlw_menu_flush_move(&w->menu, 0), RLW_MENU_REPAINT) ||
@@ -100,6 +111,13 @@ static int options_walk(Walk *w) {
      keys(w, "options-right", RL_OPCOES_DIREITA, RLW_MENU_REPAINT) ||
      keys(w, "options-escape", RL_SHELL_ESCAPE, RLW_MENU_REPAINT)) return 1;
  if (m->options_open(w->d)) return end_walk(w, "options did not close");
+ /* Jogo > Opções… opens the same screen without the button; Escape closes it. */
+ if (m->options_show) {
+  int shown = m->options_show(w->d); line(w, "options-show", shown ? "failed" : "ok");
+  if (shown || !m->options_open(w->d)) return end_walk(w, "Jogo > Opções… did not open the screen");
+  if (ticks(w, 2) || keys(w, "options-escape", RL_SHELL_ESCAPE, RLW_MENU_REPAINT)) return 1;
+  if (m->options_open(w->d)) return end_walk(w, "options did not close");
+ }
  /* The pointer leaves the button (its caption returns to the item font). */
  return act(w, "move", rlw_menu_mouse(&w->menu, 0x200, 4, 4, 0), RLW_MENU_IDLE) || act(w, "flush", rlw_menu_flush_move(&w->menu, 0), RLW_MENU_REPAINT);
 }
@@ -245,6 +263,11 @@ int rlw_save_demo_run(const RlwDemoOps *ops, void *driver, const char *directory
  slot_line(&w, saved ? "save-slot-failed" : "save-slot", c, path);
  if (c || saved) { ops->menu.error(driver, w.menu.error, sizeof(w.menu.error)); end_walk(&w, w.menu.error); goto done; }
  if (ops->menu.mode(driver)) { end_walk(&w, "save slot did not resume"); goto done; }
+ /* The resumed world: what a load of this paused save must continue as. */
+ uint8_t resumed[2] = {0, 0}, loaded[2] = {0, 0}; uint64_t resumed_tick = 0, loaded_tick = 0; uint32_t resumed_ms = 0, loaded_ms = 0;
+ if (ops->probe(driver, resumed, &resumed_tick, &resumed_ms)) { end_walk(&w, "probe after the save slot"); goto done; }
+ line(&w, "resumed", "game"); char resumed_hex[65]; memcpy(resumed_hex, w.last_hex, 65);
+ fprintf(out, "%u resumed-state mode=%u latch=%u clock=%llu/%u\n", w.step++, resumed[0], resumed[1], (unsigned long long)resumed_tick, resumed_ms);
  files_line(&w, directory);
  if (play(&w, 20, NULL, 0) || escape_to_pause(&w)) goto done;
  /* Carregar (pause item 0): list 12, Enter on the first slot: the paused save. */
@@ -254,14 +277,37 @@ int rlw_save_demo_run(const RlwDemoOps *ops, void *driver, const char *directory
  slot_path(directory, w.menu.host_event.reserved, path, sizeof(path));
  c = ops->load(driver, path); rlw_menu_reset(&w.menu); line(&w, "load-slot", c ? "failed" : "ok");
  if (c) { ops->menu.error(driver, w.menu.error, sizeof(w.menu.error)); end_walk(&w, w.menu.error); goto done; }
- /* A save from the pause list reopens the original pause at the next host tick. */
- if (play(&w, 1, NULL, 0)) goto done;
- if (ops->menu.mode(driver) != RL_SHELL_PAUSE) { end_walk(&w, "the paused save did not reopen the pause"); goto done; }
- if (pointer_off_items(&w) || ticks(&w, 5)) goto done;
- for (int i = 0; i < 5; i++) if (keys(&w, "down", RL_SHELL_DOWN, RLW_MENU_REPAINT)) goto done;
- if (keys(&w, "enter-continue", RL_SHELL_ENTER, RLW_MENU_GAME)) goto done;
- line(&w, "resume", "game");
+ /* The original load lists continue after GameLoad 0x46b88d with MenuInit(18)
+  * and the HUD latch (list12 0x42c57a/0x42c57f): the paused save plays on in
+  * mode 18 with the clock and picture it was saved with. */
+ c = ops->load_resume(driver); line(&w, "load-resume", c ? "failed" : "ok");
+ if (c) { ops->menu.error(driver, w.menu.error, sizeof(w.menu.error)); end_walk(&w, w.menu.error); goto done; }
+ if (ops->menu.mode(driver)) { end_walk(&w, "the paused save did not resume play"); goto done; }
+ if (ops->probe(driver, loaded, &loaded_tick, &loaded_ms)) { end_walk(&w, "probe after the load resume"); goto done; }
+ int same = loaded[0] == 18 && loaded[1] == 1 && loaded_tick == resumed_tick && loaded_ms == resumed_ms && !strcmp(w.last_hex, resumed_hex);
+ fprintf(out, "%u loaded-state mode=%u latch=%u clock=%llu/%u picture=%s %s\n", w.step++, loaded[0], loaded[1], (unsigned long long)loaded_tick, loaded_ms,
+         strcmp(w.last_hex, resumed_hex) ? "differs" : "equal", same ? "ok" : "FAILED");
+ if (!same) { end_walk(&w, "the loaded paused save is not the resumed game"); goto done; }
+ uint64_t from = ops->frames(driver);
+ if (play(&w, 10, NULL, 0)) goto done;
+ if (ops->menu.mode(driver) || ops->frames(driver) != from + 10) { end_walk(&w, "the loaded paused save did not play 10 frames"); goto done; }
  if (play(&w, 20, NULL, 0)) goto done;
+ files_line(&w, directory);
+ /* Periodic autosave (Partida > Salvamento automático): the host's schedule over
+  * eligible frames, with a 40-frame test interval, writing the ordinary save to
+  * its own slot "autosave"; a busy boundary retries at the next frame. */
+ RlwAutosave periodic; rlw_autosave_init(&periodic, 40);
+ snprintf(path, sizeof(path), "%s" RLW_SEP RLW_AUTOSAVE_SLOT ".rls", directory);
+ for (unsigned i = 0; i < 100; i++) {
+  if (play(&w, 1, NULL, 0)) goto done;
+  if (ops->menu.mode(driver)) { end_walk(&w, "the game paused during the periodic autosave"); goto done; }
+  if (!rlw_autosave_frame(&periodic, 1)) continue;
+  c = ops->save(driver, path);
+  if (c == RL_SAVE_BUSY) continue;
+  slot_line(&w, "autosave-periodic", c, path);
+  if (c) { ops->menu.error(driver, w.menu.error, sizeof(w.menu.error)); end_walk(&w, w.menu.error); goto done; }
+  rlw_autosave_saved(&periodic);
+ }
  files_line(&w, directory);
  fprintf(out, "end complete\n");
  rc = 0;

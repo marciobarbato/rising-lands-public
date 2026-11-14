@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "rlw_audio_ui.h"
 #include "rlw_cd.h"
 #include "rlw_demo.h"
 #include "rlw_driver.h"
@@ -31,7 +32,15 @@
 #include "rlw_menu.h"
 #include "rlw_menu_ops.h"
 #include "rlw_modern.h"
+#include "rlw_markers.h"
+#include "rlw_markers_gdi.h"
+#include "rlw_smoke.h"
+#include "rlw_dpi.h"
 #include "rlw_saves.h"
+#include "rlw_savemgr.h"
+#include "rlw_autosave.h"
+#include "rlw_savemgr_dialog.h"
+#include "rlw_gamemenu_win.h"
 #include "rlw_sha256.h"
 #include "rising_engine.h"
 
@@ -44,6 +53,7 @@ typedef struct {
  unsigned difficulty, frames, speed;
  int selftest, import_only, headless, fullscreen, no_verify_image, demo_input;
  int difficulty_given, speed_given; /* explicit --difficulty/--speed win over opcoes.ini */
+ int smoke_markers, smoke_prompt, smoke_window; /* rlw_smoke.h: CI smokes without game data */
 } Options;
 
 static struct {
@@ -69,6 +79,8 @@ static struct {
  RlwSnapshot snapshot;
  /* Bindings file beside opcoes.ini (players' runs only). */
  char keys_path[4200];
+ /* Shift+click order queue markers (rlw_markers.h) of markers_driver. */
+ RlwMarkers markers; RlwDriver *markers_driver; unsigned marker_tick;
 } G = {0};
 
 /* ---------- utilities ---------- */
@@ -119,8 +131,10 @@ static void update_viewport(void) {
 }
 
 static void present(HDC dc) {
+ { RECT client; GetClientRect(G.hwnd, &client); if (rlw_audio_ui_movie_present(dc, &client, &G.view)) return; } /* original movie (front 2) */
  if (!G.driver) return;
  const uint8_t *pixels = rlw_driver_pixels(G.driver), *palette = rlw_driver_palette(G.driver);
+ (void)rlw_audio_ui_picture(G.driver, &pixels, &palette); /* in-game FLC event (front 2) */
  for (int i = 0; i < 256; i++) {
   G.bmi->bmiColors[i].rgbRed = palette[3 * i]; G.bmi->bmiColors[i].rgbGreen = palette[3 * i + 1];
   G.bmi->bmiColors[i].rgbBlue = palette[3 * i + 2]; G.bmi->bmiColors[i].rgbReserved = 0;
@@ -131,6 +145,8 @@ static void present(HDC dc) {
                  {0, G.view.top, G.view.left, G.view.bottom}, {G.view.right, G.view.top, c.right, G.view.bottom}};
  for (int i = 0; i < 4; i++) if (bars[i].right > bars[i].left && bars[i].bottom > bars[i].top) FillRect(dc, &bars[i], black);
  SetStretchBltMode(dc, COLORONCOLOR);
+ if (!(G.markers.path_count && G.markers_driver == G.driver && !rlw_shell_mode(G.driver) &&
+       rlw_markers_paint(dc, &G.markers, G.view.left, G.view.top, G.view.right - G.view.left, G.view.bottom - G.view.top, pixels, G.bmi)))
  StretchDIBits(dc, G.view.left, G.view.top, G.view.right - G.view.left, G.view.bottom - G.view.top,
                0, 0, 800, 600, pixels, G.bmi, DIB_RGB_COLORS, SRCCOPY);
 }
@@ -286,6 +302,17 @@ static void step_modern(void) {
  if (allowed && G.job.state == RLW_JOB_RUNNING) return;
  G.job_active = 0;
 }
+/* stepOrderQueueMarkers: every 4 frames, read only while the world has the
+ * order queue rule (RL_REGRA_FILA_ORDENS) and some unit has waypoints. */
+static int marker_queue(void *ctx, uint32_t unit, uint16_t *cells, uint32_t capacity, uint32_t *count) { (void)ctx; return rlw_driver_order_queue(G.driver, unit, cells, capacity, count); }
+static void step_markers(void) {
+ static RlwMarkers next;
+ if (++G.marker_tick % RLW_MARKER_PERIOD) return;
+ rlw_markers_clear(&next);
+ if (modern_allowed() && (rlw_driver_rules(G.driver) & RL_REGRA_FILA_ORDENS) && rlw_markers_any_queued(marker_queue, NULL))
+  (void)rlw_markers_read(modern_peek, marker_queue, NULL, &next);
+ G.markers = next; G.markers_driver = G.driver;
+}
 static void start_modern(int command, uint32_t digit) {
  if (G.left_held) { G.pending_modern = command; G.pending_digit = digit; return; }
  if (G.job_active || !modern_allowed()) return;
@@ -303,10 +330,13 @@ static void start_modern(int command, uint32_t digit) {
 }
 
 /* ---------- "Opções" settings (opcoes.ini beside Dados and Partidas) ---------- */
+/* Partida > Salvamento automático (rlw_autosave.h): minutes (off by default) and the schedule. */
+static unsigned autosave_minutes; static RlwAutosave autosave_schedule;
 static void options_store(void) {
  if (!G.options_path[0]) return;
- char text[160]; int n = snprintf(text, sizeof(text), "atalhos=%u\r\ncaminhos=%u\r\ndificuldade=%u\r\nvelocidade=%u\r\n",
-                                  G.atalhos, G.caminhos, G.opt.difficulty, G.speed);
+ char text[400]; int n = snprintf(text, sizeof(text), "atalhos=%u\r\ncaminhos=%u\r\ndificuldade=%u\r\nvelocidade=%u\r\nautosave=%u\r\n",
+                                  G.atalhos, G.caminhos, G.opt.difficulty, G.speed, autosave_minutes);
+ if (n > 0 && (size_t)n < sizeof(text)) n += (int)rlw_audio_ui_ini(text + n, sizeof(text) - (size_t)n); /* Áudio (front 2) */
  if (n > 0) (void)rlw_durable_write(G.options_path, (const uint8_t *)text, (size_t)n, NULL, 0);
 }
 /* Missing file or keys keep the defaults (set by the caller: the macOS app's). */
@@ -319,6 +349,7 @@ static void options_load(void) {
   else if (!strncmp(line, "caminhos=", 9) && v <= 1) G.caminhos = v;
   else if (!strncmp(line, "dificuldade=", 12) && v <= 2 && !G.opt.difficulty_given) G.opt.difficulty = v;
   else if (!strncmp(line, "velocidade=", 11) && v <= 3 && !G.opt.speed_given) G.opt.speed = v;
+  else (void)rlw_autosave_option(line, &autosave_minutes);
  }
  fclose(f);
 }
@@ -354,7 +385,7 @@ static void show_keys(void) {
 
 static void set_speed(unsigned speed) { G.speed = speed > 3 ? 3 : speed; G.deadline = now_seconds(); update_title(); options_store(); }
 static void command(unsigned id);
-enum { ID_QUICK_SAVE = 100, ID_QUICK_LOAD, ID_STAGE_LOAD, ID_SAVE_POSITION = 110, ID_LOAD_POSITION = 120, ID_KEYS = 130 };
+enum { ID_QUICK_SAVE = RLW_GM_QUICK_SAVE, ID_QUICK_LOAD = RLW_GM_QUICK_LOAD };
 
 /* Host keys never reach the game: F11 (fullscreen; also never delivered per the
  * host contract), P/Pause (pause), +/- (speed), F5/F9 (quick save/load, the
@@ -450,6 +481,7 @@ static struct {
  HANDLE thread; RlwSaveJob *job; volatile LONG code;    /* one background write at a time */
  unsigned named; char name[RLW_SAVE_NAME_CAPACITY];      /* position named after its write */
  char retry_slot[32]; unsigned retry_named; char retry_name[RLW_SAVE_NAME_CAPACITY]; int retries; double retry_at;
+ int autosave;                                           /* the write is the periodic autosave */
 } SV;
 
 static void notice(const char *text) { snprintf(G.notice, sizeof(G.notice), "%s", text); G.notice_until = now_seconds() + 4; update_title(); }
@@ -457,6 +489,7 @@ static int game_running(void) { RlwStatus s; rlw_driver_status(G.driver, &s); re
 
 static void commit_finished(int code, RlwSaveJob *job) {
  char error[512]; rlw_save_job_error(job, error, sizeof(error)); rlw_save_job_free(job);
+ if (SV.autosave) { SV.autosave = 0; notice(code ? "Falha no salvamento automático" : "Salvamento automático"); return; }
  if (code) { message_box(error, "Não foi possível salvar a partida", MB_ICONWARNING | MB_OK); SV.named = 0; return; }
  if (SV.named) {
   RlwSaveNames names; rlw_saves_names_read(G.saves, &names);
@@ -505,7 +538,7 @@ static void save_now(const char *slot, unsigned named, const char *name) {
 }
 /* loadSlot(): waits for a save still being written, then replaces world,
  * renderer and picture together; a failure leaves the current game as it was.
- * A save made from the pause list reopens the pause at the next host tick. */
+ * A save made from the pause list plays on (rlw_driver_load_resume). */
 static int load_slot(const char *slot, int report) {
  char path[4200];
  if (!G.saves[0] || rlw_saves_path(G.saves, slot, path, sizeof(path))) return RL_INVALID_ARGUMENT;
@@ -513,6 +546,8 @@ static int load_slot(const char *slot, int report) {
  if (!in_menu()) release_all();
  int c = rlw_driver_load(G.driver, path);
  if (c) { if (report) save_failed("Não foi possível carregar a partida"); return c; }
+ if (rlw_driver_load_resume(G.driver)) save_failed("Retomada da partida carregada");
+ rlw_autosave_restart(&autosave_schedule);
  rlw_menu_reset(&G.menu); G.menu_failed = 0; G.stopped_reported = 0; G.left_held = 0;
  if (GetCapture() == G.hwnd) ReleaseCapture();
  G.deadline = now_seconds(); notice("Partida carregada"); present_now(); update_title();
@@ -520,9 +555,22 @@ static int load_slot(const char *slot, int report) {
 }
 /* The stage-start autosave (advance stageStart / finishShellCampaign). */
 static void stage_autosave(void) {
+ rlw_autosave_restart(&autosave_schedule);
  if (!G.saves[0]) return;
  char path[4200]; int c = rlw_mkdirs(G.saves) || rlw_saves_path(G.saves, "inicio-fase", path, sizeof(path)) ? RL_IO_ERROR : rlw_driver_autosave(G.driver, path);
  if (c) { G.paused = 1; update_title(); if (G.opt.frames) { attach_console(); fprintf(stderr, "autosave: %d\n", c); } else save_failed("Falha ao salvar automaticamente"); }
+}
+
+/* attemptAutosave(): at the frame boundary the quick save uses; captured here,
+ * written off the loop. Busy (input queued, a held button, a write running)
+ * retries at the next eligible frame; an error waits a whole interval. */
+static void periodic_autosave(void) {
+ if (SV.thread) return;
+ char path[4200]; RlwSaveJob *job = NULL;
+ int c = rlw_mkdirs(G.saves) || rlw_saves_path(G.saves, RLW_AUTOSAVE_SLOT, path, sizeof(path)) ? RL_IO_ERROR : rlw_driver_save_begin(G.driver, path, &job);
+ if (c == RL_SAVE_BUSY) return;
+ if (c) { rlw_autosave_failed(&autosave_schedule); notice("Falha no salvamento automático"); return; }
+ rlw_autosave_saved(&autosave_schedule); SV.autosave = 1; start_commit(job, 0, NULL);
 }
 
 /* Position name (namedSave): the macOS app's alert with a text field, as an
@@ -577,49 +625,65 @@ static int ask_name(unsigned n, char *out, size_t capacity) {
  free(name); return 1;
 }
 
-/* refreshSaveMenus(): positions 1..5 with their names and times; loads only of
- * existing files; the stage-start autosave below the load positions. */
-static void refresh_save_menus(void) {
- while (GetMenuItemCount(G.save_menu) > 0) DeleteMenu(G.save_menu, 0, MF_BYPOSITION);
- while (GetMenuItemCount(G.load_menu) > 0) DeleteMenu(G.load_menu, 0, MF_BYPOSITION);
- int usable = G.saves[0] && !SV.thread && !G.menu_failed;
- for (unsigned n = 1; n <= 5; n++) {
-  char title[400], slot[32], path[4200]; rlw_saves_title(G.saves, n, title, sizeof(title)); snprintf(slot, sizeof(slot), "posicao-%u", n);
-  int exists = !rlw_saves_path(G.saves, slot, path, sizeof(path)) && rlw_exists(path);
-  wchar_t *w = widen(title);
-  AppendMenuW(G.save_menu, MF_STRING | (usable && !in_menu() ? 0 : MF_GRAYED), ID_SAVE_POSITION + n, w);
-  AppendMenuW(G.load_menu, MF_STRING | (usable && exists ? 0 : MF_GRAYED), ID_LOAD_POSITION + n, w);
-  free(w);
- }
- char path[4200]; int stage = G.saves[0] && !rlw_saves_path(G.saves, "inicio-fase", path, sizeof(path)) && rlw_exists(path);
- AppendMenuW(G.load_menu, MF_SEPARATOR, 0, NULL);
- AppendMenuW(G.load_menu, MF_STRING | (usable && stage ? 0 : MF_GRAYED), ID_STAGE_LOAD, L"Início da fase · salvamento automático");
- int quick = G.saves[0] && !rlw_saves_path(G.saves, "rapido", path, sizeof(path)) && rlw_exists(path);
- EnableMenuItem(G.menubar, ID_QUICK_SAVE, MF_BYCOMMAND | (usable ? MF_ENABLED : MF_GRAYED));
- EnableMenuItem(G.menubar, ID_QUICK_LOAD, MF_BYCOMMAND | (usable && quick ? MF_ENABLED : MF_GRAYED));
+/* The Jogo menu (rlw_gamemenu.h): the host's state for its items. */
+static RlwOptionsRequest options_request;
+static void menu_state(RlwGameMenuState *m) {
+ memset(m, 0, sizeof(*m)); RlwStatus st; memset(&st, 0, sizeof(st)); if (G.driver) rlw_driver_status(G.driver, &st);
+ m->driver = G.driver != NULL; m->failed = G.menu_failed; m->shell_mode = G.driver ? rlw_shell_mode(G.driver) : 0;
+ m->playing = m->driver && !m->shell_mode && !st.stopped; m->paused = G.paused; m->saves = G.saves[0] != 0; m->writing = SV.thread != NULL;
+ m->keys = G.keys_path[0] != 0; m->options = G.options_path[0] != 0; m->speed = G.speed; m->difficulty = G.opt.difficulty;
+ m->atalhos = G.atalhos; m->caminhos = G.caminhos; m->autosave_minutes = autosave_minutes; rlw_gamemenu_scan(m, G.saves);
 }
-static void build_menu(void) {
- G.menubar = CreateMenu(); HMENU game = CreatePopupMenu(); G.save_menu = CreatePopupMenu(); G.load_menu = CreatePopupMenu();
- AppendMenuW(game, MF_STRING, ID_QUICK_SAVE, L"Salvar rápido\tF5");
- AppendMenuW(game, MF_STRING, ID_QUICK_LOAD, L"Carregar rápido\tF9");
- AppendMenuW(game, MF_POPUP, (UINT_PTR)G.save_menu, L"Salvar partida…");
- AppendMenuW(game, MF_POPUP, (UINT_PTR)G.load_menu, L"Carregar partida");
- if (G.keys_path[0]) { AppendMenuW(game, MF_SEPARATOR, 0, NULL); AppendMenuW(game, MF_STRING, ID_KEYS, L"Configurar teclas…"); }
- AppendMenuW(G.menubar, MF_POPUP, (UINT_PTR)game, L"Partida");
- SetMenu(G.hwnd, G.menubar); refresh_save_menus();
+static void refresh_save_menus(void) { RlwGameMenuState m; menu_state(&m); rlw_gamemenu_refresh(G.menubar, &m, G.saves); }
+static void build_menu(void) { G.menubar = rlw_gamemenu_create(); rlw_audio_ui_menu(G.menubar); /* Áudio (front 2) */ SetMenu(G.hwnd, G.menubar); refresh_save_menus(); }
+/* A value changed from the menu bar: the Opções screen (open or not) shows it. */
+static void options_resync(void) {
+ if (!G.options_path[0] || !G.driver) return;
+ RlOpcoesValores v; memset(&v, 0, sizeof(v));
+ v.version = RL_OPCOES_VERSION; v.atalhos = G.atalhos; v.caminhos = G.caminhos; v.dificuldade = G.opt.difficulty; v.velocidade = G.speed;
+ v.disponivel = RL_OPCOES_TODOS; v.idioma = 0;
+ if (!rlw_options_sync(G.driver, &v) && rlw_options_open(G.driver) && !rlw_options_redraw(G.driver)) present_now();
+}
+/* openOptions(): over the main or pause menu at once; in play a synthetic Escape
+ * is held until the original pause opens (open_shell_if_needed shows it). */
+static void open_options(void) {
+ if (in_menu()) { if (rlw_options_show(G.driver)) MessageBeep(MB_ICONWARNING); else { present_now(); update_title(); } return; }
+ RlwStatus st; rlw_driver_status(G.driver, &st);
+ if (!modern_allowed() || !rlw_options_request_start(&options_request, st.frames)) { MessageBeep(MB_ICONWARNING); return; }
+ send_event(2, 0, 0, 0, 0, VK_ESCAPE, 1);
+}
+/* manageSaves(): outside the original save/load lists, after any save still
+ * being written; the modal window runs no game frame (the game stays paused). */
+static void manage_saves(void) {
+ if (!G.saves[0] || G.menu_failed || !rlw_savemgr_available(rlw_shell_mode(G.driver))) { MessageBeep(MB_ICONWARNING); return; }
+ SV.retry_slot[0] = 0; save_poll(1);
+ if (in_menu()) { rlw_menu_reset(&G.menu); G.left_held = 0; } else release_all();
+ rlw_mkdirs(G.saves); rlw_savemgr_dialog_run(G.hwnd, G.saves);
+ G.deadline = now_seconds(); refresh_save_menus(); SetFocus(G.hwnd);
 }
 static void command(unsigned id) {
- if (id == ID_KEYS) { show_keys(); return; }
- if (!G.driver || !G.saves[0]) return;
- char slot[32];
- if (id == ID_QUICK_SAVE) save_now("rapido", 0, NULL);
- else if (id == ID_QUICK_LOAD) { char path[4200]; if (!rlw_saves_path(G.saves, "rapido", path, sizeof(path)) && rlw_exists(path)) load_slot("rapido", 1); }
- else if (id == ID_STAGE_LOAD) load_slot("inicio-fase", 1);
- else if (id > ID_SAVE_POSITION && id <= ID_SAVE_POSITION + 5) {
-  unsigned n = id - ID_SAVE_POSITION; char name[RLW_SAVE_NAME_CAPACITY];
-  if (in_menu()) { message_box("Salve durante o jogo, entre quadros completos e antes de uma parada do motor.", "Não foi possível concluir a operação", MB_ICONINFORMATION | MB_OK); return; }
-  if (ask_name(n, name, sizeof(name))) { snprintf(slot, sizeof(slot), "posicao-%u", n); save_now(slot, n, name); }
- } else if (id > ID_LOAD_POSITION && id <= ID_LOAD_POSITION + 5) { snprintf(slot, sizeof(slot), "posicao-%u", id - ID_LOAD_POSITION); load_slot(slot, 1); }
+ if (rlw_audio_ui_command(id)) return; /* Áudio (front 2) */
+ RlwGameMenuState m; menu_state(&m); RlwGameMenuCommand c = rlw_gamemenu_decode(&m, id);
+ char slot[32], name[RLW_SAVE_NAME_CAPACITY];
+ switch (c.action) {
+ case RLW_GM_PAUSE: G.paused = (int)c.arg; G.deadline = now_seconds(); update_title(); break;
+ case RLW_GM_SPEED: set_speed(c.arg); options_resync(); break;
+ case RLW_GM_DIFFICULTY: G.opt.difficulty = c.arg; (void)rlw_driver_set_difficulty(G.driver, G.opt.difficulty); options_store(); options_resync(); break;
+ case RLW_GM_MODERN: G.atalhos = c.arg; rlw_router_reset(&G.router); G.router.modern_enabled = G.atalhos != 0; apply_rules(); options_store(); options_resync(); break;
+ case RLW_GM_PATHS: G.caminhos = c.arg; apply_rules(); options_store(); options_resync(); break;
+ case RLW_GM_OPTIONS: open_options(); break;
+ case RLW_GM_KEYS: show_keys(); break;
+ case RLW_GM_AUTOSAVE: autosave_minutes = c.arg; rlw_autosave_set_interval(&autosave_schedule, rlw_autosave_frames(autosave_minutes)); options_store(); break;
+ case RLW_GM_MANAGE: manage_saves(); break;
+ case RLW_GM_QUICK_SAVE: save_now("rapido", 0, NULL); break;
+ case RLW_GM_QUICK_LOAD: load_slot("rapido", 1); break;
+ case RLW_GM_STAGE_LOAD: load_slot("inicio-fase", 1); break;
+ case RLW_GM_AUTOSAVE_LOAD: load_slot(RLW_AUTOSAVE_SLOT, 1); break;
+ case RLW_GM_SAVE_POSITION: if (ask_name(c.arg, name, sizeof(name))) { snprintf(slot, sizeof(slot), "posicao-%u", c.arg); save_now(slot, c.arg, name); } break;
+ case RLW_GM_LOAD_POSITION: snprintf(slot, sizeof(slot), "posicao-%u", c.arg); load_slot(slot, 1); break;
+ default: return;
+ }
+ refresh_save_menus();
 }
 
 /* Requests the driver cannot complete by itself (sendShell's host cases). */
@@ -628,14 +692,12 @@ static void host_request(const RlShellEvent *e) {
  switch (e->kind) {
  case RL_SHELL_QUIT: G.quit = 1; PostQuitMessage(0); return;
  case RL_SHELL_MULTIPLAYER: reopen_menu("O jogo em rede não faz parte desta versão", "O menu principal será reaberto do início."); return;
- case RL_SHELL_DEFEAT_MOVIE: case RL_SHELL_CAMPAIGN_MOVIE:
-  /* No movie player yet (later milestone): "unavailable" is the ABI's own
-   * completion for a host without a decoder; both run the original MenuInit(2). */
+ case RL_SHELL_DEFEAT_MOVIE: case RL_SHELL_CAMPAIGN_MOVIE: case RL_SHELL_INTRODUCTION:
+  if (rlw_audio_ui_movie_begin(G.dados, e)) { present_now(); return; } /* plays; completed in the loop (front 2) */
+  if (e->kind == RL_SHELL_INTRODUCTION) { code = rlw_shell_movie_finish(G.driver, movie_exists(e) ? RL_SHELL_MOVIE_FINISHED : RL_SHELL_MOVIE_UNAVAILABLE); break; }
+  /* A movie that cannot be opened: "unavailable", the ABI's completion for a
+   * failed PlayVideo; both run the original MenuInit(2). */
   code = rlw_shell_movie_finish(G.driver, RL_SHELL_MOVIE_UNAVAILABLE); break;
- case RL_SHELL_INTRODUCTION:
-  /* movieCompletion(): FINISHED whenever the file exists, played or not (the
-   * original would have called PlayVideo); UNAVAILABLE only for an absent file. */
-  code = rlw_shell_movie_finish(G.driver, movie_exists(e) ? RL_SHELL_MOVIE_FINISHED : RL_SHELL_MOVIE_UNAVAILABLE); break;
  case RL_SHELL_LOAD_SLOT: {
   /* beginSlotLoad(): the modern load replaces the world (and the session); a
    * failure reopens the original main menu. */
@@ -703,7 +765,9 @@ static int open_shell_if_needed(void) {
  }
  int c = rlw_shell_begin(G.driver);
  if (c) { char why[512]; rlw_shell_error(G.driver, why, sizeof(why)); menu_failed(why[0] ? why : "Tela original"); return 1; }
- release_all(); menu_attach(); present_now(); update_title();
+ release_all(); menu_attach();
+ if (rlw_options_request_shell(&options_request) && s.screen == RL_SHELL_PAUSE) (void)rlw_options_show(G.driver); /* Jogo > Opções… in play */
+ present_now(); update_title();
  return 1;
 }
 
@@ -715,6 +779,7 @@ static void menu_mouse(uint32_t msg, LPARAM lp) {
 }
 
 static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+ if (rlw_audio_ui_movie_message(msg, wp)) return 0; /* an original movie takes the input (front 2) */
  switch (msg) {
  case WM_SIZE: update_viewport(); InvalidateRect(hwnd, NULL, FALSE); return 0;
  case WM_PAINT: { PAINTSTRUCT ps; HDC dc = BeginPaint(hwnd, &ps); present(dc); EndPaint(hwnd, &ps); return 0; }
@@ -760,6 +825,10 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
  case WM_SETFOCUS: G.focused = 1; G.deadline = now_seconds(); return 0;
  case WM_KILLFOCUS: G.focused = 0; if (in_menu()) { rlw_menu_reset(&G.menu); G.left_held = 0; } else release_all(); return 0;
  case WM_DESTROY: PostQuitMessage(0); return 0;
+ /* rlw_dpi.h: a DPI change moves a window to the suggested size; fullscreen
+  * (also after a resolution change) keeps covering its monitor. */
+ case WM_DPICHANGED: if (G.fullscreen) rlw_fit_monitor(hwnd); else rlw_dpi_changed(hwnd, lp); return 0;
+ case WM_DISPLAYCHANGE: if (G.fullscreen) rlw_fit_monitor(hwnd); break;
  }
  return DefWindowProcW(hwnd, msg, wp, lp);
 }
@@ -810,6 +879,7 @@ static void usage(void) {
         "  testes: --selftest | --import-only | --frames N [--headless] [--hashes ARQ] [--screenshot ARQ.bmp] [--demo-input]\n"
         "          --menu-demo ARQ (percurso fixo pelos menus, sem janela; igual ao parity.sh)\n"
         "          --save-demo ARQ [--save-directory PASTA_VAZIA] (percurso fixo de salvar/carregar; igual ao parity.sh)\n"
+        "          --smoke-markers | --smoke-window | --smoke-import-prompt --data PASTA_VAZIA (CI, sem dados do jogo)\n"
         "  --save-directory PASTA: partidas salvas (padrão: Partidas na pasta de dados do usuário).\n"
         "  --cd: RISING_LANDS_BR_.BIN, .CUE, .ISO ou a pasta do CD (importa na primeira execução).\n"
         "  Teclas do host: P/Pause pausa, +/- velocidade, F5 salvar rápido, F9 carregar rápido, F11 tela cheia.\n"
@@ -840,6 +910,9 @@ static int parse(int argc, char **argv, Options *o) {
   else if (!strcmp(a, "--fullscreen")) o->fullscreen = 1;
   else if (!strcmp(a, "--no-verify-image")) o->no_verify_image = 1;
   else if (!strcmp(a, "--demo-input")) o->demo_input = 1;
+  else if (!strcmp(a, "--smoke-markers")) o->smoke_markers = 1;
+  else if (!strcmp(a, "--smoke-import-prompt")) o->smoke_prompt = 1;
+  else if (!strcmp(a, "--smoke-window")) o->smoke_window = 1;
   else return -1;
 #undef VALUE
  }
@@ -876,6 +949,7 @@ static int ensure_import(const char *data_root) {
  HCURSOR old = SetCursor(LoadCursor(NULL, IDC_WAIT));
  char error[1024] = {0};
  int rc = rlw_cd_import(source, data_root, !G.opt.no_verify_image, import_progress, NULL, error, sizeof(error));
+ if (!rc) rlw_audio_ui_import(source, data_root);
  SetCursor(old); free(chosen);
  if (rc) {
   attach_console(); fprintf(stderr, "importação: %s\n", error);
@@ -913,9 +987,20 @@ int main_utf8(int argc, char **argv) {
          rl_versao(), rl_render_contrato(), rl_missao_versao(), rl_salvar_versao());
   return 0;
  }
+ if (G.opt.smoke_markers) { attach_console(); return rlw_smoke_markers(); }
+ if (G.opt.smoke_window) { attach_console(); return rlw_smoke_window(); }
  char data_root[4096];
  if (G.opt.data) snprintf(data_root, sizeof(data_root), "%s", G.opt.data);
  else if (rlw_user_data_dir(data_root, sizeof(data_root))) { message_box("Pasta de dados do usuário indisponível.", "Rising Lands", MB_ICONERROR); return 1; }
+ if (G.opt.smoke_prompt) {
+  /* First start, the player's path: notice + CD dialog, both cancelled. */
+  attach_console(); char dados_dir[4200]; snprintf(dados_dir, sizeof(dados_dir), "%s" RLW_SEP "Dados", data_root);
+  if (!G.opt.data || G.opt.cd || G.opt.headless || G.opt.frames || rlw_exists(dados_dir)) { fprintf(stderr, "smoke import prompt: use só --data PASTA_VAZIA\n"); return 64; }
+  rlw_smoke_dialogs_begin(); int rc = ensure_import(data_root); int shown = rlw_smoke_dialogs_end();
+  int ok = rc != 0 && shown == 2 && !rlw_exists(dados_dir);
+  printf("smoke import prompt %s: importação %d, diálogos %d, Dados %s\n", ok ? "ok" : "FALHOU", rc, shown, rlw_exists(dados_dir) ? "criada" : "ausente");
+  return ok ? 0 : 1;
+ }
  if (ensure_import(data_root)) return 2;
  if (G.opt.import_only) { attach_console(); printf("importado em %s" RLW_SEP "Dados\n", data_root); return 0; }
  char *dados = G.dados; snprintf(G.dados, sizeof(G.dados), "%s" RLW_SEP "Dados", data_root);
@@ -953,6 +1038,7 @@ int main_utf8(int argc, char **argv) {
    * off, Normal, 1x. A key in opcoes.ini wins. */
   G.atalhos = 1; G.caminhos = 0;
   options_load(); G.speed = G.opt.speed; rlw_driver_default_rules(options_rules());
+  rlw_autosave_init(&autosave_schedule, rlw_autosave_frames(autosave_minutes));
   G.router.modern_enabled = G.atalhos != 0;
   snprintf(G.keys_path, sizeof(G.keys_path), "%s" RLW_SEP "teclas.ini", data_root); keys_load();
  }
@@ -974,7 +1060,9 @@ int main_utf8(int argc, char **argv) {
   rlw_driver_free(G.driver); return rc;
  }
 
+ rlw_audio_ui_open(dados, G.options_path, options_store);
  G.bmi = calloc(1, sizeof(BITMAPINFOHEADER) + 256 * sizeof(RGBQUAD));
+ if (!G.bmi) { rlw_driver_free(G.driver); G.driver = NULL; message_box("Memória insuficiente.", "Rising Lands", MB_ICONERROR); return 5; }
  G.bmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER); G.bmi->bmiHeader.biWidth = 800; G.bmi->bmiHeader.biHeight = -600;
  G.bmi->bmiHeader.biPlanes = 1; G.bmi->bmiHeader.biBitCount = 8; G.bmi->bmiHeader.biCompression = BI_RGB;
  G.bmi->bmiHeader.biClrUsed = 256;
@@ -984,12 +1072,17 @@ int main_utf8(int argc, char **argv) {
  wc.hCursor = LoadCursor(NULL, IDC_ARROW); wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
  wc.lpszClassName = L"RisingLandsWindow";
  RegisterClassExW(&wc);
+ /* The game window and the rest of this thread's UI are per-monitor DPI aware
+  * (rlw_dpi.h); the client area starts at 800x600 at 100 % scale. */
+ (void)rlw_dpi_begin_per_monitor();
  RECT r = {0, 0, 800, 600}; AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, TRUE);
  G.hwnd = CreateWindowExW(0, wc.lpszClassName, L"Rising Lands", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                           r.right - r.left, r.bottom - r.top, NULL, NULL, instance, NULL);
  if (!G.hwnd) { message_box("Não foi possível criar a janela.", "Rising Lands", MB_ICONERROR); return 5; }
  G.placement.length = sizeof(G.placement);
  build_menu();
+ { int ww, wh; rlw_dpi_window_size(G.hwnd, 800, 600, WS_OVERLAPPEDWINDOW, TRUE, 0, &ww, &wh);
+   SetWindowPos(G.hwnd, NULL, 0, 0, ww, wh, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE); }
  ShowWindow(G.hwnd, SW_SHOW); update_viewport();
  if (G.opt.fullscreen) set_fullscreen(1);
  SetForegroundWindow(G.hwnd); SetFocus(G.hwnd);
@@ -1011,6 +1104,12 @@ int main_utf8(int argc, char **argv) {
   if (SV.retry_slot[0] && now_seconds() >= SV.retry_at) { char slot[32], name[RLW_SAVE_NAME_CAPACITY]; snprintf(slot, sizeof(slot), "%s", SV.retry_slot); snprintf(name, sizeof(name), "%s", SV.retry_name); save_attempt(slot, SV.retry_named, name, SV.retries); }
   if (G.menu_failed) { MsgWaitForMultipleObjects(0, NULL, FALSE, 50, QS_ALLINPUT); if (G.opt.frames) { rc = 2; break; } continue; }
   if (in_menu()) {
+   if (rlw_audio_ui_movie_active()) { /* original movie (front 2): frames by the clock, then its completion */
+    uint32_t done = 0; int step = rlw_audio_ui_movie_step(&done);
+    if (step == 1) { int c = rlw_shell_movie_finish(G.driver, done); if (c) { char why[512]; rlw_shell_error(G.driver, why, sizeof(why)); menu_failed(why[0] ? why : "Filme original"); } else menu_result(RLW_MENU_REPAINT); }
+    else if (step == 2) present_now();
+    MsgWaitForMultipleObjects(0, NULL, FALSE, 8, QS_ALLINPUT); continue;
+   }
    /* shellTick at 20 Hz (100 Hz in the credits); moves coalesced to 60 Hz. */
    double t = now_seconds(), period = rlw_menu_tick_ms(&G.menu) / 1000.0;
    if (G.menu.move_pending && t - G.menu_flush >= 1.0 / 60) { G.menu_flush = t; menu_result(rlw_menu_flush_move(&G.menu, t * 1000)); continue; }
@@ -1035,11 +1134,16 @@ int main_utf8(int argc, char **argv) {
   if (rate > 0) { if (t - G.deadline > MAXIMUM_BACKLOG) G.deadline = t; G.deadline += 1 / rate; }
   if (smoke && G.opt.demo_input) demo_input(s.frames + 1);
   int stage_start = rlw_driver_stage_start(G.driver);
+  rlw_audio_ui_attach(G.driver);
   if (rlw_driver_advance(G.driver)) { report_stop(); present_now(); continue; }
+  rlw_audio_ui_pump(G.driver);
   if (stage_start) stage_autosave();
   step_modern();
+  step_markers();
   present_now();
   rlw_driver_status(G.driver, &s);
+  if (rlw_options_request_frame(&options_request, s.frames, !in_menu())) send_event(2, 0, 0, 0, 0, VK_ESCAPE, 0); /* no pause came */
+  if (!smoke && G.saves[0] && rlw_autosave_frame(&autosave_schedule, !s.stopped && s.screen != RL_SHELL_PAUSE && s.screen != 19 && !in_menu())) periodic_autosave();
   if (!smoke && open_shell_if_needed()) continue;
   if (hashes) { char hex[65]; frame_digest(hex); fprintf(hashes, "%llu %u %s\n", (unsigned long long)s.frames, s.screen, hex); }
   if (t - last_title > 0.5) { update_title(); last_title = t; }
@@ -1055,6 +1159,7 @@ int main_utf8(int argc, char **argv) {
  if (hashes) fclose(hashes);
  rlw_menu_close(&G.menu);
  rlw_driver_free(G.driver); G.driver = NULL;
+ rlw_audio_ui_close();
  return rc;
 }
 

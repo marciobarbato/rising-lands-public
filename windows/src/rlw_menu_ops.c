@@ -21,6 +21,7 @@ static int op_options_input(void *driver, const RlShellInput *i, uint32_t k, RlO
 static uint32_t op_options_open(void *driver) { return rlw_options_open(D); }
 static int op_options_sync(void *driver, const RlOpcoesValores *v) { return rlw_options_sync(D, v); }
 static int op_options_button(void *driver, int32_t r[4]) { return rlw_options_button(D, r); }
+static int op_options_show(void *driver) { return rlw_options_show(D); }
 static int op_advance(void *driver) { return rlw_driver_advance(D); }
 static int op_event(void *driver, uint32_t k, uint32_t m, int32_t x, int32_t y, uint32_t w, uint32_t v, uint32_t dn) { return rlw_driver_event(D, k, m, x, y, w, v, dn); }
 static int op_begin(void *driver) { return rlw_shell_begin(D); }
@@ -33,7 +34,12 @@ static int op_save(void *driver, const char *p) { return rlw_driver_save(D, p); 
 static int op_autosave(void *driver, const char *p) { return rlw_driver_autosave(D, p); }
 static int op_load_file(void *driver, const char *p) { return rlw_driver_load(D, p); }
 static int op_save_slot(void *driver, const char *p, int32_t *saved) { return rlw_shell_save_slot(D, p, saved); }
+static int op_load_resume(void *driver) { return rlw_driver_load_resume(D); }
+static int op_probe(void *driver, uint8_t b[2], uint64_t *t, uint32_t *ms) {
+ static const uint32_t addresses[2] = {0x4e2f78, 0x4e05a2}, sizes[2] = {1, 1};
+ return rlw_driver_peek(D, addresses, sizes, 2, b) || rlw_driver_clock(D, t, ms);
+}
 const RlwDemoOps RLW_WINDOWS_OPS = {{op_mode, op_state, op_input, op_draw, op_show, op_prepare, op_request, op_load, op_slots, op_zone,
- rlw_shell_click_clock, op_credits_frame, op_credits_present, op_error, op_options_input, op_options_open, op_options_sync, op_options_button}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
- op_save, op_autosave, op_load_file, op_save_slot};
+ rlw_shell_click_clock, op_credits_frame, op_credits_present, op_error, op_options_input, op_options_open, op_options_sync, op_options_button, op_options_show}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
+ op_save, op_autosave, op_load_file, op_save_slot, op_load_resume, op_probe};
 #undef D

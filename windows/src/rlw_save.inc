@@ -135,6 +135,9 @@ int rlw_driver_autosave(RlwDriver *d, const char *path) { if (!d || !path) retur
 uint32_t rlw_driver_pending_input(const RlwDriver *d) { return d ? d->pending_count : 0; }
 int rlw_driver_stage_start(const RlwDriver *d) { return d && !d->shell && !d->menu_world && d->phase_index == UINT32_MAX; }
 const char *rlw_driver_mission(const RlwDriver *d) { return d ? d->mission : ""; }
+int rlw_driver_clock(const RlwDriver *d, uint64_t *tick, uint32_t *milliseconds) {
+ if (!d || !d->world || !tick || !milliseconds) return RL_INVALID_ARGUMENT; return rl_relogio(d->world, tick, milliseconds);
+}
 void rlw_driver_save_error(const RlwDriver *d, char *out, size_t capacity) { if (d && out && capacity) snprintf(out, capacity, "%s", d->save_error); }
 
 /* macos_live_load(): a candidate world, renderer and picture are built first;

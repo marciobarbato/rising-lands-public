@@ -34,3 +34,23 @@ int rlw_options_button(RlwDriver *d, int32_t rect[4]) {
  if (!d || !rect || !d->options || !d->shell) return RL_INVALID_ARGUMENT;
  return rl_opcoes_botao(d->options, d->shell, rect);
 }
+/* macos_live_options_show(): Jogo > Opções…, the same screen the button opens,
+ * through the explicit rl_opcoes_abrir. Only over main2/pause16 without a
+ * pending request; the shell session is not touched. Already open: nothing. */
+int rlw_options_show(RlwDriver *d) {
+ if (!d || !d->options || !d->shell) return RL_UNSUPPORTED_PATH;
+ if (d->shell_request.kind || (d->shell_mode != RL_SHELL_MAIN && d->shell_mode != RL_SHELL_PAUSE)) return RL_INVALID_ARGUMENT;
+ if (d->options_open) return 0;
+ int c = rl_opcoes_abrir(d->options, d->shell);
+ if (c) return save_result(d, c, "Tela de opções");
+ d->options_open = 1;
+ c = rl_opcoes_desenhar(d->options, d->shell, d->pixels, 480000, d->palette, 768);
+ return c ? save_result(d, c, "Tela de opções") : 0;
+}
+/* After rlw_options_sync from the host's own menu: an open screen shows the new
+ * values at once (nothing to do when closed). */
+int rlw_options_redraw(RlwDriver *d) {
+ if (!d || !d->options || !d->shell || !d->options_open || d->shell_request.kind) return 0;
+ int c = rl_opcoes_desenhar(d->options, d->shell, d->pixels, 480000, d->palette, 768);
+ return c ? save_result(d, c, "Tela de opções") : 0;
+}

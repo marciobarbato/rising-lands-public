@@ -7,9 +7,10 @@ Estado em 2026-11-12. / State on 2026-11-12.
 | Frente / Front | Estado / State | Issue | Ajuda de fora / Outside help |
 |---|---|---|---|
 | Cliente Windows: jogo, menus, saves, Opções / Windows client: game, menus, saves, Options | Feito / Done | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) | — |
-| Windows: builds MSVC x64 e ARM64 / MSVC x64 and ARM64 builds | Feito; sem assinatura de código, por decisão / Done; no code signing, by decision | — | — |
+| Windows: build MSVC x64 / MSVC x64 build | Feito; só x86-64 desde 2026-11-14 (as pré-alfas 1 a 3 tinham ARM64); sem assinatura de código, por decisão / Done; x86-64 only since 2026-11-14 (pre-alphas 1 to 3 had ARM64); no code signing, by decision | — | — |
 | Windows: teste num PC de verdade / test on a real PC | Fica com a comunidade / Left to the community | [#6](https://github.com/marciobarbato/rising-lands-public/issues/6) | **Bem-vinda / Welcome** |
-| Windows: áudio, música do CD, FLC, filmes / audio, CD music, FLC, movies | Aberto; contribuição externa em discussão / Open; outside contribution under discussion | [#4](https://github.com/marciobarbato/rising-lands-public/issues/4) | Combinar na issue antes / Agree on the issue first |
+| Windows: áudio, música do CD, FLC, filmes / audio, CD music, FLC, movies | Feito no código; entra na pré-alfa 4 / Done in the source; goes into pre-alpha 4 | [#4](https://github.com/marciobarbato/rising-lands-public/issues/4) | Testar num PC / Test on a PC (#6) |
+| Windows: menu Jogo, gerenciador de partidas salvas, salvamento automático, bandeirinhas da fila, DPI / Jogo menu, saved-games manager, periodic autosave, order queue flags, DPI | Feito no código; entra na pré-alfa 4 / Done in the source; goes into pre-alpha 4 | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) | — |
 | Host Windows: atalhos modernos, configurar teclas, caminhos melhores / Windows host: modern shortcuts, key setup, better paths | Feito; na pré-alfa 3 / Done; in pre-alpha 3 | [#7](https://github.com/marciobarbato/rising-lands-public/issues/7) (fechada / closed) | — |
 | Atalhos modernos e fila de ordens / Modern shortcuts and order queue | Feito (macOS e Windows) / Done (macOS and Windows) | — | — |
 | Tela de Opções no estilo original / Options screen in the original style | Feito (macOS e Windows) / Done (macOS and Windows) | — | — |
@@ -36,16 +37,21 @@ macOS.
 
 - **Feito:** importação do CD, os menus originais, a campanha, saves e cargas no mesmo formato do macOS (a pasta
   `Partidas` serve nos dois) e a tela de Opções. Com a mesma entrada, o driver do Windows e o do macOS produzem os
-  mesmos quadros, o mesmo passeio pelos menus e os mesmos arquivos de save. Compila com mingw-w64 (x64) e com MSVC (x64
-  e ARM64); o CI gera os três `.exe`, cada um com o seu SHA-256.
+  mesmos quadros, o mesmo passeio pelos menus e os mesmos arquivos de save. Compila com mingw-w64 e com MSVC, só
+  x86-64 desde 2026-11-14 (as pré-alfas 1 a 3 também tinham um `.exe` ARM64; o Windows em ARM pode rodar o x64 pela
+  própria emulação, sem suporte); o CI gera os dois `.exe`, cada um com o seu SHA-256, e roda o `.exe` sem dados do
+  jogo (recusas da importação, primeira execução, bandeirinhas, DPI).
+- **Feito no código, para a pré-alfa 4 (ainda não publicada):** efeitos sonoros e o menu Áudio, a música do CD (do
+  `.BIN` do próprio jogador), as figuras de evento (FLC) e os filmes
+  ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)); o menu Jogo do macOS, o gerenciador de
+  partidas salvas, o salvamento automático periódico, a partida salva pela pausa voltando jogando, as bandeirinhas
+  da fila de ordens sobre o mapa e a janela ciente de DPI.
 - **Sem assinatura de código:** decisão do projeto. O SmartScreen avisa na primeira execução; o SHA-256 e o commit de
   cada build estão no CI e nas notas da release.
 - **Testar num PC com Windows real ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)):** o autor
   não vai testar no Windows, então isso fica com a comunidade. O CI só compila e roda testes sem o CD; ninguém jogou a
   build num PC com Windows ainda. Baixe a pré-alfa em
   [Releases](https://github.com/marciobarbato/rising-lands-public/releases) e conte na issue o que funcionou.
-- **Áudio, música do CD, figuras de evento (FLC) e filmes ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)):**
-  há uma contribuição externa em discussão. Combine na issue antes de começar.
 - **Atalhos modernos, configurar teclas e caminhos melhores no host
   ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), fechada):** feitos, com os
   mesmos padrões do macOS; estão na pré-alfa 3. Detalhes em [`WINDOWS_CLIENT.md`](WINDOWS_CLIENT.md).
@@ -56,8 +62,8 @@ Feito no macOS: N duas vezes centraliza no grupo, Home vai ao último alerta, po
 trabalhador ou militar ocioso, H seleciona o Santuário, e a **fila de ordens com Shift+clique** (pontos de passagem
 marcados com bandeirinhas). Cada atalho vira uma entrada que o original já aceita; a fila é uma regra opcional do motor
 (`RL_REGRA_FILA_ORDENS`), desligada no jogo original. No Windows os mesmos atalhos e a janela de configurar teclas
-estão no código atual (`windows/src/rlw_modern.c`, `rlw_hotkeys.c`, `rlw_keys_dialog.c`); faltam lá as bandeirinhas da
-fila sobre o mapa.
+estão no código atual (`windows/src/rlw_modern.c`, `rlw_hotkeys.c`, `rlw_keys_dialog.c`), e as bandeirinhas da fila
+sobre o mapa também (`rlw_markers.c`; entram na pré-alfa 4).
 
 ### Tela de Opções no estilo original
 
@@ -101,16 +107,21 @@ The client is in [`windows/`](../windows/README.md): Win32 + GDI in C, with the 
 
 - **Done:** CD import, the original menus, the campaign, saving and loading in the macOS format (the `Partidas` folder
   works on both) and the Options screen. With the same input, the Windows and macOS drivers produce the same frames,
-  the same menu walk and the same save files. It builds with mingw-w64 (x64) and with MSVC (x64 and ARM64); CI builds
-  all three `.exe` files, each with its SHA-256.
+  the same menu walk and the same save files. It builds with mingw-w64 and with MSVC, x86-64 only since 2026-11-14
+  (pre-alphas 1 to 3 also shipped an ARM64 `.exe`; Windows on ARM may run the x64 one under its own emulation,
+  unsupported); CI builds both `.exe` files, each with its SHA-256, and runs the `.exe` without game data (importer
+  refusals, first start, flags, DPI).
+- **Done in the source, for pre-alpha 4 (not released yet):** sound effects and the Áudio menu, CD music (from the
+  player's own `.BIN`), event pictures (FLC) and movies
+  ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)); the macOS Jogo menu, the saved-games manager,
+  the periodic autosave, a pause-list save loading back into play, the order queue flags over the map and the
+  DPI-aware window.
 - **No code signing:** a project decision. SmartScreen warns on the first run; each build's SHA-256 and commit are in
   CI and in the release notes.
 - **Test on a real Windows PC ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)):** the author will
   not test on Windows, so this is left to the community. CI only builds and runs tests without the CD; nobody has played
   the build on a Windows PC yet. Download the pre-alpha from
   [Releases](https://github.com/marciobarbato/rising-lands-public/releases) and say on the issue what worked.
-- **Audio, CD music, event pictures (FLC) and movies ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)):**
-  an outside contribution is under discussion. Agree on the issue before starting.
 - **Modern shortcuts, key dialog and better paths in the host
   ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), closed):** done, with the
   macOS defaults; they are in pre-alpha 3. Details in [`WINDOWS_CLIENT.md`](WINDOWS_CLIENT.md).
@@ -121,8 +132,8 @@ Done on macOS: N twice centres on the group, Home goes to the last alert, period
 military unit, H selects the Sanctuary, and the **Shift+click order queue** (waypoints marked with small flags). Each
 shortcut becomes input the original already accepts; the queue is an optional engine rule (`RL_REGRA_FILA_ORDENS`),
 off in the original game. On Windows the same shortcuts and the key dialog are in the current source
-(`windows/src/rlw_modern.c`, `rlw_hotkeys.c`, `rlw_keys_dialog.c`); the queue's flags over the map are still missing
-there.
+(`windows/src/rlw_modern.c`, `rlw_hotkeys.c`, `rlw_keys_dialog.c`), and so are the queue's flags over the map
+(`rlw_markers.c`; in pre-alpha 4).
 
 ### Options screen in the original style
 

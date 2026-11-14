@@ -54,6 +54,13 @@ struct RlwDriver {
  uint8_t *stage_presentation; int32_t stage_cursor_x, stage_cursor_y; uint32_t save_capacity;
  /* "Atalhos modernos" read-only snapshot buffer (rlw_driver_peek), play only. */
  uint8_t *peek; uint32_t peek_capacity;
+ /* Play-mode sound request transport (macos_live_driver.c: kind-10 copies plus
+  * PlaySnd_Manage ticks); sound_world is the world the queue belongs to. */
+ int sound_capture; RlPlayerInputEvent *events; uint32_t event_capacity, sound_count;
+ uint64_t sound_dropped, sound_errors; RlMundo sound_world;
+ /* In-game FLC events played by the host (rlw_eventflc.c) instead of ended at once. */
+ int event_flc_host;
+ RlwSoundEvent sounds[4096];
 };
 
 static uint8_t *file(const char *root, const char *name, uint32_t *length) {
@@ -107,10 +114,11 @@ static int event_flc_present(RlMundo world) {
 /* Every new or loaded world, before its first frame. A world resumed from the
  * pause menu (or continued from one that had it) already carries its table and
  * is left as it is, without reading EVENTS.INI; "already declared" is no error. */
-static int event_flc_declare(RlwDriver *d, RlMundo world) {
- if (!world || event_flc_present(world)) return 0;
+/* The declared names: distinct EVENEMENT values of EVENTS.INI, sorted. */
+static int event_flc_names(RlwDriver *d, char names[256][16], uint32_t *count) {
+ *count = 0;
  uint32_t n = 0; uint8_t *ini = file(d->root, "EVENTS.INI", &n); if (!ini) return RL_IO_ERROR;
- static char names[256][16]; uint32_t found = 0; int section = 0;
+ uint32_t found = 0; int section = 0;
  for (uint32_t i = 0; i < n;) {
   uint32_t j = i; while (j < n && ini[j] != '\n' && ini[j] != '\r') j++;
   char line[256]; uint32_t len = j - i < 255 ? j - i : 255; memcpy(line, ini + i, len); line[len] = 0;
@@ -129,8 +137,14 @@ static int event_flc_declare(RlwDriver *d, RlMundo world) {
   if (!dup) { if (found == 256) { free(ini); return RL_INVALID_ARGUMENT; } snprintf(names[found++], 16, "%s", v); }
  }
  free(ini);
+ if (found) qsort(names, found, 16, flc_compare);
+ *count = found; return 0;
+}
+static int event_flc_declare(RlwDriver *d, RlMundo world) {
+ if (!world || event_flc_present(world)) return 0;
+ static char names[256][16]; uint32_t found = 0;
+ int named = event_flc_names(d, names, &found); if (named) return named;
  if (!found) return 0;
- qsort(names, found, 16, flc_compare);
  RlEventFlcV1 *table = calloc(found, sizeof(*table)); if (!table) return RL_MEMORY_ERROR;
  for (uint32_t k = 0; k < found; k++) {
   memcpy(table[k].name, names[k], strlen(names[k]));
@@ -284,7 +298,7 @@ void rlw_driver_free(RlwDriver *d) {
  if (d->shell) rl_shell_free(d->shell);
  if (d->renderer) rl_render_liberar(d->renderer);
  if (d->world) rl_liberar_mundo(d->world);
- free(d->root); free(d->events_directory); free(d->events_bytes); free(d->pause_presentation); free(d->stage_presentation); free(d->peek); free(d);
+ free(d->root); free(d->events_directory); free(d->events_bytes); free(d->pause_presentation); free(d->stage_presentation); free(d->peek); free(d->events); free(d);
 }
 
 static int check_render(RlwDriver *d, const RlRenderResult *out, uint64_t generation) {
@@ -309,6 +323,79 @@ static int first_game_draw(RlwDriver *d) {
  return check_render(d, &out, generation);
 }
 
+/* ---- Sound requests: macos_live_driver.c sound_push / sound_collect /
+ * macos_live_sound_capture / _events / _dropped, same order and values. ---- */
+/* A new world (load, next stage, resume) starts with an empty queue, as the
+ * macOS driver clears sound_count/dropped when it replaces the world. */
+static void sound_check_world(RlwDriver *d) {
+ if (d->sound_world != d->world) { d->sound_world = d->world; d->sound_count = 0; d->sound_dropped = 0; d->sound_errors = 0; }
+}
+static void sound_push(RlwDriver *d, RlwSoundEvent e) {
+ if (d->sound_count == 4096) { d->sound_dropped++; return; }
+ d->sounds[d->sound_count++] = e;
+}
+/* Copies the engine's ordered kind-10 requests after each play phase
+ * (values[0]: 1 PostSound, 0 StopSound, 2 StopAllSound -> kind 3). The WinMain
+ * loop calls PlaySnd_Manage (0x460220) before every PeekMessage: one tick opens
+ * phase 2 and, when phase 2 dispatched requests, the loop's final tick follows
+ * them. Queries never consume or modify engine state; failures only count. */
+static void sound_collect(RlwDriver *d, uint32_t phase) {
+ sound_check_world(d);
+ uint32_t n = 0; int c = rl_eventos_entrada(d->world, d->events, d->event_capacity, &n);
+ if (c == RL_BUFFER_TOO_SMALL && n > d->event_capacity && n <= 65536) {
+  RlPlayerInputEvent *grown = realloc(d->events, (size_t)n * sizeof(*grown));
+  if (grown) { d->events = grown; d->event_capacity = n; c = rl_eventos_entrada(d->world, d->events, d->event_capacity, &n); }
+ }
+ if (c) { d->sound_errors++; return; }
+ uint32_t frame = (uint32_t)(d->status.frames + 1), requests = 0;
+ const RlwSoundEvent manage = {RLW_SOUND_MANAGE, frame, 2, 0x460220, 0, 0, 0, 0, 0, 0};
+ if (phase == 2) sound_push(d, manage);
+ for (uint32_t i = 0; i < n; i++) {
+  const RlPlayerInputEvent *e = &d->events[i]; if (e->kind != 10) continue;
+  RlwSoundEvent s = {e->values[0] == 2 ? RLW_SOUND_STOP_ALL : e->values[0] ? RLW_SOUND_POST : RLW_SOUND_STOP, e->frame, e->phase, e->site,
+                     e->values[1], e->values[2], e->values[3], e->values[4], e->values[6], e->values[5]};
+  sound_push(d, s); requests++;
+ }
+ if (phase == 2 && requests) sound_push(d, manage);
+}
+int rlw_driver_sound_capture(RlwDriver *d, uint32_t enabled) {
+ if (!d || enabled > 1) return 1;
+ d->sound_capture = (int)enabled; d->sound_count = 0; d->sound_world = d->world; return 0;
+}
+uint32_t rlw_driver_sound_events(RlwDriver *d, RlwSoundEvent *out, uint32_t capacity) {
+ if (!d || !out) return 0;
+ sound_check_world(d);
+ uint32_t n = d->sound_count < capacity ? d->sound_count : capacity;
+ memcpy(out, d->sounds, n * sizeof(*out));
+ memmove(d->sounds, d->sounds + n, (d->sound_count - n) * sizeof(*out)); d->sound_count -= n;
+ return n;
+}
+uint64_t rlw_driver_sound_dropped(const RlwDriver *d) { return d ? d->sound_dropped + d->sound_errors : 0; }
+uint64_t rlw_driver_sound_world(const RlwDriver *d) { return d ? (uint64_t)d->world : 0; }
+void rlw_driver_event_flc_host(RlwDriver *d, int enabled) { if (d) d->event_flc_host = enabled != 0; }
+/* macos_live_event_flc_state / _finish / _name. */
+int rlw_driver_event_flc_state(RlwDriver *d, RlEventFlcStateV1 *out) {
+ if (!d || !out) return RL_INVALID_ARGUMENT;
+ memset(out, 0, sizeof(*out));
+ if (!d->world || d->shell) return 0;
+ return rl_evento_flc_estado_v1(d->world, out);
+}
+int rlw_driver_event_flc_finish(RlwDriver *d) {
+ if (!d || !d->world) return RL_INVALID_ARGUMENT;
+ return rl_evento_flc_terminar_v1(d->world);
+}
+int rlw_driver_event_flc_name(RlwDriver *d, uint32_t index, char out[16]) {
+ if (!d || !out) return RL_INVALID_ARGUMENT;
+ static char names[256][16]; uint32_t count = 0;
+ int c = event_flc_names(d, names, &count); if (c) return c;
+ if (index >= count) return RL_INVALID_ARGUMENT;
+ memcpy(out, names[index], 16); out[15] = 0; return 0;
+}
+int rlw_driver_cd_events(RlwDriver *d, RlFrameEvent *out, uint32_t capacity, uint32_t *required) {
+ if (!d || !d->world || !required) return RL_INVALID_ARGUMENT;
+ return rl_eventos_quadro(d->world, out, capacity, required);
+}
+
 /* macos_live_input_phase() */
 static int input_phase(RlwDriver *d, uint32_t phase, const RlDeclaredInput *declared) {
  if (d->status.stopped || d->phase_index == UINT32_MAX || phase != (d->input_next_phase ? d->input_next_phase : 2)) return 1;
@@ -317,6 +404,7 @@ static int input_phase(RlwDriver *d, uint32_t phase, const RlDeclaredInput *decl
  if (phase == 2) { d->cursor_x = d->input.cursor_x; d->cursor_y = d->input.cursor_y; }
  d->phase_index = (uint32_t)(2 * d->status.frames + (phase == 2 ? 1 : 2));
  d->input_next_phase = phase == 2 ? 3 : 2;
+ if (d->sound_capture) sound_collect(d, phase);
  if (phase == 3) d->status.frames++;
  return 0;
 }
@@ -346,6 +434,7 @@ static int human_phase(RlwDriver *d, uint32_t phase, RlDeclaredInput *frame_inpu
  * an event is running and modal, report "last frame shown" at once, which is
  * the same ABI call the macOS host makes when its picture ends. */
 static int flc_skip(RlwDriver *d) {
+ if (d->event_flc_host) return 0;
  RlEventFlcStateV1 s; memset(&s, 0, sizeof(s));
  int c = rl_evento_flc_estado_v1(d->world, &s); if (c) return fail(d, c, "estado do evento FLC");
  if (s.running && s.modal) { c = rl_evento_flc_terminar_v1(d->world); if (c) return fail(d, c, "fim do evento FLC"); d->status.flc_skipped++; }
@@ -389,6 +478,7 @@ static int advance_step(RlwDriver *d) {
    c = rl_entrada_passo_pendente(d->world, &d->input); if (c) return fail(d, c, "entrada salva");
    c = rl_render_geracao(d->world, &gen, &phase, &counter); if (c) return fail(d, c, "fase da entrada salva");
    if (phase == 2) { d->cursor_x = d->input.cursor_x; d->cursor_y = d->input.cursor_y; }
+   if (d->sound_capture) sound_collect(d, phase);
    if (phase == 3) { d->status.frames++; d->phase_index = (uint32_t)(2 * d->status.frames); d->input_next_phase = 2; return flc_skip(d); }
    c = rl_entrada_quantidade_pendente(d->world, &pending); if (c) return fail(d, c, "consulta de entradas salvas");
   } while (pending);
@@ -499,4 +589,10 @@ int rlw_driver_peek(RlwDriver *d, const uint32_t *addresses, const uint32_t *siz
   if (!found) return 3; written += size;
  }
  return 0;
+}
+
+/* macos_live_order_queue(): pending Shift+click waypoints of one unit, play only. */
+int rlw_driver_order_queue(RlwDriver *d, uint32_t unit, uint16_t *cells, uint32_t capacity, uint32_t *count) {
+ if (!d || !count || !d->world || d->shell) return 1;
+ return rl_fila_ordens(d->world, unit, cells, capacity, count);
 }

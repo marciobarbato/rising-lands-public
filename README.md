@@ -20,11 +20,11 @@ Requisitos para jogar: Mac com **Apple Silicon** e **macOS 13** ou mais recente.
 
 O cliente Windows está em andamento, no diretório [`windows/`](windows/README.md). Existe uma **pré-alfa** para quem quiser testar cedo. **O teste num PC com Windows de verdade fica com a comunidade** ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)): o autor não vai testar no Windows.
 
-1. Baixe o `.exe` da pré-release mais recente do Windows (`v0.1.0-prealpha.…-windows`) em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**: x64 para a maioria dos PCs, ARM64 para PCs com processador ARM. Confira o SHA-256 publicado nas notas da release. O `.exe` foi compilado pelo próprio GitHub Actions a partir deste código (workflow `windows-client`).
+1. Baixe o `.exe` da pré-release mais recente do Windows (`v0.1.0-prealpha.…-windows`) em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**: x64 para a maioria dos PCs (as pré-alfas 1 a 3 também trazem um `.exe` ARM64; da próxima em diante o cliente é só x86-64, e um PC com processador ARM pode rodar o `.exe` x64 pela emulação do próprio Windows, sem suporte). Confira o SHA-256 publicado nas notas da release. O `.exe` foi compilado pelo próprio GitHub Actions a partir deste código (workflow `windows-client`).
 2. **Aviso do SmartScreen:** o `.exe` **não é assinado**, então o Windows mostra "O Windows protegeu o computador". Clique em **Mais informações** e depois em **Executar assim mesmo**. Não há plano de assinar o executável; se preferir, compile você mesmo (veja abaixo).
 3. Na primeira execução, uma janela pede o CD: escolha o **RISING_LANDS_BR_.BIN** (ou o .CUE, ou um .ISO). Os arquivos são conferidos por SHA-256 e copiados para `%LOCALAPPDATA%\RisingLands-ptbr\Dados`. Depois o jogo abre no menu original.
 
-Requisitos: Windows 10 ou 11 de 64 bits (x86-64 ou ARM64). É um único `.exe`, sem instalador e sem DLLs extras.
+Requisitos: Windows 10 ou 11 de 64 bits, x86-64 (as pré-alfas 1 a 3 também tinham um build ARM64). É um único `.exe`, sem instalador e sem DLLs extras.
 
 O que já funciona:
 - importação do CD (.BIN/.CUE, .ISO ou a pasta do CD);
@@ -36,10 +36,15 @@ O que já funciona:
 - a campanha, com mouse e teclado iguais aos do macOS, rolagem pela borda, tela cheia (**F11**), pausa (**P**) e velocidades (**+** e **−**: 0,5x, 1x, 2x e 4x).
 - Paridade com o macOS: com a mesma entrada, o driver do Windows e o do macOS produzem os mesmos quadros, tick a tick, e o mesmo passeio pelos menus e os mesmos arquivos de save.
 
-O que ainda falta:
-- **áudio** (efeitos e música do CD), as figuras de evento (FLC) durante o jogo e os **filmes** ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)).
+Já no código, para a pré-alfa 4 (ainda não publicada):
+- **áudio**: efeitos sonoros e o menu **Áudio** (silenciar e volume de efeitos e música), a **música do CD** (lida da imagem .BIN/.CUE do próprio jogador), as figuras de evento (FLC) durante o jogo e os **filmes** originais ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)); quem importou o CD numa pré-alfa anterior precisa importar de novo para ter som e música;
+- o menu da janela passa a se chamar **Jogo**, como no macOS (pausa, velocidade, dificuldade, Opções…, Atalhos modernos, Caminhos melhores e os saves), com **Gerenciar partidas salvas…** (renomear e apagar para a Lixeira) e o **salvamento automático** a cada 5, 10 ou 15 minutos de jogo;
+- uma partida salva pela lista da pausa volta jogando ao ser carregada, como no original;
+- as **bandeirinhas da fila de ordens** (Shift+clique) desenhadas sobre o mapa, como no macOS;
+- imagem nítida em telas com escala (DPI por monitor);
+- só x86-64: sem build ARM64.
 
-Importante: a paridade foi verificada no macOS, compilando o driver do Windows contra o mesmo motor. No Windows de verdade, o CI testa só a compilação, os testes unitários, o autoteste do motor e a recusa de um arquivo que não é o CD. **Ainda ninguém jogou essa build num PC com Windows.** Quem tiver Windows e o CD pode ajudar muito: conte na [#6](https://github.com/marciobarbato/rising-lands-public/issues/6) o que funcionou e o que não funcionou, ou abra uma issue pelo modelo **Problema no jogo** e diga que é o Windows.
+Importante: a paridade foi verificada no macOS, compilando o driver do Windows contra o mesmo motor. No Windows de verdade, o CI testa a compilação, os testes unitários e o próprio `.exe` sem dados do jogo (autoteste do motor, as recusas da importação, a primeira execução com o diálogo do CD, o desenho das bandeirinhas e o DPI). **Ainda ninguém jogou essa build num PC com Windows.** Quem tiver Windows e o CD pode ajudar muito: conte na [#6](https://github.com/marciobarbato/rising-lands-public/issues/6) o que funcionou e o que não funcionou, ou abra uma issue pelo modelo **Problema no jogo** e diga que é o Windows.
 
 ## Onde conseguir o CD
 
@@ -51,7 +56,7 @@ A imagem do CD original brasileiro pode ser encontrada no **Internet Archive**. 
 - Ninguém terminou a campanha inteira ainda. É aí que os testes de vocês ajudam.
 - Se o jogo chegar a um trecho ainda não portado, ele não trava em silêncio: mostra um **painel de parada** com o endereço da rotina do original. Esse texto é o que mais ajuda num relato.
 - macOS: alfa `v0.1.0-alpha.2`. O código já tem novidades que entram na próxima versão: o relógio do mosteiro com o painel lateral escondido, o balão saindo do hangar, os atalhos modernos e a fila de ordens com Shift+clique, a **tela de Opções**, os **caminhos melhores**, o menu **Áudio** e sons que antes não tocavam (o som dos eventos, o andar dos veículos, o impacto das torres; silêncio na pausa e na tela de resultado) (veja "Controles").
-- Windows: pré-alfa, em andamento; jogo, menus, saves, tela de Opções, atalhos modernos, configurar teclas e caminhos melhores feitos, com builds x64 e ARM64 (veja "Windows (pré-alfa)").
+- Windows: pré-alfa, em andamento; jogo, menus, saves, tela de Opções, atalhos modernos, configurar teclas e caminhos melhores na pré-alfa 3 (com builds x64 e ARM64); no código atual também áudio, música do CD, figuras de evento, filmes, o menu Jogo, o gerenciador de partidas salvas e o salvamento automático, só x86-64 (veja "Windows (pré-alfa)").
 - Só a versão brasileira do jogo, em português, é suportada.
 
 ## Controles
@@ -104,7 +109,7 @@ cargo test --locked --manifest-path engine/Cargo.toml
 ./macos/tests/run.sh
 ```
 
-Cliente Windows: a partir de um Mac ou Linux com mingw-w64, ou no Windows com MSYS2/Git Bash. No Windows também compila com o Visual Studio (MSVC), para x64 e ARM64: `windows\build-msvc.ps1 -Test` no PowerShell. Detalhes em [windows/README.md](windows/README.md).
+Cliente Windows: a partir de um Mac ou Linux com mingw-w64, ou no Windows com MSYS2/Git Bash. No Windows também compila com o Visual Studio (MSVC), para x64: `windows\build-msvc.ps1 -Test` no PowerShell. Detalhes em [windows/README.md](windows/README.md).
 
 ```bash
 rustup target add x86_64-pc-windows-gnu
@@ -119,12 +124,12 @@ Os testes que precisam dos arquivos originais do jogo pulam quando eles não est
 
 ## Frentes de trabalho
 
-O que está sendo feito, o estado de cada frente e onde alguém de fora pode ajudar: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Feitos desde a última versão publicada do macOS: a tela de Opções e os caminhos melhores (no Windows, estão na pré-alfa 3). As frentes abertas têm uma issue: o cliente Windows ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)), áudio e filmes no Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)), teste num PC com Windows ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), outros CDs e idiomas ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) e testes em jogo ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Antes de começar algo grande, comente na issue da frente.
+O que está sendo feito, o estado de cada frente e onde alguém de fora pode ajudar: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Feitos desde a última versão publicada do macOS: a tela de Opções e os caminhos melhores (no Windows, estão na pré-alfa 3). As frentes abertas têm uma issue: o cliente Windows ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)), áudio e filmes no Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4), já no código atual), teste num PC com Windows ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), outros CDs e idiomas ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) e testes em jogo ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Antes de começar algo grande, comente na issue da frente.
 
 ## Ajuda bem-vinda
 
 - **Testar o Windows num PC de verdade:** ninguém jogou a pré-alfa num PC com Windows ainda, e o autor não vai testar no Windows ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)).
-- **Host Windows:** áudio, música do CD e filmes ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)); já há uma contribuição externa em discussão: combine na issue antes. O guia [docs/WINDOWS_CLIENT.md](docs/WINDOWS_CLIENT.md) mostra onde cada parte fica no código do macOS.
+- **Host Windows:** áudio, música do CD, figuras de evento e filmes já estão no código atual ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) e precisam ser testados num PC de verdade (#6). O guia [docs/WINDOWS_CLIENT.md](docs/WINDOWS_CLIENT.md) mostra onde cada parte fica no código do macOS.
 - **Testes em jogo:** a magia ESPELHO, o druida e o mosteiro de fusão, e a campanha completa ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)).
 - **Outros idiomas:** hoje só o CD brasileiro funciona. Se você tem outro CD original (inglês, francês...), conte qual na [#8](https://github.com/marciobarbato/rising-lands-public/issues/8). Nada traduzido do jogo pode ir ao repositório.
 

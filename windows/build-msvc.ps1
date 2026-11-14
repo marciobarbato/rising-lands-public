@@ -7,16 +7,15 @@
 .EXAMPLE
   windows\build-msvc.ps1                  # x64 -> windows\build\msvc-x64\RisingLands.exe
   windows\build-msvc.ps1 -Test            # also builds and runs the portable unit tests with cl.exe
-  windows\build-msvc.ps1 -Arch arm64      # ARM64 (cross from x64, or native on an ARM64 machine)
 
 .NOTES
-  Needs Visual Studio 2022 (or Build Tools) with the C++ workload, plus the ARM64
-  build tools for -Arch arm64, and rustup/cargo. It finds vcvarsall.bat with
-  vswhere when cl.exe for the requested architecture is not already on PATH.
-  Tests are built for any -Arch but run only when the target matches the machine.
+  The Windows client is x86-64 only (decision of 2026-11-14; pre-alphas 1-3 also
+  shipped an ARM64 build). Needs Visual Studio 2022 (or Build Tools) with the C++
+  workload and rustup/cargo. It finds vcvarsall.bat with vswhere when cl.exe for
+  x64 is not already on PATH. Tests run only on an x64 machine.
 #>
 param(
-  [ValidateSet('x64', 'arm64')][string]$Arch = 'x64',
+  [ValidateSet('x64')][string]$Arch = 'x64',
   [switch]$Test,
   [string]$Out = ''
 )
@@ -43,7 +42,7 @@ $HostArch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64
 if (-not ((Get-Command cl.exe -ErrorAction SilentlyContinue) -and $env:VSCMD_ARG_TGT_ARCH -eq $Arch)) {
   $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
   if (-not (Test-Path $vswhere)) { throw 'vswhere.exe not found: install Visual Studio 2022 or the Build Tools' }
-  $component = if ($Arch -eq 'arm64') { 'Microsoft.VisualStudio.Component.VC.Tools.ARM64' } else { 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' }
+  $component = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64'
   $vs = & $vswhere -latest -products * -requires $component -property installationPath
   if (-not $vs) { throw "No Visual Studio installation with $component" }
   $names = @{ x64 = 'amd64'; arm64 = 'arm64' }
@@ -64,6 +63,8 @@ $Common = @('/nologo', '/std:c11', '/utf-8', '/MT', '/W3', '/wd4244', '/wd4267',
   '/DUNICODE', '/D_UNICODE', '/D_CRT_SECURE_NO_WARNINGS', '/D_CRT_NONSTDC_NO_WARNINGS')
 $Src = Join-Path $Here 'src'
 $Inc = Join-Path $Repo 'engine\include'
+# MacOSAudioMapper (portable C, reused unchanged by the Windows sound host).
+$Mac = Join-Path $Repo 'macos\src'
 
 # --- portable unit tests ----------------------------------------------------
 if ($Test) {
@@ -74,7 +75,11 @@ if ($Test) {
     @{ Name = 'test_cd'; Defines = @('/DRLW_TESTING'); Files = @('tests\test_cd.c', 'src\rlw_cd.c', 'src\rlw_fs.c', 'src\rlw_sha256.c') },
     @{ Name = 'test_menu'; Defines = @(); Files = @('tests\test_menu.c', 'src\rlw_menu.c', 'src\rlw_flc.c', 'src\rlw_fs.c') },
     @{ Name = 'test_saves'; Defines = @(); Files = @('tests\test_saves.c', 'src\rlw_saves.c', 'src\rlw_fs.c') },
-    @{ Name = 'test_hotkeys'; Defines = @(); Files = @('tests\test_hotkeys.c', 'src\rlw_hotkeys.c', 'src\rlw_modern.c') }
+    @{ Name = 'test_savemgr'; Defines = @(); Files = @('tests\test_savemgr.c', 'src\rlw_saves.c', 'src\rlw_savemgr.c', 'src\rlw_autosave.c', 'src\rlw_fs.c') },
+    @{ Name = 'test_gamemenu'; Defines = @(); Files = @('tests\test_gamemenu.c', 'src\rlw_gamemenu.c', 'src\rlw_saves.c', 'src\rlw_savemgr.c', 'src\rlw_autosave.c', 'src\rlw_fs.c') },
+    @{ Name = 'test_hotkeys'; Defines = @(); Files = @('tests\test_hotkeys.c', 'src\rlw_hotkeys.c', 'src\rlw_modern.c') },
+    @{ Name = 'test_markers'; Defines = @(); Files = @('tests\test_markers.c', 'src\rlw_markers.c') },
+    @{ Name = 'test_audio'; Defines = @('/DRLW_TESTING', "/I$Mac"); Files = @('tests\test_audio.c', 'src\rlw_audio.c', 'src\rlw_sound.c', 'src\rlw_sound_import.c', 'src\rlw_cdmusic.c', 'src\rlw_eventflc.c', 'src\rlw_flc.c', 'src\rlw_movie.c', 'src\rlw_cd.c', 'src\rlw_fs.c', 'src\rlw_sha256.c', '..\macos\src\macos_audio_mapper.c') }
   )
   foreach ($s in $suites) {
     Write-Host "== $($s.Name) (cl $Arch)"
@@ -88,14 +93,18 @@ if ($Test) {
     Invoke-Checked (Join-Path $T 'test_cd.exe') @((Join-Path $T 'test-work'))
     Invoke-Checked (Join-Path $T 'test_menu.exe') @()
     Invoke-Checked (Join-Path $T 'test_saves.exe') @($T)
+    Invoke-Checked (Join-Path $T 'test_savemgr.exe') @($T)
+    Invoke-Checked (Join-Path $T 'test_gamemenu.exe') @($T)
     Invoke-Checked (Join-Path $T 'test_hotkeys.exe') @()
+    Invoke-Checked (Join-Path $T 'test_markers.exe') @()
+    Invoke-Checked (Join-Path $T 'test_audio.exe') @((Join-Path $T 'test-audio'))
   } else {
     Write-Host "== tests built for $Arch; not run on this $HostArch machine"
   }
 }
 
 # --- engine -----------------------------------------------------------------
-$Triple = if ($Arch -eq 'arm64') { 'aarch64-pc-windows-msvc' } else { 'x86_64-pc-windows-msvc' }
+$Triple = 'x86_64-pc-windows-msvc'
 if (Get-Command rustup -ErrorAction SilentlyContinue) { Invoke-Checked 'rustup' @('target', 'add', $Triple) }
 Write-Host "== engine ($Triple, static CRT)"
 $env:CARGO_TARGET_DIR = Join-Path $Out 'engine-target'
@@ -112,13 +121,16 @@ Write-Host "== host (cl $Arch)"
 $obj = Join-Path $Out 'obj'
 New-Item -ItemType Directory -Force -Path $obj | Out-Null
 $Sources = @('rlw_main.c', 'rlw_driver.c', 'rlw_cd.c', 'rlw_fs.c', 'rlw_sha256.c', 'rlw_menu.c', 'rlw_menu_ops.c',
-  'rlw_menu_demo.c', 'rlw_flc.c', 'rlw_saves.c', 'rlw_hotkeys.c', 'rlw_modern.c', 'rlw_keys_dialog.c') | ForEach-Object { Join-Path $Src $_ }
+  'rlw_menu_demo.c', 'rlw_flc.c', 'rlw_saves.c', 'rlw_hotkeys.c', 'rlw_modern.c', 'rlw_keys_dialog.c',
+  'rlw_markers.c', 'rlw_markers_gdi.c', 'rlw_smoke.c', 'rlw_dpi.c', 'rlw_savemgr.c', 'rlw_savemgr_dialog.c', 'rlw_autosave.c', 'rlw_gamemenu.c', 'rlw_gamemenu_win.c',
+  'rlw_audio.c', 'rlw_audio_win32.c', 'rlw_audio_ui.c', 'rlw_sound.c', 'rlw_sound_import.c', 'rlw_cdmusic.c', 'rlw_eventflc.c', 'rlw_movie.c') | ForEach-Object { Join-Path $Src $_ }
+$Sources += Join-Path $Mac 'macos_audio_mapper.c'
 # Win32 libraries of the host, then what the Rust std needs on windows-msvc
 # (rustc --print native-static-libs).
-$Libs = @('user32.lib', 'gdi32.lib', 'comdlg32.lib', 'shell32.lib', 'ole32.lib', 'uuid.lib', 'winmm.lib',
+$Libs = @('user32.lib', 'gdi32.lib', 'comdlg32.lib', 'comctl32.lib', 'shell32.lib', 'ole32.lib', 'uuid.lib', 'winmm.lib',
   'kernel32.lib', 'advapi32.lib', 'ntdll.lib', 'userenv.lib', 'ws2_32.lib', 'dbghelp.lib', 'bcrypt.lib')
 $Exe = Join-Path $Out 'RisingLands.exe'
-Invoke-Checked 'cl.exe' ($Common + @('/O2', "/I$Inc", "/I$Src") + $Sources + @($Lib) + $Libs +
+Invoke-Checked 'cl.exe' ($Common + @('/O2', "/I$Inc", "/I$Src", "/I$Mac") + $Sources + @($Lib) + $Libs +
   @("/Fe$Exe", '/link', '/SUBSYSTEM:WINDOWS', '/INCREMENTAL:NO')) $obj
 
 # One .exe with system DLLs only: no vcruntime/msvcp/ucrt redistributable.

@@ -45,7 +45,7 @@ static int f_credits_frame(void *d, uint32_t ms, RlShellCredits *o) {
 static int f_credits_present(void *d, const RlShellCredits *fr, const uint8_t *p, const uint8_t *c) { (void)d; (void)fr; (void)p; (void)c; return 0; }
 static void f_error(void *d, char *o, size_t n) { (void)d; snprintf(o, n, "fake"); }
 static const RlwMenuOps OPS = {f_mode, f_state, f_input, f_draw, f_show, f_prepare, f_request, f_load, f_slots, f_zone, f_clock,
- f_credits_frame, f_credits_present, f_error, NULL, NULL, NULL, NULL};
+ f_credits_frame, f_credits_present, f_error, NULL, NULL, NULL, NULL, NULL};
 
 static void fresh(Fake *f, RlwMenu *m, uint32_t mode) {
  memset(f, 0, sizeof(*f)); f->mode = mode; f->state.version = 1; f->state.clock_7c = 13; f->state.animation_84 = 40;
@@ -133,7 +133,7 @@ static int f_options_input(void *d, const RlShellInput *in, uint32_t keys, RlOpc
 }
 static uint32_t f_options_open(void *d) { (void)d; return (uint32_t)fo.open; }
 static const RlwMenuOps OPTIONS_OPS = {f_mode, f_state, f_input, f_draw, f_show, f_prepare, f_request, f_load, f_slots, f_zone, f_clock,
- f_credits_frame, f_credits_present, f_error, f_options_input, f_options_open, NULL, NULL};
+ f_credits_frame, f_credits_present, f_error, f_options_input, f_options_open, NULL, NULL, NULL};
 
 static void test_options(void) {
  Fake f; RlwMenu m; memset(&fo, 0, sizeof(fo));

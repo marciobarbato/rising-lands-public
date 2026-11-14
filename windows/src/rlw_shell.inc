@@ -355,6 +355,36 @@ static int shell_resume(RlwDriver *d) {
  memset(d->held, 0, sizeof(d->held)); d->pending_count = 0; d->left_held = 0;
  return refresh_screen(d);
 }
+/* macos_live_load_resume(): after rlw_driver_load. A game saved from the
+ * original save list14 is in mode16 (shell_save_slot captures the paused
+ * world). The original load lists never stop there: after GameLoad 0x46b88d
+ * they run the MenuNewSelect 0x42c570 tail, MenuInit(local player,18) and the
+ * HUD refresh latch 0x4e05a2=1 (list12: call 0x42c56b, MenuInit 0x42c57a, latch
+ * 0x42c57f; list13 from the main menu: call 0x42c70b, MenuInit 0x42c722, latch
+ * 0x42c72b), so a loaded game always plays. The pause menu's sixth item,
+ * "Voltar ao jogo" (MouseZone 6 = item 5), runs that same tail. The pause
+ * session is opened on the loaded world and that item is activated through the
+ * session's own input (button down and released over its zone, as a click),
+ * then RESUME is completed like the menu does. No game memory is written by
+ * the host. Any other mode is left as loaded. */
+int rlw_driver_load_resume(RlwDriver *d) {
+ if (!d || d->shell || d->status.stopped) return RL_INVALID_ARGUMENT;
+ uint32_t mode = 0; int c = rl_missao_tela(d->world, &mode); if (c) return save_result(d, c, "Retomada da partida carregada");
+ if (mode != RL_SHELL_PAUSE) return 0;
+ c = rlw_shell_begin(d); if (c) return c;
+ int32_t rect[4] = {0}; c = rlw_shell_zone(d, 6, rect);
+ if (!c && (rect[0] < 0 || rect[1] < 0 || rect[2] <= rect[0] || rect[3] <= rect[1])) { snprintf(d->save_error, sizeof(d->save_error), "Retomada da partida carregada: o item \"Voltar ao jogo\" não tem zona"); c = RL_UNSUPPORTED_PATH; }
+ RlShellEvent event; memset(&event, 0, sizeof(event));
+ if (!c) {
+  RlShellInput input = d->shell_input; input.keys = 0; input.mouse_b0 = 0;
+  input.mouse_x = (uint32_t)((rect[0] + rect[2]) / 2); input.mouse_y = (uint32_t)((rect[1] + rect[3]) / 2);
+  input.mouse_ae = 1; input.mouse_af = 1;
+  c = rlw_shell_input(d, &input, &event);
+ }
+ if (!c && event.kind != RL_SHELL_RESUME) { snprintf(d->save_error, sizeof(d->save_error), "Retomada da partida carregada: o menu de pausa devolveu o pedido %u", event.kind); c = RL_UNSUPPORTED_PATH; }
+ if (!c) c = shell_resume(d);
+ return c;
+}
 /* shell_save_slot(): SAVE_SLOT from the in-game list 14. The host's modern save
  * of the paused game FIRST (its retained gameplay picture, no AffGame draw of
  * mode16), then the original final 0x42c570 (MenuInit 18 + HUD latch) through

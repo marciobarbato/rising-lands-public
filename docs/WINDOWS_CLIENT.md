@@ -7,14 +7,19 @@
 > documento lista o que cada parte faz, onde está no código macOS, as chamadas da ABI em ordem e o que ainda é
 > específico do macOS. Nenhum dado do jogo pode ser incluído: tudo vem do CD original do jogador.
 
-> **Estado (2026-11-13).** O cliente Windows já existe em [`windows/`](../windows/README.md) (Win32 + GDI em C, motor
+> **Estado (2026-11-14).** O cliente Windows já existe em [`windows/`](../windows/README.md) (Win32 + GDI em C, motor
 > estático, um único `RisingLands.exe`): importa o CD, abre no menu principal original, joga a campanha, salva e
 > carrega no mesmo formato do macOS e tem a tela de Opções, com paridade quadro a quadro com o macOS. Desde a #7 também
 > tem os caminhos melhores, os atalhos modernos (N duas vezes, Home, ponto, vírgula, H) e a janela de configurar
-> teclas, com os mesmos padrões do macOS (atalhos modernos ligados, caminhos melhores desligados). Compila com
-> mingw-w64 (x64) e com MSVC (x64 e ARM64). Faltam áudio e filmes (#4) e um teste num PC com Windows de verdade (#6),
-> que fica com quem tem Windows. Os binários não são assinados, e não há plano de assiná-los. Este guia continua
-> valendo como mapa da camada de host.
+> teclas, com os mesmos padrões do macOS (atalhos modernos ligados, caminhos melhores desligados). Para a pré-alfa 4
+> (em andamento, ainda não publicada) chegaram os efeitos sonoros com o menu Áudio, a música do CD (lida do `.BIN` do
+> próprio jogador), as figuras de evento (FLC) e os filmes (#4); as bandeiras da fila de ordens sobre o mapa; o menu
+> "Jogo" do macOS (substitui "Partida"); o gerenciador de partidas salvas e o salvamento automático periódico; a
+> partida salva pela lista da pausa voltando jogando; a janela ciente de DPI por monitor; e smokes do `.exe` no CI sem
+> dados do jogo. Compila com mingw-w64 e com MSVC, só x86-64 (decisão de 2026-11-14; as pré-alfas 1 a 3 também
+> tinham um build ARM64; o Windows em ARM pode rodar o build x64 pela própria emulação, sem suporte). Falta um teste
+> num PC com Windows de verdade (#6), que fica com quem tem Windows. Os binários não são assinados, e não há plano de
+> assiná-los. Este guia continua valendo como mapa da camada de host.
 
 This guide is for a contributor who wants to build a Windows host over the same engine. Each statement points to the
 macOS file that implements it. Items not checked against the code are marked **unverified**.
@@ -22,10 +27,12 @@ macOS file that implements it. Items not checked against the code are marked **u
 ## 0. Current state: `windows/`
 
 A Windows client now lives in [`windows/`](../windows/README.md): Win32 + GDI in C11, the engine linked statically, one
-self-contained `RisingLands.exe` that imports only system DLLs. It builds with mingw-w64 (x64, also cross from
-macOS/Linux) and with MSVC (x64 and ARM64); `.github/workflows/windows-client.yml` builds all three, runs the unit
-tests and uploads each `.exe` with its SHA-256. **Nobody has played it on a real Windows PC yet**: CI has no game data,
-and the parity checks run on macOS. Testing on Windows is left to the community (#6).
+self-contained `RisingLands.exe` that imports only system DLLs. It builds with mingw-w64 (also cross from
+macOS/Linux) and with MSVC, **x86-64 only** (decision of 2026-11-14; pre-alphas 1–3 also shipped an MSVC ARM64 build;
+Windows on ARM may run the x64 build under its own emulation, unsupported). `.github/workflows/windows-client.yml`
+builds both, runs the unit tests and the smokes of the `.exe` without game data (`windows/ci/smoke.sh`) and uploads
+each `.exe` with its SHA-256. **Nobody has played it on a real Windows PC yet**: CI has no game data, and the parity
+checks run on macOS. Testing on Windows is left to the community (#6).
 
 | Part | macOS reference | Windows |
 |---|---|---|
@@ -34,17 +41,24 @@ and the parity checks run on macOS. Testing on Windows is left to the community 
 | Mouse and keyboard (the 23 virtual keys, held drags, edge zones, F11 never delivered) | `NativeLiveWindow.swift`, `NativeHotkeyInputRouter.swift`, `macos_live_driver.c` | `rlw_main.c`, `rlw_driver.c` (same queue and click gesture) — done |
 | Key bindings and router: actions, aliases, optional modifiers, conflicts, digit double tap | `NativeHotkeyBindings.swift`, `NativeHotkeyInputRouter.swift` | `rlw_hotkeys.c` (portable C, `tests/test_hotkeys.c`) — done; with the default bindings the game gets exactly the keys it got before |
 | Mission start, renderer from the CD, per-frame phases | `macos_live_driver.c` | `rlw_driver.c` — done, per-tick frame hashes equal to the macOS driver's |
-| First-run CD import (BIN/CUE/ISO/folder, SHA-256) | `NativeCDImport.swift`, `NativePlayerImport.swift` | `rlw_cd.c` — done (no audio decoding yet) |
+| First-run CD import (BIN/CUE/ISO/folder, SHA-256) | `NativeCDImport.swift`, `NativePlayerImport.swift` | `rlw_cd.c` — done; then `rlw_sound_import.c` (the six sound banks) and `rlw_cdmusic.c` (CD audio tracks 2 and 3 from the raw `.BIN` only, as pinned WAVs) |
 | Original menus, briefing, pause, result, credits | `macos_campaign_shell.inc`, `NativeLiveWindow.swift` shell paths, `NativeFLC.swift` | `rlw_shell.inc`, `rlw_menu.c`, `rlw_flc.c` — done, menu walk equal to the macOS driver's |
-| Saves and loads: slots + `.view` companion, background write, stage autosave, the original save/load lists, "Partida" menu (F5/F9) | `macos_live_driver.c` (`snapshot_capture`, `macos_live_save*`, `macos_live_load`, `macos_live_autosave`), `macos_campaign_shell.inc`, `NativeLiveWindow.swift`, `main.swift` | `rlw_save.inc`, `rlw_saves.c`, `rlw_fs.c` (durable replace with `FlushFileBuffers`) — done, same files as macOS, saved files equal to the macOS driver's |
-| Sound effects, CD music, event pictures (FLC), movies (AVI) | `NativeAudio.swift`, `NativeCDMusic*.swift`, `NativeEventFLCPlayback.swift`, `NativeDefeatMovie.swift` | **open** (#4): in-game FLC events end at once; movies complete as unavailable |
+| Saves and loads: slots + `.view` companion, background write, stage autosave, the original save/load lists, F5/F9; a game saved from the pause list loads playing | `macos_live_driver.c` (`snapshot_capture`, `macos_live_save*`, `macos_live_load`, `macos_live_autosave`), `macos_campaign_shell.inc` (`macos_live_load_resume`), `NativeLiveWindow.swift`, `main.swift` | `rlw_save.inc`, `rlw_shell.inc` (`rlw_driver_load_resume`), `rlw_saves.c`, `rlw_fs.c` (durable replace with `FlushFileBuffers`) — done, same files as macOS, saved files equal to the macOS driver's |
+| Saved-games manager (Jogo → Gerenciar partidas salvas…: list, rename, Recycle Bin) | `NativeSaveLibrary.swift`, `NativeSaveManager.swift` | `rlw_savemgr.c` (portable, `tests/test_savemgr.c`), `rlw_savemgr_dialog.c` (Win32, `SHFileOperationW` with `FOF_ALLOWUNDO`) — done |
+| Periodic autosave (Jogo → Salvamento automático: off, 5/10/15 game minutes, slot `autosave`) | `NativePlayerOptions.swift` (`NativeAutosaveInterval`, `NativeAutosaveSchedule`), `NativeLiveWindow.swift` | `rlw_autosave.c` (portable), `rlw_main.c` (`autosave=` in `opcoes.ini`) — done |
+| Jogo menu (replaces "Partida"): Pausar/Continuar, Velocidade, Dificuldade, saves, Opções… (in play over the pause), Configurar teclas…, Atalhos modernos, Caminhos melhores | `NativePlayerApp.swift` (`makePlayerMenu`), `main.swift`, `macos_options.inc` | `rlw_gamemenu.c` (portable, `tests/test_gamemenu.c`), `rlw_gamemenu_win.c` (Win32 popup) — done |
+| Sound effects | `NativeAudio.swift`, `macos_audio_mapper.c` | `rlw_sound.c` (banks decoded in memory), `rlw_audio.c` (mixer and sound host over `macos_audio_mapper.c`, reused unchanged), `rlw_audio_win32.c` (`waveOut`) — done; Áudio menu (mute and volume for effects and music) in `rlw_audio_ui.c` |
+| CD music | `NativeCDMusicHost.swift`, `NativeCDMusicPlayer.swift`, `NativeCDMusicDisc.swift` | `rlw_cdmusic.c` — done: tracks from the player's own `.BIN`, the macOS selection policy |
+| Event pictures (FLC) | `NativeEventFLCPlayback.swift`, `macos_event_flc.inc` | `rlw_eventflc.c` — done: the picture over the view at the file's speed, with its sound ticks |
+| Movies (AVI: introduction, defeat, campaign end) | `NativeDefeatMovie.swift` | `rlw_movie.c` — done: Cinepak and Microsoft ADPCM decoded by the host (no system codec), Escape key-up ends it |
 | "Opções" screen over the main and pause menus, settings kept between runs | `macos_options.inc`, `NativeLiveWindow.swift` | `rlw_options.inc`, `rlw_main.c` (`opcoes.ini` beside `Dados` and `Partidas`) — done, with the macOS defaults (section 0.1) |
-| Key window ("Configurar teclas"): one row per action, alternatives, capture field, defaults, apply/cancel | `NativeHotkeyPreferences.swift` | `rlw_keys_dialog.c` (plain Win32 controls), editor and `teclas.ini` format in `rlw_hotkeys.c` — done; opened from the Opções item and **Partida → Configurar teclas…** |
-| MSVC x64 and ARM64 builds | — | `build-msvc.ps1`, CI jobs `msvc-x64`, `msvc-arm64`, `arm64-run` — done (section 1) |
+| Key window ("Configurar teclas"): one row per action, alternatives, capture field, defaults, apply/cancel | `NativeHotkeyPreferences.swift` | `rlw_keys_dialog.c` (plain Win32 controls), editor and `teclas.ini` format in `rlw_hotkeys.c` — done; opened from the Opções item and **Jogo → Configurar teclas…** |
+| MSVC x64 build | — | `build-msvc.ps1`, CI job `msvc-x64` — done (section 1). x86-64 only since 2026-11-14 (the ARM64 build and its `windows-11-arm` job were removed) |
 | Modern shortcuts (N twice, Home, period/comma, H) | `NativeModernHotkeys.swift`, `NativeLiveWindow.swift` (`startModern`, `stepModern`), `macos_live_peek` | `rlw_modern.c` (portable C: read-only snapshot, planner, command job), `rlw_main.c`, `rlw_driver.c` (`rlw_driver_peek`) — done; they follow the "Atalhos modernos" item |
-| Shift+click order queue (`RL_REGRA_FILA_ORDENS`, rule bit 1) | `macos_live_default_rules`, `NativeModernHotkeys.swift` | done: "Atalhos modernos" in the Opções screen turns the rule on for worlds created afterwards |
+| Shift+click order queue (`RL_REGRA_FILA_ORDENS`, rule bit 1) and its markers over the map | `macos_live_default_rules`, `NativeModernHotkeys.swift` (`NativeOrderQueueMarkers`), `NativeLiveWindow.swift` (`layoutWaypoints`) | done: "Atalhos modernos" in the Opções screen turns the rule on for worlds created afterwards; `rlw_markers.c` (portable, `tests/test_markers.c`) and `rlw_markers_gdi.c` draw the pending waypoints over the map as on macOS |
 | Better unit paths (`RL_REGRA_CAMINHOS_MELHORES`, rule bit 0) | `macos_live_default_rules`, menu Jogo > Caminhos melhores | done: "Caminhos melhores" in the Opções screen turns the rule on for worlds created afterwards; `windows/parity.sh` checks `rl_regras` of the created world |
-| DPI awareness, a D3D11 presenter | — | open |
+| DPI awareness | `NativeViewportPolicy.swift` (backing scale) | `rlw_dpi.c` — done: the game window per-monitor aware (sharp picture, real fullscreen resolution), fixed-layout windows scaled by Windows |
+| A D3D11 presenter | — | open |
 | Code signing | — | not planned (section 6) |
 
 ### 0.1 Opções defaults and rules
@@ -78,14 +92,23 @@ macOS file's action names.
 ### 0.3 Checks
 
 - `windows/build.sh test` (and `build-msvc.ps1 -Test`): portable unit tests, among them `windows/tests/test_hotkeys.c`
-  (bindings, router, the `teclas.ini` format, the editor, the snapshot over a synthetic memory map, planner and job).
-  CI runs them on `windows-latest` and natively on `windows-11-arm`.
+  (bindings, router, the `teclas.ini` format, the editor, the snapshot over a synthetic memory map, planner and job),
+  `test_markers.c` (order queue markers), `test_savemgr.c` (saved-games manager, autosave schedule),
+  `test_gamemenu.c` (Jogo menu model) and `test_audio.c` (sound banks, mixer, sound host, CD music import and policy,
+  event FLC, movie decoding; all synthetic). CI runs them on `windows-latest` with gcc and with cl.
+- `windows/ci/smoke.sh` runs the built `.exe` in CI without game data: `--selftest`, usage, the importer's refusals
+  with their messages and no `Dados` left behind, the order queue markers through GDI (`--smoke-markers`), the DPI
+  mixed mode (`--smoke-window`) and the first start's import dialogs (`--smoke-import-prompt`).
 - `windows/parity.sh --cd …` on macOS with the player's CD: the Windows and macOS drivers give the same frames tick by
   tick, the same menu walk and the same save files, with every option off; then "REGRAS DAS OPÇÕES": each
   combination of the two items gives the created world exactly those `regras` (with Caminhos melhores on, `rl_regras`
-  has bit 0 after the stage start).
-- The key window and the modern shortcuts are built by CI but have not been tried interactively on a real Windows PC
-  (#6).
+  has bit 0 after the stage start). The save walk also loads a pause-list save playing on and runs the periodic
+  autosave schedule.
+- `windows/audio_parity.sh --cd …` on macOS with the player's CD: the sound and CD music requests of both drivers are
+  identical, the play run renders to a non-silent, unclipped WAV, and every frame and sample of the original movies
+  decoded by `rlw_movie.c` equals the macOS decoder's.
+- Sound, music, movies, the key window and the modern shortcuts are built by CI but have not been tried interactively
+  on a real Windows PC (#6).
 
 The rest of this guide is the original contributor map, kept for anyone working on the open parts.
 
@@ -96,7 +119,7 @@ The engine is a Rust workspace (`engine/Cargo.toml`). Crate `rl-ffi` builds libr
 staticlib`, see `build-macos.sh`).
 
 ```
-rustup target add x86_64-pc-windows-msvc        # and/or aarch64-pc-windows-msvc
+rustup target add x86_64-pc-windows-msvc
 cargo build --release --locked --manifest-path engine/Cargo.toml --target x86_64-pc-windows-msvc
 ```
 
@@ -105,19 +128,19 @@ The DLL (`rising_engine.dll`) or the static library is then used with the header
 `module.modulemap` is only for Swift. **Verified (2026-11-11):** the engine builds unchanged as a static library for
 `x86_64-pc-windows-gnu` (`cargo rustc --release --locked -p rl-ffi --lib --crate-type staticlib --target
 x86_64-pc-windows-gnu`; native libraries `kernel32 ntdll userenv ws2_32 dbghelp`), which is what `windows/build.sh`
-does. **Verified (2026-11-12):** it also builds unchanged for `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc`
-with `-C target-feature=+crt-static` (native set `kernel32 ntdll userenv ws2_32 dbghelp /defaultlib:libcmt`). The
+does. **Verified (2026-11-12):** it also builds unchanged for `x86_64-pc-windows-msvc` (and `aarch64-pc-windows-msvc`,
+no longer built) with `-C target-feature=+crt-static` (native set `kernel32 ntdll userenv ws2_32 dbghelp /defaultlib:libcmt`). The
 engine has no OS calls in its logic: no wall clock, no threads, and file I/O only in save and load.
 
 | Build | Rust target | C compiler | Script | CI job / artifact |
 |---|---|---|---|---|
 | mingw x64 | `x86_64-pc-windows-gnu` | mingw-w64 gcc | `windows/build.sh` | `mingw-x64` / `RisingLands-windows-x86_64-mingw` |
 | MSVC x64 | `x86_64-pc-windows-msvc` | `cl.exe` x64, `/MT` | `windows/build-msvc.ps1` | `msvc-x64` / `RisingLands-windows-x86_64-msvc` |
-| MSVC ARM64 | `aarch64-pc-windows-msvc` | `cl.exe` ARM64 (cross), `/MT` | `windows/build-msvc.ps1 -Arch arm64` | `msvc-arm64` / `RisingLands-windows-arm64-msvc` |
 
-All three are one `RisingLands.exe` importing system DLLs only. The x64 builds run the unit tests, `--selftest` and
-the import refusal in CI. The ARM64 build is cross-compiled on `windows-latest` (PE machine type checked), then the
-`arm64-run` job runs the same unit tests, `--selftest` and refusal natively on a `windows-11-arm` runner.
+Both are one `RisingLands.exe` importing system DLLs only, and both run the unit tests and `windows/ci/smoke.sh` in
+CI. **x86-64 only** (decision of 2026-11-14): the ARM64 build and its `windows-11-arm` job were removed. Pre-alphas
+1–3 did ship an ARM64 `.exe`, built by MSVC and tested natively on a `windows-11-arm` runner. Windows on ARM may run
+the x64 build under its own emulation, unsupported.
 
 The engine is deterministic and frame based. The host owns time, input, presentation and audio, and passes everything
 across the ABI.
@@ -177,7 +200,8 @@ functions).
   (SHA-256) and, without `MACOS_STATIC_ENGINE`, dynamic symbol loading. On Windows these need replacements (for example
   `QueryPerformanceCounter`, `BCrypt` or a small SHA-256, `LoadLibrary`/`GetProcAddress`). The rest of the driver
   (input queue, frame phases, save jobs) could be reused (**unverified**).
-- The CD image reader in `NativeCDImport.swift` (BIN/CUE/ISO, IMA ADPCM decoding) is Swift and needs a port.
+- The CD image reader in `NativeCDImport.swift` (BIN/CUE/ISO, IMA ADPCM decoding) is Swift; the Windows client
+  ports it in C (`windows/src/rlw_cd.c`, `rlw_sound.c`, `rlw_cdmusic.c`).
 - The edition switch `-DRISING_PLAYER_EDITION` removes the research UI. A Windows client needs only the player
   behaviour.
 
