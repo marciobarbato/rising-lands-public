@@ -602,3 +602,27 @@ SHA-256 `4e25097c…da8500a2e06e`). No game data is bundled.
 
 Docs (`README.md`, `README.en.md`): a beta 1 banner with the release link and the pinned call for testers (#10); both
 platforms say beta 1; the Windows section is "Windows (beta)".
+
+### 2026-11-14 (fifth): private `main` `fa448acd` — per-frame PostVolume, Windows movie audio
+
+Previous synchronisation: public `8adfb7a` (source identical to `ce0ceff`).
+
+Copied (path-mapped patch: `motor/` → `engine/`, `apps/macos-preview/src/native/` → `macos/src/`, `apps/windows/` →
+`windows/`):
+
+| Private change | Public files |
+|---|---|
+| `18a51b7e` EnginNextEtape 0x454474 publishes PlaySnd_PostVolume 0x48aacf as a kind-10 event `[3, &unit[+0x104], EnginGetVolume]` at site 0x45448a for every unit with a nonzero state (the busy-handle test is the host's); the game path is unchanged; the ABI header documents the kind-10 first word 0..3 | `engine/crates/rl-core/src/frame_units.rs`, `campaign_flow.rs` (comment), `engine/include/rising_engine.h` |
+| `2de46fcb` mapper kind 4 = the original `set_volume`; the macOS driver maps value 3 to kind 4 for references a PostSound named since the last StopAllSound (`posted_find`), not counted as a phase-2 request | `macos/src/MacOSAudioMapper.h`, `macos_audio_mapper.c`, `macos_live_driver.c` (the private-only 2x presentation lines stay out) |
+| `cda10f50` the same mapping in the Windows driver; movie audio follows the Áudio menu's music level and mute | `windows/src/rlw_driver.c/.h`, `rlw_audio_ui.c`, `windows/tests/audio_parity.c` |
+
+Docs: `README.md`, `README.en.md`, `docs/ROADMAP.md` (reports go to #10; #6, #8 and #9 are closed; the post-beta
+changes), `windows/README.md` and `docs/WINDOWS_CLIENT.md` (beta 1 wording, the PostVolume section).
+
+No release: beta 1 stays the current one; these changes enter the next builds. No game data is added.
+
+Checked before the push: in this clone `windows/build.sh test` (10 suites), `windows/build.sh`, `cargo test --workspace`
+in `engine/`, a clang syntax check of the two macOS sources. In the private repository: `cargo test -p rl-core`,
+`test_macos_audio` (new PostVolume case), `check.py --domain windows` 13/13, `parity.sh` 300 (PARIDADE 301, MENUS 410,
+SAVES 481, REGRAS 6), `audio_parity.sh` 600 (SONS OK), MONDE01 20 × 36,000 `185de81f…` GATE_MATCH, `validate.sh` exit 0,
+and `workstream.py integrate` for macos, windows and maintenance.

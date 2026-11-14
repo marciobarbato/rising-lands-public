@@ -61,6 +61,7 @@ struct RlwDriver {
  /* In-game FLC events played by the host (rlw_eventflc.c) instead of ended at once. */
  int event_flc_host;
  RlwSoundEvent sounds[4096];
+ uint32_t posted[4096], posted_count; /* PostSound references since the last StopAllSound */
 };
 
 static uint8_t *file(const char *root, const char *name, uint32_t *length) {
@@ -330,12 +331,27 @@ static int first_game_draw(RlwDriver *d) {
 static void sound_check_world(RlwDriver *d) {
  if (d->sound_world != d->world) { d->sound_world = d->world; d->sound_count = 0; d->sound_dropped = 0; d->sound_errors = 0; }
 }
+/* macos_live_driver.c posted_find: references named by a PostSound since the
+ * last StopAllSound. Only they can hold a busy handle in the mapper, so the
+ * per-unit, per-frame PostVolume requests (values[0] 3) reach it only for them;
+ * a full table forwards every request (the mapper ignores free handles). */
+static int posted_find(uint32_t *t, uint32_t *count, uint32_t a, int add) {
+ if (!a) return 0;
+ uint32_t h = (a * 2654435761u) >> 20;
+ for (uint32_t i = 0; i < 4096; i++) {
+  uint32_t *s = &t[(h + i) & 4095];
+  if (*s == a) return 1;
+  if (!*s) { if (add && *count < 3072) { *s = a; (*count)++; } return *count >= 3072; }
+ }
+ return 1;
+}
 static void sound_push(RlwDriver *d, RlwSoundEvent e) {
  if (d->sound_count == 4096) { d->sound_dropped++; return; }
  d->sounds[d->sound_count++] = e;
 }
 /* Copies the engine's ordered kind-10 requests after each play phase
- * (values[0]: 1 PostSound, 0 StopSound, 2 StopAllSound -> kind 3). The WinMain
+ * (values[0]: 1 PostSound, 0 StopSound, 2 StopAllSound -> kind 3, 3 PostVolume
+ * -> kind 4, filtered by posted_find and not counted as a phase-2 request). The WinMain
  * loop calls PlaySnd_Manage (0x460220) before every PeekMessage: one tick opens
  * phase 2 and, when phase 2 dispatched requests, the loop's final tick follows
  * them. Queries never consume or modify engine state; failures only count. */
@@ -352,7 +368,17 @@ static void sound_collect(RlwDriver *d, uint32_t phase) {
  if (phase == 2) sound_push(d, manage);
  for (uint32_t i = 0; i < n; i++) {
   const RlPlayerInputEvent *e = &d->events[i]; if (e->kind != 10) continue;
-  RlwSoundEvent s = {e->values[0] == 2 ? RLW_SOUND_STOP_ALL : e->values[0] ? RLW_SOUND_POST : RLW_SOUND_STOP, e->frame, e->phase, e->site,
+  uint32_t v = e->values[0];
+  if (v == 3) {
+   if (posted_find(d->posted, &d->posted_count, e->values[1], 0)) {
+    RlwSoundEvent s = {RLW_SOUND_VOLUME, e->frame, e->phase, e->site, e->values[1], e->values[2], 0, 0, 0, 0};
+    sound_push(d, s);
+   }
+   continue;
+  }
+  if (v == 1) posted_find(d->posted, &d->posted_count, e->values[3], 1);
+  else if (v == 2) { memset(d->posted, 0, sizeof(d->posted)); d->posted_count = 0; }
+  RlwSoundEvent s = {v == 2 ? RLW_SOUND_STOP_ALL : v ? RLW_SOUND_POST : RLW_SOUND_STOP, e->frame, e->phase, e->site,
                      e->values[1], e->values[2], e->values[3], e->values[4], e->values[6], e->values[5]};
   sound_push(d, s); requests++;
  }

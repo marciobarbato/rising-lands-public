@@ -324,7 +324,10 @@ int32_t rl_render_fundo_salvo(RlRenderer renderer,uint8_t *buffer,uint32_t capac
  * 7 SetPlayerOrdre: player,tag,word2,word4,word6,word8;
  * 8 ProcessInputGame: player,tag,three LE packet words (10 bytes),jump target;
  * 9 TextGetMessage declared boundary: message,EAX;
- * 10 sound boundary: post, EAX,EDX,EBX,ECX,has_volume,volume.
+ * 10 sound boundary: post, EAX,EDX,EBX,ECX,has_volume,volume. The first word
+ *    is 1 PostSound, 0 StopSound (EAX reference), 2 StopAllSound (no registers)
+ *    or 3 PostVolume 0x48aacf at 0x45448a (EAX reference = unit +0x104, EDX
+ *    EnginGetVolume; published for every unit, the busy-handle test is the host's).
  * phase is 2/3, frame is the original cycle counter. Unused words are padding.
  * Event queries never consume or modify a successful/stopped attempt's log.
  */

@@ -21,7 +21,8 @@ typedef struct MacOSAudioMapper MacOSAudioMapper;
 
 /* Same layout is produced by macos_live_sound_events. kind 0 PlaySnd_Manage
  * (the WinMain loop tick), 1 PlaySnd_PostSound, 2 PlaySnd_StopSound,
- * 3 PlaySnd_StopAllSound (0x48aac5 -> 0x48a4a8; registers unused).
+ * 3 PlaySnd_StopAllSound (0x48aac5 -> 0x48a4a8; registers unused),
+ * 4 PlaySnd_PostVolume (0x48aacf at 0x45448a: eax reference, edx volume).
  * eax/edx/ebx/ecx are the request registers; volume is the pushed stack word. */
 typedef struct {
  uint32_t kind,frame,phase,site,eax,edx,ebx,ecx,volume,has_volume;
@@ -39,7 +40,7 @@ typedef struct {
 
 typedef struct {
  uint64_t requests,posts,stops,manages,absent,unsupported_selector,commands,dropped_commands;
- uint64_t plays,domain_faults,handle_overflow,buffer_overflow,stop_alls;
+ uint64_t plays,domain_faults,handle_overflow,buffer_overflow,stop_alls,volumes;
 } MacOSAudioStats;
 
 uint32_t macos_audio_abi_version(void);

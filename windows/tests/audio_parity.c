@@ -6,7 +6,7 @@
  * Capture is enabled right after the driver is created (as the apps do) and the
  * queue is drained after every host tick. One line per event:
  *   "<tick> <kind> <frame> <phase> <site> <eax> <edx> <ebx> <ecx> <volume> <has_volume>"
- * (kind 0 Manage, 1 PostSound, 2 StopSound, 3 StopAllSound), the CD music requests of the
+ * (kind 0 Manage, 1 PostSound, 2 StopSound, 3 StopAllSound, 4 PostVolume), the CD music requests of the
  * world's last step (frame boundary 102, MCICD_Play) as "<tick> cd <site> <track> <loop>", then a summary line
  * with the event counts per kind and the dropped counter. Identical files prove
  * the Windows driver hands its audio exactly the requests the macOS app plays.

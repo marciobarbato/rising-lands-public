@@ -1,4 +1,4 @@
-# Rising Lands for Windows (pre-alpha 4)
+# Rising Lands for Windows (beta 1)
 
 > **Resumo em português.** Cliente Windows sobre o mesmo motor em Rust e a mesma ABI em C (`engine/include`) do app
 > macOS. Este primeiro marco importa o CD brasileiro do jogador (imagem `.BIN`/`.CUE`, `.ISO` ou pasta), roda a
@@ -18,7 +18,7 @@
 > Windows em ARM pode rodar o build x64 pela emulação do próprio Windows, sem suporte (as pré-alfas 1 a 3 também
 > tinham um build ARM64).
 > A pré-alfa 3 trouxe a tela de Opções, os atalhos modernos, a janela de configurar teclas e os caminhos melhores.
-> A pré-alfa 4 (a versão atual, um único `RisingLands-windows-x86_64.exe`) traz efeitos sonoros e o menu "Áudio"
+> A pré-alfa 4 (publicada também como beta 1, a versão atual, um único `RisingLands-windows-x86_64.exe`) traz efeitos sonoros e o menu "Áudio"
 > (silenciar e volume de efeitos e música), a música do CD (lida da imagem `.BIN`/`.CUE` do próprio jogador), as
 > figuras de evento (FLC) durante o jogo e os filmes originais (introdução, derrota, fim da campanha); as bandeiras da
 > fila de ordens (Shift+clique) desenhadas sobre o mapa, como no macOS; a imagem nítida em telas com escala (DPI por
@@ -27,6 +27,8 @@
 > jogador quiser, na Área de Trabalho; Jogo → Importar o CD novamente… (quem vem das pré-alfas 1 a 3 precisa
 > reimportar para ter sons e música; o jogo avisa uma vez); e smokes automáticos no CI sem dados do jogo (recusas da
 > importação, primeira execução, desenho das bandeiras, DPI, áudio).
+> Depois da beta 1, no código: o volume que o jogo ajusta a cada quadro (PlaySnd_PostVolume, 0x45448a) e o som dos
+> filmes seguindo o volume e o silenciar da música do menu "Áudio".
 > Nenhum dado do jogo vai para o repositório: tudo vem do CD importado na primeira execução.
 
 ## Stack and why
@@ -394,10 +396,21 @@ paused save, the saved picture with `rl_mundo_paleta_jogo`). A loaded world with
 `rl_entrada_passo_pendente` to the next complete frame before new host input. The pause list's SAVE_SLOT saves first,
 then resumes through `rl_shell_resume`; the save list slots are the exact original paths behind `0x497128`.
 
+## Per-frame volume and movie audio (after beta 1)
+
+- **PlaySnd_PostVolume 0x45448a.** EnginNextEtape publishes, for every unit with a nonzero state, a kind-10 event
+  `[3, &unit[+0x104], EnginGetVolume]` at site 0x45448a (`engine/crates/rl-core/src/frame_units.rs`); the game path
+  stays the free-handle one. `rlw_driver.c` maps it to sound kind 4 (`RLW_SOUND_VOLUME`) exactly as
+  `macos/src/macos_live_driver.c` does, forwarding it only for references a PostSound named since the last
+  StopAllSound (`posted_find`) and not counting it as a phase-2 request. `MacOSAudioMapper` kind 4 is the original
+  `set_volume`: a busy handle takes the new volume, volume 0 stops it, a free handle does nothing. A war vehicle's loop
+  follows the camera every frame instead of only at each move post.
+- **Movie audio** takes the music stream at the Áudio menu's music level and mute; it used to play at full level.
+
 ## Known gaps (next milestones)
 
 - Position names only for 1–5 in the Jogo menu (6–10 through the original lists and the saved-games manager), as on
   macOS.
 - A D3D11 presenter. ARM64 builds (x86-64 only since 2026-11-14).
-- Nobody has played a build on a real Windows PC yet (#6), sound and movies included; CI covers builds, unit tests
+- Nobody has played a build on a real Windows PC yet (call for testers #10), sound and movies included; CI covers builds, unit tests
   and the smokes above, not a played game.

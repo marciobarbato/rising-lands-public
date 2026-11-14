@@ -165,10 +165,10 @@ int rlw_driver_set_difficulty(RlwDriver *d, uint32_t difficulty);
 /* ---- Sound requests (front 2, audio) ----
  * Same contract and record layout as MacOSLiveDriver.h's macos_live_sound_*
  * (MacOSSoundEvent in MacOSAudioMapper.h): once enabled, every successful play
- * input phase appends its kind-10 PostSound/StopSound/StopAllSound copies plus
+ * input phase appends its kind-10 PostSound/StopSound/StopAllSound/PostVolume copies plus
  * the WinMain loop's PlaySnd_Manage ticks. The host drains them after each
  * rlw_driver_advance; game state is never touched. A new world clears the queue. */
-enum { RLW_SOUND_MANAGE = 0, RLW_SOUND_POST = 1, RLW_SOUND_STOP = 2, RLW_SOUND_STOP_ALL = 3 };
+enum { RLW_SOUND_MANAGE = 0, RLW_SOUND_POST = 1, RLW_SOUND_STOP = 2, RLW_SOUND_STOP_ALL = 3, RLW_SOUND_VOLUME = 4 };
 typedef struct { uint32_t kind, frame, phase, site, eax, edx, ebx, ecx, volume, has_volume; } RlwSoundEvent;
 int rlw_driver_sound_capture(RlwDriver *d, uint32_t enabled);
 uint32_t rlw_driver_sound_events(RlwDriver *d, RlwSoundEvent *out, uint32_t capacity);

@@ -395,6 +395,9 @@ uint32_t macos_audio_request(MacOSAudioMapper*m,const MacOSSoundEvent*e){
  if(e->kind==0){m->stats.manages++;return manage(m);}
  if(e->kind==2){m->stats.stops++;return (uint32_t)stop_handle(m,e->eax);}
  if(e->kind==3){m->stats.stop_alls++;stop_all(m);return 1;}
+ /* PlaySnd_PostVolume 0x48aacf (EAX reference, EDX volume): a free handle
+  * does nothing, as the original never calls it then (0x454474). */
+ if(e->kind==4){m->stats.volumes++;return (uint32_t)set_volume(m,e->eax,e->edx);}
  if(e->kind!=1){m->stats.domain_faults++;return 0;}
  m->stats.posts++;
  for(int b=0;b<3;b++)if(SELECTORS[b]==e->eax)return (uint32_t)insert(m,e->edx,BANKS[b],e->ebx,e->ecx&255,e->volume);

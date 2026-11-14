@@ -97,6 +97,7 @@ struct MacOSLiveDriver {
  /* Play-mode sound request transport (kind10 copies plus Manage ticks). */
  int sound_capture; RlPlayerInputEvent *events; uint32_t event_capacity,sound_count; uint64_t sound_dropped,sound_errors;
  MacOSSoundEvent sounds[4096];
+ uint32_t posted[4096],posted_count; /* PostSound references since the last StopAllSound */
 };
 uint32_t macos_live_abi_version(void){return 1;}
 uint32_t macos_live_engine_binding(void){
@@ -390,9 +391,19 @@ int32_t macos_live_validation(MacOSLiveDriver*d,uint32_t enabled){
  if(c)return fail(d,c,"execution mode");
  d->validation=enabled==1;d->production_input=enabled==0;return 0;
 }
+/* References named by a PostSound since the last StopAllSound (open addressing,
+ * never 0). Only they can hold a busy handle in the mapper, so the per-unit,
+ * per-frame PostVolume requests (values[0] 3) reach it only for them; a full
+ * table forwards every request (the mapper ignores free handles). */
+static int posted_find(uint32_t*t,uint32_t*count,uint32_t a,int add){
+ if(!a)return 0;uint32_t h=(a*2654435761u)>>20;
+ for(uint32_t i=0;i<4096;i++){uint32_t*s=&t[(h+i)&4095];if(*s==a)return 1;if(!*s){if(add&&*count<3072){*s=a;(*count)++;}return *count>=3072;}}
+ return 1;
+}
 static void sound_push(MacOSLiveDriver*d,MacOSSoundEvent e){if(d->sound_count==4096){d->sound_dropped++;return;}d->sounds[d->sound_count++]=e;}
 /* Copies the engine's ordered kind-10 requests after each play phase
- * (values[0]: 1 PostSound, 0 StopSound, 2 StopAllSound -> mapper kind 3). The WinMain
+ * (values[0]: 1 PostSound, 0 StopSound, 2 StopAllSound -> mapper kind 3, 3 PostVolume
+ * -> kind 4, filtered by posted_find and not counted as a phase-2 request). The WinMain
  * loop calls PlaySnd_Manage before every PeekMessage: one tick opens phase 2 and,
  * when phase 2 dispatched requests, the loop's final tick follows them. Queries
  * never consume or modify engine state; failures only count, never stop play. */
@@ -403,7 +414,11 @@ static void sound_collect(MacOSLiveDriver*d,uint32_t phase){
  uint32_t frame=(uint32_t)(d->status.frames+1),requests=0;
  if(phase==2)sound_push(d,(MacOSSoundEvent){0,frame,2,0x460220,0,0,0,0,0,0});
  for(uint32_t i=0;i<n;i++){RlPlayerInputEvent*e=&d->events[i];if(e->kind!=10)continue;
-  sound_push(d,(MacOSSoundEvent){e->values[0]==2?3:e->values[0]?1:2,e->frame,e->phase,e->site,e->values[1],e->values[2],e->values[3],e->values[4],e->values[6],e->values[5]});requests++;}
+  uint32_t v=e->values[0];
+  if(v==3){if(posted_find(d->posted,&d->posted_count,e->values[1],0))sound_push(d,(MacOSSoundEvent){4,e->frame,e->phase,e->site,e->values[1],e->values[2],0,0,0,0});continue;}
+  if(v==1)posted_find(d->posted,&d->posted_count,e->values[3],1);
+  else if(v==2){memset(d->posted,0,sizeof(d->posted));d->posted_count=0;}
+  sound_push(d,(MacOSSoundEvent){v==2?3:v?1:2,e->frame,e->phase,e->site,e->values[1],e->values[2],e->values[3],e->values[4],e->values[6],e->values[5]});requests++;}
  if(phase==2&&requests)sound_push(d,(MacOSSoundEvent){0,frame,2,0x460220,0,0,0,0,0,0});
 }
 int32_t macos_live_sound_capture(MacOSLiveDriver*d,uint32_t enabled){if(!d||enabled>1)return 1;d->sound_capture=(int)enabled;d->sound_count=0;return 0;}

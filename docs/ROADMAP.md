@@ -6,24 +6,27 @@ Estado em 2026-11-14. / State on 2026-11-14.
 
 | Frente / Front | Estado / State | Issue | Ajuda de fora / Outside help |
 |---|---|---|---|
-| Cliente Windows: jogo, menus, saves, Opções / Windows client: game, menus, saves, Options | Feito; pré-alfa 4 publicada / Done; pre-alpha 4 released | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) (fechada / closed) | — |
+| Cliente Windows: jogo, menus, saves, Opções / Windows client: game, menus, saves, Options | Feito; na beta 1 / Done; in beta 1 | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) (fechada / closed) | — |
 | Windows: build MSVC x64 / MSVC x64 build | Feito; só x86-64 desde 2026-11-14 (as pré-alfas 1 a 3 tinham ARM64); sem assinatura de código, por decisão / Done; x86-64 only since 2026-11-14 (pre-alphas 1 to 3 had ARM64); no code signing, by decision | — | — |
-| Windows: teste num PC de verdade / test on a real PC | Fica com a comunidade / Left to the community | [#6](https://github.com/marciobarbato/rising-lands-public/issues/6) | **Bem-vinda / Welcome** |
-| Windows: áudio, música do CD, FLC, filmes / audio, CD music, FLC, movies | Feito; na pré-alfa 4 / Done; in pre-alpha 4 | [#4](https://github.com/marciobarbato/rising-lands-public/issues/4) (fechada / closed) | Testar num PC / Test on a PC (#6) |
-| Windows: menu Jogo, gerenciador de partidas salvas, salvamento automático, bandeirinhas da fila, DPI, ícone original, reimportar o CD / Jogo menu, saved-games manager, periodic autosave, order queue flags, DPI, original icon, CD re-import | Feito; na pré-alfa 4 / Done; in pre-alpha 4 | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) (fechada / closed) | — |
+| Beta 1: teste público (macOS e Windows) / Beta 1: public test (macOS and Windows) | Aberto desde 2026-11-14 / Open since 2026-11-14 | [#10](https://github.com/marciobarbato/rising-lands-public/issues/10) | **Bem-vinda: jogar, Windows num PC de verdade, outros CDs / Welcome: play, Windows on a real PC, other CDs** |
+| Windows: teste num PC de verdade / test on a real PC | Fica com a comunidade / Left to the community | [#10](https://github.com/marciobarbato/rising-lands-public/issues/10) (#6 fechada / closed) | **Bem-vinda / Welcome** |
+| Windows: áudio, música do CD, FLC, filmes / audio, CD music, FLC, movies | Feito; na beta 1 / Done; in beta 1 | [#4](https://github.com/marciobarbato/rising-lands-public/issues/4) (fechada / closed) | Testar num PC / Test on a PC (#10) |
+| Volume a cada quadro (PostVolume 0x45448a), som dos filmes no volume da música (Windows) / Per-frame volume (PostVolume 0x45448a), movie sound at the music level (Windows) | Feito no código, entra na próxima versão / Done in the code, in the next version | — | — |
+| Windows: menu Jogo, gerenciador de partidas salvas, salvamento automático, bandeirinhas da fila, DPI, ícone original, reimportar o CD / Jogo menu, saved-games manager, periodic autosave, order queue flags, DPI, original icon, CD re-import | Feito; na beta 1 / Done; in beta 1 | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) (fechada / closed) | — |
 | Host Windows: atalhos modernos, configurar teclas, caminhos melhores / Windows host: modern shortcuts, key setup, better paths | Feito; na pré-alfa 3 / Done; in pre-alpha 3 | [#7](https://github.com/marciobarbato/rising-lands-public/issues/7) (fechada / closed) | — |
 | Atalhos modernos e fila de ordens / Modern shortcuts and order queue | Feito (macOS e Windows) / Done (macOS and Windows) | — | — |
 | Tela de Opções no estilo original / Options screen in the original style | Feito (macOS e Windows) / Done (macOS and Windows) | — | — |
 | Caminhos melhores (opcional) / Better unit paths (opt-in) | Feito no motor, no macOS e no Windows / Done in the engine, on macOS and on Windows | — | — |
-| Outros CDs e idiomas / Other CDs and languages | Pesquisa / Research | [#8](https://github.com/marciobarbato/rising-lands-public/issues/8) | **Bem-vinda, de quem tem outras versões / Welcome, from owners of other versions** |
-| Testes em jogo / In-game checks | Aberto / Open | [#9](https://github.com/marciobarbato/rising-lands-public/issues/9) | **Bem-vinda, de testadores / Welcome, from testers** |
+| Outros CDs e idiomas / Other CDs and languages | Pesquisa / Research | [#10](https://github.com/marciobarbato/rising-lands-public/issues/10) (#8 fechada / closed) | **Bem-vinda, de quem tem outras versões / Welcome, from owners of other versions** |
+| Testes em jogo / In-game checks | Aberto / Open | [#10](https://github.com/marciobarbato/rising-lands-public/issues/10) (#9 fechada / closed) | **Bem-vinda, de testadores / Welcome, from testers** |
 
 **Regra para todas as frentes / Rule for every front:** nada derivado do jogo entra no repositório: nem dados do CD, nem
 assets, nem textos traduzidos do jogo. Tudo vem do CD original do jogador. / Nothing derived from the game goes into the
 repository: no CD data, no assets, no translated game text. Everything comes from the player's original CD.
 
-Antes de começar algo grande, comente na issue da frente, para ninguém fazer o mesmo trabalho duas vezes. / Before
-starting anything large, comment on the front's issue, so nobody does the same work twice.
+Antes de começar algo grande, comente na issue da frente (ou na [#10](https://github.com/marciobarbato/rising-lands-public/issues/10)), para ninguém fazer o mesmo trabalho duas
+vezes. / Before starting anything large, comment on the front's issue (or on [#10](https://github.com/marciobarbato/rising-lands-public/issues/10)), so nobody does the same
+work twice.
 
 ---
 
@@ -41,18 +44,21 @@ macOS.
   x86-64 desde 2026-11-14 (as pré-alfas 1 a 3 também tinham um `.exe` ARM64; o Windows em ARM pode rodar o x64 pela
   própria emulação, sem suporte); o CI gera os dois `.exe`, cada um com o seu SHA-256, e roda o `.exe` sem dados do
   jogo (recusas da importação, primeira execução, bandeirinhas, DPI, áudio).
-- **Feito na pré-alfa 4 (a versão atual do Windows, só x86-64):** efeitos sonoros e o menu Áudio, a música do CD (do
+- **Feito na pré-alfa 4, publicada como beta 1 (a versão atual, só x86-64):** efeitos sonoros e o menu Áudio, a música do CD (do
   `.BIN` do próprio jogador), as figuras de evento (FLC) e os filmes
   ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)); o menu Jogo do macOS, o gerenciador de
   partidas salvas, o salvamento automático periódico, a partida salva pela pausa voltando jogando, as bandeirinhas
   da fila de ordens sobre o mapa, a janela ciente de DPI, o ícone original (lido do `RISING.EXE` importado) com
   atalhos no menu Iniciar e na Área de Trabalho, e Jogo → Importar o CD novamente… (quem vem das pré-alfas 1 a 3
   precisa reimportar para ter sons e música).
+- **Depois da beta 1, no código:** o volume que o jogo ajusta a cada quadro (PlaySnd_PostVolume, 0x45448a: o som de
+  um veículo em movimento acompanha a câmera e para quando sai do alcance, como no original), também no macOS, e o som
+  dos filmes seguindo o volume e o silenciar da música do menu Áudio.
 - **Sem assinatura de código:** decisão do projeto. O SmartScreen avisa na primeira execução; o SHA-256 e o commit de
   cada build estão no CI e nas notas da release.
-- **Testar num PC com Windows real ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)):** o autor
+- **Testar num PC com Windows real ([#10](https://github.com/marciobarbato/rising-lands-public/issues/10)):** o autor
   não vai testar no Windows, então isso fica com a comunidade. O CI só compila e roda testes sem o CD; ninguém jogou a
-  build num PC com Windows ainda. Baixe a pré-alfa em
+  build num PC com Windows ainda. Baixe a beta 1 em
   [Releases](https://github.com/marciobarbato/rising-lands-public/releases) e conte na issue o que funcionou.
 - **Atalhos modernos, configurar teclas e caminhos melhores no host
   ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), fechada):** feitos, com os
@@ -85,12 +91,12 @@ das Opções (no código atual).
 
 Pesquisa. Hoje só o CD brasileiro funciona. Outras versões (inglês, francês e outras) exigem conferir o motor contra o
 executável e os arquivos daquela versão. Ajuda bem-vinda de quem tem esses CDs originais: comece contando na
-[#8](https://github.com/marciobarbato/rising-lands-public/issues/8) qual versão você tem. Nada traduzido do jogo pode
+[#10](https://github.com/marciobarbato/rising-lands-public/issues/10) qual versão você tem (só o nome dos arquivos e o tamanho). Nada traduzido do jogo pode
 ir ao repositório.
 
 ### Testes em jogo
 
-Partes que precisam de gente jogando ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)):
+Partes que precisam de gente jogando ([#10](https://github.com/marciobarbato/rising-lands-public/issues/10)):
 
 - a magia **ESPELHO** (30 de mana);
 - o **druida** e o **mosteiro de fusão**;
@@ -113,17 +119,20 @@ The client is in [`windows/`](../windows/README.md): Win32 + GDI in C, with the 
   (pre-alphas 1 to 3 also shipped an ARM64 `.exe`; Windows on ARM may run the x64 one under its own emulation,
   unsupported); CI builds both `.exe` files, each with its SHA-256, and runs the `.exe` without game data (importer
   refusals, first start, flags, DPI, audio).
-- **Done in pre-alpha 4 (the current Windows release, x86-64 only):** sound effects and the Áudio menu, CD music (from the
+- **Done in pre-alpha 4, released as beta 1 (the current release, x86-64 only):** sound effects and the Áudio menu, CD music (from the
   player's own `.BIN`), event pictures (FLC) and movies
   ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)); the macOS Jogo menu, the saved-games manager,
   the periodic autosave, a pause-list save loading back into play, the order queue flags over the map, the DPI-aware
   window, the original icon (read from the imported `RISING.EXE`) with Start menu and Desktop shortcuts, and Jogo →
   Importar o CD novamente… (players coming from pre-alphas 1 to 3 must re-import to get sound and music).
+- **After beta 1, in the code:** the per-frame volume the game sets (PlaySnd_PostVolume, 0x45448a: a moving vehicle's
+  sound follows the camera and stops out of range, as in the original), on macOS too, and movie sound following the
+  Áudio menu's music level and mute.
 - **No code signing:** a project decision. SmartScreen warns on the first run; each build's SHA-256 and commit are in
   CI and in the release notes.
-- **Test on a real Windows PC ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)):** the author will
+- **Test on a real Windows PC ([#10](https://github.com/marciobarbato/rising-lands-public/issues/10)):** the author will
   not test on Windows, so this is left to the community. CI only builds and runs tests without the CD; nobody has played
-  the build on a Windows PC yet. Download the pre-alpha from
+  the build on a Windows PC yet. Download beta 1 from
   [Releases](https://github.com/marciobarbato/rising-lands-public/releases) and say on the issue what worked.
 - **Modern shortcuts, key dialog and better paths in the host
   ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), closed):** done, with the
@@ -156,12 +165,12 @@ the current source).
 
 Research. Only the Brazilian CD works today. Other versions (English, French and others) need the engine checked
 against that version's executable and files. Help welcome from owners of those original CDs: start by saying on
-[#8](https://github.com/marciobarbato/rising-lands-public/issues/8) which version you have. No translated game text may
+[#10](https://github.com/marciobarbato/rising-lands-public/issues/10) which version you have (just the file names and sizes). No translated game text may
 go into the repository.
 
 ### In-game checks
 
-Parts that need people playing ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)):
+Parts that need people playing ([#10](https://github.com/marciobarbato/rising-lands-public/issues/10)):
 
 - the **ESPELHO** (mirror) spell (30 mana);
 - the **druid** and the **fusion monastery**;

@@ -11,7 +11,8 @@ use crate::{
 /// PlaySnd_StopAllSound 48aac5 -> 48a4a8, in the engine's unopened audio domain.
 /// Active device and queued sample destruction remain explicit dependencies.
 /// The call is published to the host first as a kind-10 player event whose
-/// first value is 2 (stop all; 1 is a post, 0 a stop of one handle) at the
+/// first value is 2 (stop all; 1 is a post, 0 a stop of one handle, 3 a
+/// PostVolume, frame_units) at the
 /// original call `site`: 0x429335 InputGame, 0x42d4c8 CalculGame,
 /// 0x4580b7 EvenementEnd, 0x45837a / 0x458390 EvenementAffiche, 0x47c83a PlayVideo.
 pub fn stop_sounds(m: &mut MemoriaJogo, site: u32) -> Result<()> {

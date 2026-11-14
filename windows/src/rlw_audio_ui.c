@@ -172,7 +172,9 @@ int rlw_audio_ui_movie_begin(const char *dados, const RlShellEvent *e) {
  if (!bgrx) { rlw_movie_free(m); return 0; }
  rlw_audio_host_leave_stage(U.host);                   /* the CD music stops (leaveStage) */
  RlwAudio *a = rlw_audio_host_audio(U.host);
- if (rlw_movie_audio_rate(m)) { rlw_audio_set_music_gain(a, 1.0f); rlw_audio_set_music(a, rlw_movie_pull, m, rlw_movie_audio_rate(m)); }
+ /* The movie's sound takes the music stream and follows the Áudio menu's music
+  * level and mute (the original's MCI AVI playback had only the system volume). */
+ if (rlw_movie_audio_rate(m)) { rlw_audio_set_music_gain(a, rlw_audio_settings_music_gain(&U.settings)); rlw_audio_set_music(a, rlw_movie_pull, m, rlw_movie_audio_rate(m)); }
  memset(&U.movie_bmi, 0, sizeof(U.movie_bmi));
  U.movie_bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER); U.movie_bmi.bmiHeader.biWidth = (LONG)rlw_movie_width(m);
  U.movie_bmi.bmiHeader.biHeight = -(LONG)rlw_movie_height(m); U.movie_bmi.bmiHeader.biPlanes = 1; U.movie_bmi.bmiHeader.biBitCount = 32;

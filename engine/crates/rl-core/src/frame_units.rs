@@ -167,6 +167,14 @@ fn next_unit(m: &mut MemoriaJogo, unit: u16) -> Result<u32> {
         if m.u32(r + 0x104)? != u32::MAX {
             return Err(stop("EnginNextEtape sound handle", 0x454479));
         }
+        // 0x454474..0x45448a: with a sound driver a busy handle takes
+        // EnginGetVolume 0x440c5d (read-only) and PlaySnd_PostVolume 0x48aacf
+        // (EAX = &unit[+0x104], EDX = volume; volume 0 stops the sound). The
+        // handle test is the host's, as for StopSound at 0x4545ee: the request
+        // is published as a kind-10 event with first value 3 and the game path
+        // stays the free-handle one (the clear at 0x454491).
+        let volume = crate::player_orders::unit_volume(m, n)?;
+        crate::player::event(m, 10, 0x45448a, &[3, r + 0x104, volume, 0, 0, 0, 0]);
         step_flag = m.u8(r + 0xf9)?;
         m.set_u8(r + 0xf9, 0)?;
     }
