@@ -1,4 +1,4 @@
-# Rising Lands for Windows (beta 1)
+# Rising Lands for Windows (beta 2)
 
 > **Resumo em português.** Cliente Windows sobre o mesmo motor em Rust e a mesma ABI em C (`engine/include`) do app
 > macOS. Este primeiro marco importa o CD brasileiro do jogador (imagem `.BIN`/`.CUE`, `.ISO` ou pasta), roda a
@@ -27,7 +27,7 @@
 > jogador quiser, na Área de Trabalho; Jogo → Importar o CD novamente… (quem vem das pré-alfas 1 a 3 precisa
 > reimportar para ter sons e música; o jogo avisa uma vez); e smokes automáticos no CI sem dados do jogo (recusas da
 > importação, primeira execução, desenho das bandeiras, DPI, áudio).
-> Depois da beta 1, no código: o volume que o jogo ajusta a cada quadro (PlaySnd_PostVolume, 0x45448a) e o som dos
+> A beta 2 traz o volume que o jogo ajusta a cada quadro (PlaySnd_PostVolume, 0x45448a) e o som dos
 > filmes seguindo o volume e o silenciar da música do menu "Áudio".
 > Nenhum dado do jogo vai para o repositório: tudo vem do CD importado na primeira execução.
 
@@ -396,7 +396,7 @@ paused save, the saved picture with `rl_mundo_paleta_jogo`). A loaded world with
 `rl_entrada_passo_pendente` to the next complete frame before new host input. The pause list's SAVE_SLOT saves first,
 then resumes through `rl_shell_resume`; the save list slots are the exact original paths behind `0x497128`.
 
-## Per-frame volume and movie audio (after beta 1)
+## Per-frame volume and movie audio (beta 2)
 
 - **PlaySnd_PostVolume 0x45448a.** EnginNextEtape publishes, for every unit with a nonzero state, a kind-10 event
   `[3, &unit[+0x104], EnginGetVolume]` at site 0x45448a (`engine/crates/rl-core/src/frame_units.rs`); the game path

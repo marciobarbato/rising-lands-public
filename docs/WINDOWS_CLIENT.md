@@ -12,7 +12,7 @@
 > carrega no mesmo formato do macOS e tem a tela de Opções, com paridade quadro a quadro com o macOS. Desde a #7 também
 > tem os caminhos melhores, os atalhos modernos (N duas vezes, Home, ponto, vírgula, H) e a janela de configurar
 > teclas, com os mesmos padrões do macOS (atalhos modernos ligados, caminhos melhores desligados). A pré-alfa 4,
-> publicada também como beta 1, teste público (a versão atual do Windows, um único `RisingLands-windows-x86_64.exe` em
+> publicada também como beta 1 (a versão atual é a beta 2, teste público, um único `RisingLands-windows-x86_64.exe` em
 > [Releases](https://github.com/marciobarbato/rising-lands-public/releases)), traz os efeitos sonoros com o menu Áudio,
 > a música do CD (lida do `.BIN` do próprio jogador), as figuras de evento (FLC) e os filmes (#4); as bandeiras da fila
 > de ordens sobre o mapa; o menu "Jogo" do macOS (substitui "Partida"), com Importar o CD novamente… (quem vem das

@@ -626,3 +626,23 @@ in `engine/`, a clang syntax check of the two macOS sources. In the private repo
 `test_macos_audio` (new PostVolume case), `check.py --domain windows` 13/13, `parity.sh` 300 (PARIDADE 301, MENUS 410,
 SAVES 481, REGRAS 6), `audio_parity.sh` 600 (SONS OK), MONDE01 20 × 36,000 `185de81f…` GATE_MATCH, `validate.sh` exit 0,
 and `workstream.py integrate` for macos, windows and maintenance.
+
+### 2026-11-14 (sixth): docs only — beta 2 (public test)
+
+Previous synchronisation: public `5668ac5`. No source changed (`engine/`, `macos/` and `windows/` are identical to
+`5668ac5`).
+
+The release `v0.1.0-beta.2` is tagged on the commit that carries this entry. Assets:
+- `RisingLands-macOS-5668ac5.dmg`: built on the MacBook from a fresh clone at `5668ac5` with `./build-macos.sh`,
+  Developer ID (TF3GU6U7H8), hardened runtime, notarized and stapled (app `b3a73c2f-…`, dmg `6201fc40-…`, both
+  Accepted), SHA-256 `1c3c9c9ae72bf279992602a175a5fef64ccedcd289ef04f1e64bb171eda8d7d8`. Candidate round 5 on the Mac
+  mini (ad hoc build of the same commit): engine tests 103 passed, macOS component tests, the user's three saves and a
+  pause-list save 36,000 frames with no stop, player UI smoke 20/20, saved-games smoke 23/23.
+- `RisingLands-windows-x86_64.exe` (+ `.sha256`): public CI run 43604778714 (job `mingw-x64`) from `5668ac5`,
+  SHA-256 `6a1878b04744b6c14d2e1f49b8f9159a4186da7693fda3c3d97af2c22ca03b4d`.
+
+Both downloaded again from the release and checked (hashes, `stapler validate`, `spctl` accepted). No game data is
+bundled.
+
+Docs (`README.md`, `README.en.md`, `docs/ROADMAP.md`, `windows/README.md`, `docs/WINDOWS_CLIENT.md`): beta 2 is the
+current release; the per-frame volume and the Windows movie audio are in it.
