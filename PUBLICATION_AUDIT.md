@@ -589,3 +589,16 @@ public commit `2a8398e` (tag `v0.1.0-alpha.3` on that commit), asset `RisingLand
 Docs (macOS parts of `README.md` and `README.en.md`): alpha 3 is the current macOS release; the features marked
 "coming in the next macOS release" (Options screen, modern shortcuts, better paths, Áudio menu, saved-games manager,
 autosave) now say "since alpha 3".
+
+### 2026-11-14 (fourth): docs only — beta 1 (public test)
+
+Previous synchronisation: public `5ed518c`. No source changed (`engine/`, `macos/` and `windows/` are identical to
+`ce0ceff`; `engine/` and `macos/` are identical to `2a8398e`).
+
+The release `v0.1.0-beta.1` is tagged on the commit that carries this entry and re-publishes, byte for byte, the macOS
+alpha 3 `.dmg` (`RisingLands-macOS-2a8398e.dmg`, built from `2a8398e`, Developer ID + notarized, SHA-256
+`fd9244b9…85389a3b4c`) and the Windows pre-alpha 4 `.exe` (`RisingLands-windows-x86_64.exe`, public CI from `ce0ceff`,
+SHA-256 `4e25097c…da8500a2e06e`). No game data is bundled.
+
+Docs (`README.md`, `README.en.md`): a beta 1 banner with the release link and the pinned call for testers (#10); both
+platforms say beta 1; the Windows section is "Windows (beta)".

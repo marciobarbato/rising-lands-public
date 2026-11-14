@@ -2,13 +2,15 @@
 
 [Versão em português](README.md)
 
-This repository holds a reimplementation of the **Rising Lands** (1997, Microïds) game engine in Rust and native apps that run the game on top of it: the macOS app (alpha) and the Windows client (pre-alpha, in progress). The logic was ported routine by routine from the original executable and compared against it.
+> **Beta 1 — public test.** The first beta is out for macOS and Windows: download it from **[Releases → v0.1.0-beta.1](https://github.com/marciobarbato/rising-lands-public/releases/tag/v0.1.0-beta.1)**, play and tell us what you find. How to help: [call for testers](https://github.com/marciobarbato/rising-lands-public/issues/10).
+
+This repository holds a reimplementation of the **Rising Lands** (1997, Microïds) game engine in Rust and native apps that run the game on top of it: the macOS app and the Windows client, now in **beta 1** (public test). The logic was ported routine by routine from the original executable and compared against it.
 
 **The game is not included.** To play, you need the image of the **original Brazilian CD** of Rising Lands. On first launch the app reads all game data from that CD: graphics, palette, sounds, music, texts, stages and movies. No game data is distributed here, not even inside the app.
 
 ## Download and play (macOS)
 
-1. Download the `.dmg` of the latest version from **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. The current one is the alpha `v0.1.0-alpha.3`. The app is signed with Developer ID and notarized by Apple.
+1. Download the `.dmg` of the latest version from **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. The current one is **beta 1** (`v0.1.0-beta.1`, public test). The app is signed with Developer ID and notarized by Apple.
 2. Open the `.dmg` and drag **Rising Lands** to **Applications**.
 3. Get the CD image (see "Where to get the CD").
 4. Open the app. In the **"Rising Lands — importar o CD original"** window, click **Escolher o CD…** and select **RISING_LANDS_BR_.BIN**. The .CUE, an .ISO or the folder with the CD files also work, but music comes only from the .BIN.
@@ -16,11 +18,11 @@ This repository holds a reimplementation of the **Rising Lands** (1997, Microïd
 
 Requirements to play: a Mac with **Apple Silicon** and **macOS 13** or later. The app's interface is in Portuguese, like the game.
 
-## Windows (pre-alpha)
+## Windows (beta)
 
-The Windows client is in progress, in [`windows/`](windows/README.md). There is a **pre-alpha** for early testers. **Testing on a real Windows PC is left to the community** ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)): the author will not test on Windows.
+The Windows client lives in [`windows/`](windows/README.md) and is in **beta 1**, with the same features as the macOS app. **Testing on a real Windows PC is left to the community** ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)): the author will not test on Windows.
 
-1. Download `RisingLands-windows-x86_64.exe` from the latest Windows pre-release (`v0.1.0-prealpha.…-windows`, currently pre-alpha 4) on **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. Since pre-alpha 4 the client is x86-64 only: a PC with an ARM processor may run that `.exe` under Windows' own emulation, unsupported (pre-alphas 1 to 3 also carried an ARM64 `.exe`). Check it against the SHA-256 in the release notes. The `.exe` was built by GitHub Actions from this source (the `windows-client` workflow).
+1. Download `RisingLands-windows-x86_64.exe` from the latest release (currently beta 1, `v0.1.0-beta.1`, the same release as macOS) on **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. Since pre-alpha 4 the client is x86-64 only: a PC with an ARM processor may run that `.exe` under Windows' own emulation, unsupported (pre-alphas 1 to 3 also carried an ARM64 `.exe`). Check it against the SHA-256 in the release notes. The `.exe` was built by GitHub Actions from this source (the `windows-client` workflow).
 2. **SmartScreen warning:** the `.exe` is **not signed**, so Windows shows "Windows protected your PC". Click **More info**, then **Run anyway**. There is no plan to sign it; if you would rather not, build it yourself (see below).
 3. On first launch a window asks for the CD: pick **RISING_LANDS_BR_.BIN** (or the .CUE, or an .ISO). The files are checked by SHA-256 and copied to `%LOCALAPPDATA%\RisingLands-ptbr\Dados`. Then the game opens in the original menu, with the game's original icon (the pumpkin, read from the imported `RISING.EXE`: no game bytes come with the download). **Coming from pre-alphas 1 to 3:** the CD imported back then has no sounds or music; use **Jogo → Importar o CD novamente…** (the game tells you once).
 
@@ -56,8 +58,8 @@ The original Brazilian CD image can be found on the **Internet Archive**. Downlo
 - The campaign runs on all 25 stages. An automated bot played every one of them, each game up to 72,000 frames, with no engine stop. The first missions were also played by hand without problems.
 - Nobody has finished the whole campaign yet. That is where your testing helps.
 - If the game reaches something not ported yet, it does not freeze silently: it shows a **stop panel** with the original routine's address. That text is the most useful part of a report.
-- macOS: alpha `v0.1.0-alpha.3`, with the **Options screen**, the modern shortcuts and the Shift+click order queue, **better unit paths**, the **Áudio** menu and sounds that did not play before, the **saved-games manager** and the **periodic autosave** (see "Controls").
-- Windows: pre-alpha 4, x86-64 only; game, menus, saves, the Options screen, modern shortcuts, the key dialog, better unit paths, audio, CD music, event pictures, movies, the Jogo menu, the saved-games manager and the periodic autosave (see "Windows (pre-alpha)").
+- macOS: beta 1 (`v0.1.0-beta.1`, the same app as alpha 3), with the **Options screen**, the modern shortcuts and the Shift+click order queue, **better unit paths**, the **Áudio** menu and sounds that did not play before, the **saved-games manager** and the **periodic autosave** (see "Controls").
+- Windows: beta 1 (`v0.1.0-beta.1`, the same `.exe` as pre-alpha 4), x86-64 only; game, menus, saves, the Options screen, modern shortcuts, the key dialog, better unit paths, audio, CD music, event pictures, movies, the Jogo menu, the saved-games manager and the periodic autosave (see "Windows (beta)").
 - Only the Brazilian Portuguese release of the game is supported.
 
 ## Controls
