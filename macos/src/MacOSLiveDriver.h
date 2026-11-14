@@ -88,6 +88,11 @@ int32_t macos_live_order_queue(MacOSLiveDriver *,uint32_t unit,uint16_t *cells,u
  * together; host input and device playback are reset by the shell. */
 int32_t macos_live_save(MacOSLiveDriver *,const char *path);
 int32_t macos_live_load(MacOSLiveDriver *,const char *path);
+/* Right after a successful macos_live_load: a game saved from the original
+ * pause list (mode16) continues as after the original load lists (GameLoad
+ * 0x46b88d, then the 0x42c570 tail MenuInit(18) + HUD latch), through the
+ * pause menu's own "Voltar ao jogo" item. 0 and nothing changed otherwise. */
+int32_t macos_live_load_resume(MacOSLiveDriver *);
 int32_t macos_live_autosave(MacOSLiveDriver *,const char *path);
 void macos_live_save_error(MacOSLiveDriver *,char *,uint32_t);
 /* Background save: macos_live_save_begin (same checks as macos_live_save) and

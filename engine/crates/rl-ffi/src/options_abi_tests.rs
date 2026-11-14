@@ -284,6 +284,46 @@ fn draw(o: u64, shell: u64) -> (Vec<u8>, Vec<u8>) {
     (pixels, palette)
 }
 
+/// The button on the original menu column (centre x = 400, row 286 + 25 * count)
+/// touches no original item zone and no opaque pixel of any frame of MENU.CMP's
+/// three AffGame animations (sprites 1..16 at (35,134), 17..32 at (702,0),
+/// 33..40 at (528,315), drawn from their top-left corner).
+fn assert_button_clear(rect: [i32; 4], count: i32, menu_cmp: &[u8]) {
+    use rl_core::render_assets::Assets;
+    assert_eq!(rect[0] + rect[2], 800, "centred on x = 400");
+    assert_eq!(rect[1], 286 + 25 * count, "row after the last item");
+    for i in 0..count {
+        let zone = [0, 286 + 25 * i, 800, 306 + 25 * i];
+        assert!(zone[3] <= rect[1] || zone[1] >= rect[3], "item zone {i}");
+    }
+    let base = Assets {
+        sprites: Vec::new(),
+        palette: [0; 768],
+        shadow: [0; 256],
+        light: [0; 256],
+    };
+    let bank = rl_core::shell_animation::Bank::load(menu_cmp, &base).unwrap();
+    let mut nearest = i32::MAX;
+    for (x, y, ids) in [(35, 134, 1..=16), (702, 0, 17..=32), (528, 315, 33..=40)] {
+        for id in ids {
+            let q = bank.assets().sprite(id).unwrap();
+            for sy in 0..q.height {
+                for sx in 0..q.width {
+                    if q.mask[sy * q.width + sx] == 0 {
+                        continue;
+                    }
+                    let (px, py) = (x + sx as i32, y + sy as i32);
+                    let dx = (rect[0] - px).max(px - (rect[2] - 1)).max(0);
+                    let dy = (rect[1] - py).max(py - (rect[3] - 1)).max(0);
+                    assert!(dx > 0 || dy > 0, "MENU.CMP sprite {id} pixel ({px},{py})");
+                    nearest = nearest.min(dx.max(dy));
+                }
+            }
+        }
+    }
+    eprintln!("button {rect:?}: nearest MENU.CMP pixel {nearest} px away");
+}
+
 /// The real program-start main menu (and, with RL_OPTIONS_PAUSE_SAVE, a real
 /// in-game pause menu 16): the button, the click rule, navigation, determinism,
 /// and an original shell that behaves byte for byte as one never touched by
@@ -378,6 +418,8 @@ fn options_screen_over_the_real_main_and_pause_menus() {
     unsafe { ok(rl_opcoes_criar(&defaults(), background, &mut o)) };
     let mut rect = [0i32; 4];
     unsafe { ok(rl_opcoes_botao(o, a.handle, rect.as_mut_ptr())) };
+    assert_eq!(rect[1], 411, "main menu: five items, last row ends at 406");
+    assert_button_clear(rect, 5, &assets[9]);
     let (cx, cy) = ((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2);
     // Overlay: only pixels inside the button rectangle change.
     let mut with_button = original.clone();
@@ -429,6 +471,27 @@ fn options_screen_over_the_real_main_and_pause_menus() {
             .collect::<String>()
     };
     eprintln!("options frame {}", digest(&first));
+    // On the main menu the button row (411) is the screen's own VOLTAR row. A
+    // pointer left still where the click opened the screen selects nothing;
+    // the first move hovers (selects) VOLTAR, as in the original menus.
+    let still = send(o, a.handle, entrada(cx, cy, 0, 0, 0));
+    assert_eq!((still.consumed, still.kind), (1, 0));
+    assert_eq!(draw(o, a.handle).0, first, "still pointer selects nothing");
+    send(o, a.handle, entrada(cx + 1, cy, 0, 0, 0));
+    let hovered_frame = draw(o, a.handle).0;
+    assert_ne!(hovered_frame, first, "VOLTAR lit after a move");
+    capture(
+        "options-pt-br-pointer-on-voltar.png",
+        &hovered_frame,
+        &palette,
+    );
+    // The keyboard navigation below runs with the pointer clear of every item,
+    // back on the first item.
+    let cy = 560;
+    for _ in 0..5 {
+        send(o, a.handle, entrada(cx, cy, 0, 0, 2));
+    }
+    assert_eq!(draw(o, a.handle).0, first, "back on the first item");
     // Navigation: the right values change, the host reads them back.
     let e = send(o, a.handle, entrada(cx, cy, 0, 0, 1)); // Enter on "atalhos"
     assert_eq!((e.kind, e.item, e.values.atalhos), (2, 0, 0));
@@ -481,8 +544,9 @@ fn options_screen_over_the_real_main_and_pause_menus() {
     // click-anywhere activation of the selected item).
     let mut shell_input = RlShellInput {
         version: 1,
+        // Off the button and below every item zone (zone 0).
         mouse_x: cx as u32,
-        mouse_y: cy as u32 - 40,
+        mouse_y: rect[3] as u32 + 40,
         ..Default::default()
     };
     let mut events = Vec::new();
@@ -534,6 +598,13 @@ fn options_screen_over_the_real_main_and_pause_menus() {
         let p = shell_over(paused, &assets, &presentation.surface, &titre);
         let (pause, pause_palette) = p.copy();
         capture("pause-menu-original.png", &pause, &pause_palette);
+        let mut pause_rect = [0i32; 4];
+        unsafe { ok(rl_opcoes_botao(o, p.handle, pause_rect.as_mut_ptr())) };
+        assert_eq!(
+            pause_rect[1], 436,
+            "pause menu: six items, last row ends at 431"
+        );
+        assert_button_clear(pause_rect, 6, &assets[9]);
         let mut over = pause.clone();
         unsafe {
             ok(rl_opcoes_sobrepor(

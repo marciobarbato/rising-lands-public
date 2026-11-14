@@ -505,3 +505,22 @@ ones), the private build/smoke scripts and `docs/MACOS_*`. READMEs (PT and EN): 
 Checked before the push: `./macos/tests/run.sh` (all passed, including `PlayerOptionsTests` and `SaveLibraryTests`) and
 `./build-macos.sh` (ad hoc). In the private repository: every UI smoke of the macOS front passed on `be80c4a0` (defeat
 17/17, player 22/22, autosave, save manager 23/23) and `check.py --domain macos` 233 OK.
+
+### 2026-11-13 (evening): private `main` `8dc7eb58`
+
+Previous synchronisation: public `404ed4e` (private `main` `66ec8404`). Two bugs the user found in the signed alpha 3
+candidate.
+
+Copied:
+
+| Private change | Public files |
+|---|---|
+| `645c2f17`, `32054e34` the OPÇÕES button is centred like the original menu items (AffText centres them in [0, 800], x = 400) on the row after the last item of the menu on screen (main menu y = 411, pause y = 436), outside every InitGameZone item zone and clear of MENU.CMP; after the opening click the hover selects nothing until the pointer moves | `engine/crates/rl-core/src/options_screen.rs`, `engine/crates/rl-ffi/src/options_abi_tests.rs`, `engine/include/options-screen.md` |
+| `2f8ad9dd` a game saved from the pause menu's SALVAR list (screen 16) reopened on the pause menu when loaded, as if Escape had been pressed (since alpha 1). The original's load lists run GameLoad 0x46b88d then MenuInit(18) and the HUD latch (0x42c56b..0x42c57f, 0x42c70b..0x42c72b), the "Voltar ao jogo" tail; the host now completes that resume after any load of a screen-16 world, through the session's own input. Existing saves open in play; no format change | `macos/src/macos_live_driver.c`, `MacOSLiveDriver.h`, `macos_campaign_shell.inc`, `NativeLiveWindow.swift`, `main.swift` |
+
+Left out, and why: the real-data capture test inputs, the private smoke scripts and the user's saves.
+
+Checked before the push: `cargo fmt --all --check` and `cargo test --release --locked` in `engine/` (103 passed),
+`./macos/tests/run.sh` (all passed) and `./build-macos.sh`. In the private repository: MONDE01 gate kept its SHA-256,
+`validate.sh` passed, and the macOS integration ran every UI smoke (pause smoke now saves from the pause list, loads and
+keeps playing).

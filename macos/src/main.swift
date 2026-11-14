@@ -1102,9 +1102,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                 live.allianceState{loaded in
                     info["afterLoad"]=loaded
                     checks["playersTableRead"]=loaded["playersRead"] as? Int32==0 || loaded["playersRead"] as? Int==0
-                    // A save made in the original pause list reopens that menu; any other resumes play.
+                    // Every load plays on, a save made in the original pause list included
+                    // (GameLoad then MenuInit 18, macos_live_load_resume).
                     poll(100,{mode($0)==16 || ($0["native_running"] as? Bool==true && frames($0)>=10)}){value in
-                        info["savedInPause"]=mode(value)==16
+                        checks["loadPlays"]=mode(value)==0 && value["native_running"] as? Bool==true
+                        live.work.async{let resumed=live.loadedFromPause;DispatchQueue.main.async{info["savedInPause"]=resumed>0}}
                         captureOwnWindow(live.window,to:output.deletingPathExtension().appendingPathExtension("loaded.png")){captured in
                             checks["loadedCaptured"]=captured
                             optionsThenResume(loaded)
@@ -1122,7 +1124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         func finish(_ error:String?=nil){
             guard !finished else{return};finished=true
             live.perform("live-pause"){value in
-                var result:[String:Any]=["passed":error==nil && checks.values.allSatisfy{$0} && checks.count==10,"checks":checks,"state":value,"nativeWindowVisible":live.window.isVisible,
+                var result:[String:Any]=["passed":error==nil && checks.values.allSatisfy{$0} && checks.count==14,"checks":checks,"state":value,"nativeWindowVisible":live.window.isVisible,
                                          "commit":Bundle.main.object(forInfoDictionaryKey:"RisingLandsSourceCommit") as? String ?? ""]
                 if let error=error{result["error"]=error}
                 let screenshot=self.screenshotOutput ?? output.deletingPathExtension().appendingPathExtension("png")
@@ -1150,6 +1152,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         }
         func frames(_ value:[String:Any])->UInt64{(value["native_metrics"] as? [String:Any])?["frames"] as? UInt64 ?? 0}
         func mode(_ value:[String:Any])->UInt32{value["original_shell_mode"] as? UInt32 ?? 0}
+        func playing(_ value:[String:Any])->Bool{mode(value)==0 && value["native_running"] as? Bool==true && frames(value)>=10}
+        // From the open pause menu: SALVAR (item 1, row y 311..331) > position 1 of
+        // list14 (row 0, y 286..306), which saves the paused world and resumes; then
+        // Escape > CARREGAR (item 0) > position 1 of list12. The original continues a
+        // loaded game (GameLoad 0x46b88d, then MenuInit 18 at 0x42c57a), so the load
+        // must play on instead of reopening the pause in which the game was saved.
+        func saveAndLoadThroughLists(){
+            live.benchmarkClick(400,321)
+            poll(100,{mode($0)==14}){_ in
+                live.benchmarkClick(400,296)
+                poll(150,playing){_ in
+                    checks["pauseListSaveResumes"]=true
+                    checks["escapeBeforeLoad"]=escape([true])
+                    poll(100,{mode($0)==16}){_ in
+                        checks["escapeBeforeLoad"]=checks["escapeBeforeLoad"]==true && escape([false])
+                        live.benchmarkClick(400,296)
+                        poll(100,{mode($0)==12}){_ in
+                            live.benchmarkClick(400,296)
+                            poll(200,playing){loaded in
+                                checks["pauseListSaveLoadsPlaying"]=loaded["live_stop"] is NSNull && loaded["mission"] as? String=="MONDE01.ETA"
+                                live.work.async{
+                                    let resumed=live.loadedFromPause,saved=FileManager.default.fileExists(atPath:live.saveURL("posicao-1").path)
+                                    DispatchQueue.main.async{checks["loadResumedSavedPause"]=resumed==1 && saved;finish()}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         poll(100,{frames($0)>=10 && $0["native_running"] as? Bool==true}){_ in
             // The original polls Escape as a held key: hold it until the pause appears.
             checks["escapeInGame"]=escape([true])
@@ -1171,7 +1203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                                 checks["optionsEscape"]=escape()
                                 live.waitOptions(open:false){closed in
                                     checks["optionsEscape"]=checks["optionsEscape"]==true && closed
-                                    finish()
+                                    saveAndLoadThroughLists()
                                 }
                             }
                         }

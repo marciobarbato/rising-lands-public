@@ -663,6 +663,14 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 self.shellRun &+= 1;self.movieActive=false;self.introductionMovie=false
                 DispatchQueue.main.async{self.defeatMovie.cancel()}
                 self.runID &+= 1;self.running=false;self.stoppedReason=nil;self.presenter?.clear();self.audio?.reset()
+                // A game saved from the original pause list continues like after the
+                // original load lists (MenuInit 18 after GameLoad, macos_live_load_resume);
+                // its first frame events (101/102) are consumed before play, as after the menu.
+                var screen:UInt32=0
+                let paused=macos_live_campaign_screen(self.driver,&screen)==0 && screen==UInt32(RL_SHELL_PAUSE)
+                let resumed=macos_live_load_resume(self.driver)
+                if resumed != 0{self.stoppedReason="Retomada da partida carregada: "+self.saveError(resumed).localizedDescription}
+                else if paused{self.pumpCDMusic();self.loadedFromPause+=1}
                 DispatchQueue.main.async{self.cdMusic?.beginStage()}
                 self.campaignEnd=nil;self.refreshSelection();self.autosaveSchedule.restart()
                 self.playStarted=0;self.playEnded=0;self.frameMicros.removeAll();self.startFrames=self.status().frames;self.startLogic=0;self.startRender=0;self.startProof=0;self.startMetal=self.metalSeconds
@@ -1230,6 +1238,8 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     /// Worker. Jogo > Opções… pressed in play: the synthetic Escape is held in
     /// the world until the original pause appears (or this frame passes).
     var optionsAfterPause:UInt64?
+    /// Worker. Loads of a game saved from the original pause list that resumed play (smokes read it).
+    var loadedFromPause=0
     func scheduleShellMove(){
         guard !shellMoveScheduled else{return}
         shellMoveScheduled=true

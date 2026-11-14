@@ -33,7 +33,7 @@ exact `#define`) keep working, and a host uses the options only after
 The module (`options_screen.rs`, `options_abi.rs`) sits beside the shell state
 machine (`shell*.rs`, MenuInit) and does not take part in it:
 
-- it **reads** a prepared session (fonts, mode 0x4e2f78, counter 0x508f84,
+- it **reads** a prepared session (fonts, mode 0x4e2f78, item count 0x4e2f40, counter 0x508f84,
   renderer fonts, MENU.CMP bank) through `shell_abi::session_view` and never
   changes it: not the surface, memory, generation or pending request;
 - it draws into its own buffer (open screen) or into the **host's copy** of the
@@ -80,11 +80,26 @@ is still identical to an untouched twin (test
 
 ## Button position
 
-Centre x 455, caption top y 548 (`BUTTON_CENTRE_X`, `BUTTON_TOP`): the empty
-middle of the wooden floor of TITRE.PIE, below every original item of both
-menus (main menu ends at y 406, pause at y 431), right of the arrow's tip and
-left of the wheel; no MENU.CMP animation reaches it.
-`rl_opcoes_botao` returns the clickable rectangle (caption ± 8 px, 25 px tall).
+The caption is one more row of the original menu column (2026-11-13, bug seen
+in alpha 3; the first version sat at centre x 455, top y 548 on the wooden
+floor). It is centred like the items, by AffText's own rule in [0, 800]
+(`BUTTON_CENTRE_X` = 400), and its top is MenuDisplay's next row,
+286 + 25 × the menu's item count [0x4e2f40]: y 411 on the main menu (five
+items, the last ends at 406) and y 436 on the pause menu (six items, the last
+ends at 431). The original InitGameZone item zones end at 281 + 25 × count, so
+no zone lies under the button, and no opaque pixel of any MENU.CMP animation
+frame comes within 92 px of it (checked against the CD bank in
+`options_screen_over_the_real_main_and_pause_menus`). A menu without items has
+no button row and `rl_opcoes_botao` fails instead of guessing.
+`rl_opcoes_botao` returns the clickable rectangle (caption ± 8 px, 25 px tall):
+[363, 411, 437, 436] on the pt-BR main menu, [363, 436, 437, 461] on pause.
+
+On the main menu the button's row is also the open screen's VOLTAR row. When
+the button's click opens the screen, hover selects nothing until the pointer
+leaves the point where that click was released, so a still pointer does not
+select VOLTAR; the first move hovers again, as in the original menus. A new
+press and release on VOLTAR still closes the screen without a move.
+`rl_opcoes_abrir` (no click) keeps hover active at once.
 
 ## Items and values
 

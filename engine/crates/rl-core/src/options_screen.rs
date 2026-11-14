@@ -3,14 +3,16 @@
 //! It is a separate module beside the faithful shell state machine (`shell*.rs`,
 //! MenuInit): it never writes game memory, never consumes RNG and never draws on
 //! the shell's persistent surface. It only READS the prepared shell session (the
-//! MenuInit fonts at 0x4e2f74..76 and the animation counter 0x508f84) and draws
+//! MenuInit fonts at 0x4e2f74..76, the item count 0x4e2f40 and the animation
+//! counter 0x508f84) and draws
 //! with the original primitives into its own buffer:
 //! - the original menu background (TITRE.PIE, decoded by the host from its CD);
 //! - MENU.CMP's three animations at AffGame's menu positions (`menu_sprites`);
 //! - title and items with AffText in MenuDisplay's layout (`shell_draw::menu`).
 //!
 //! The "Opções" button over the main menu (2) and the pause menu (16) is drawn
-//! the same way into the host's copy of the shell picture. While the screen is
+//! the same way into the host's copy of the shell picture, as one more row of
+//! the original menu column. While the screen is
 //! closed only a click that starts on that button is taken; every other input
 //! belongs to the original shell unchanged. While it is open it takes all input.
 //! Texts come from the port (not from TEXTES.TXT), in CP1252 like the game's.
@@ -126,6 +128,19 @@ impl Look<'_> {
     fn mode(&self) -> Result<u8> {
         Ok(self.memory.u8(crate::shell_state::MODE)?)
     }
+    /// The button's top: MenuDisplay's next row after the menu's items,
+    /// 286 + 25 * [0x4e2f40] (411 on the main menu's five, 436 on the pause
+    /// menu's six). The original item zones stop at 281 + 25 * count.
+    fn button_top(&self) -> Result<i32> {
+        let count = i32::from(self.memory.u16(crate::shell_menu::COUNT)?);
+        let top = ROW_TOP + ROW_STEP * count;
+        if count == 0 || top + ROW_STEP > 600 {
+            return Err(Error::Invalid(
+                "options: menu item count leaves no button row",
+            ));
+        }
+        Ok(top)
+    }
 }
 
 /// Screens that show the button: the main menu and the in-game pause menu.
@@ -140,10 +155,10 @@ const ROW_STEP: i32 = 25;
 const ROW_HEIGHT: i32 = 20;
 /// Horizontal margin of a clickable caption beyond its glyphs.
 const HIT_MARGIN: i32 = 8;
-/// The button's caption box (centre x, top y). Below the original items of both
-/// menus and clear of MENU.CMP's animations (see the captures in the private research repository).
-pub const BUTTON_CENTRE_X: i32 = 455;
-pub const BUTTON_TOP: i32 = 548;
+/// The button's caption is centred like the original items: AffText centres
+/// them in [0, 800], on x = 400. Its row is the one after the last item of the
+/// menu on screen (`button_top`), outside every InitGameZone item zone.
+pub const BUTTON_CENTRE_X: i32 = WIDTH as i32 / 2;
 
 fn latin1(text: &str) -> Vec<u8> {
     text.chars()
@@ -234,6 +249,10 @@ pub struct Options {
     /// A press that started on an item while open.
     pressed: Option<usize>,
     hover_button: bool,
+    /// The pointer where the button's click opened the screen. Until the
+    /// pointer leaves it, hover selects nothing: on the main menu the button's
+    /// row is VOLTAR's, which a still pointer would otherwise select.
+    still: Option<(i32, i32)>,
 }
 
 impl Options {
@@ -254,6 +273,7 @@ impl Options {
             armed: false,
             pressed: None,
             hover_button: false,
+            still: None,
         })
     }
     pub fn is_open(&self) -> bool {
@@ -290,6 +310,7 @@ impl Options {
         self.armed = false;
         self.pressed = None;
         self.hover_button = false;
+        self.still = None;
         Ok(())
     }
     pub fn close(&mut self) {
@@ -297,6 +318,7 @@ impl Options {
         self.armed = false;
         self.pressed = None;
         self.hover_button = false;
+        self.still = None;
     }
 
     fn width(look: &Look<'_>, text: &[u8], font: u32) -> Result<i32> {
@@ -316,12 +338,14 @@ impl Options {
     pub fn button_rect(&self, look: &Look<'_>) -> Result<[i32; 4]> {
         let caption = latin1(title(self.language));
         let w = Self::width(look, &caption, look.font(0x4e2f75)?)?;
-        let left = BUTTON_CENTRE_X - w / 2;
+        // AffText's own centring in [0, 800]: the caption sits on the items' pixels.
+        let left = (2 * BUTTON_CENTRE_X - w) / 2;
+        let top = look.button_top()?;
         Ok([
             left - HIT_MARGIN,
-            BUTTON_TOP,
+            top,
             left + w + HIT_MARGIN,
-            BUTTON_TOP + ROW_STEP,
+            top + ROW_STEP,
         ])
     }
     fn item_rect(&self, look: &Look<'_>, index: usize) -> Result<[i32; 4]> {
@@ -358,6 +382,7 @@ impl Options {
                 if std::mem::take(&mut self.armed) {
                     if on {
                         self.open(look)?;
+                        self.still = Some((input.x, input.y));
                         return Ok((true, Event::Opened));
                     }
                     return Ok((true, Event::None));
@@ -375,7 +400,10 @@ impl Options {
         }
         self.animation = self.animation.wrapping_add(input.ticks);
         let hovered = self.item_at(look, input.x, input.y)?;
-        if let Some(index) = hovered {
+        if self.still.is_some_and(|at| at != (input.x, input.y)) {
+            self.still = None;
+        }
+        if let (Some(index), None) = (hovered, self.still) {
             // MenuInput selects the item under the pointer (zone != 0).
             self.selected = index;
         }
@@ -552,9 +580,9 @@ impl Options {
             &line,
             [
                 rect[0] + HIT_MARGIN,
-                BUTTON_TOP,
+                rect[1],
                 rect[2] - HIT_MARGIN,
-                BUTTON_TOP + ROW_HEIGHT,
+                rect[1] + ROW_HEIGHT,
             ],
             font,
             [0, 0],
@@ -629,9 +657,12 @@ mod tests {
             light: [0; 256],
         }
     }
+    /// The original item counts: main menu 2 has five, pause menu 16 six.
     fn memory(mode: u8) -> MemoriaJogo {
+        let count: u16 = if mode == 16 { 6 } else { 5 };
         MemoriaJogo::from_blocks([
             (0x4e1d90, vec![0; 16]),
+            (crate::shell_menu::COUNT, count.to_le_bytes().to_vec()),
             (0x4e2f74, vec![1, 3, 4, 0, mode]),
             (0x508f84, 9u32.to_le_bytes().to_vec()),
         ])
@@ -661,6 +692,20 @@ mod tests {
         out
     }
 
+    /// Centred on x = 400 like the AffText items, on the row after the last
+    /// of `count` items, and outside every InitGameZone item zone.
+    fn assert_on_the_items_column(button: [i32; 4], count: i32) {
+        assert_eq!(button[0] + button[2], 800, "centred on x = 400");
+        assert_eq!(
+            button[1],
+            ROW_TOP + ROW_STEP * count,
+            "next row of the column"
+        );
+        let last_zone_bottom = ROW_TOP + ROW_STEP * (count - 1) + ROW_HEIGHT;
+        assert!(button[1] > last_zone_bottom, "below the last item zone");
+        assert!(button[3] <= 600);
+    }
+
     #[test]
     fn options_button_navigation_and_values() {
         let (fonts, menu) = (assets(0x2835 + 224, 6), assets(40, 4));
@@ -681,14 +726,49 @@ mod tests {
         };
         assert_eq!(o.input(&look, &keys).unwrap(), (false, Event::None));
         let button = o.button_rect(&look).unwrap();
-        assert!(
-            button[1] >= ROW_TOP + ROW_STEP * 6,
-            "below every original item"
-        );
+        assert_on_the_items_column(button, 5);
+        assert_eq!(button[1], 411);
         let clicked = click(&mut o, &look, button);
         assert_eq!(clicked[1], (true, Event::None));
         assert_eq!(clicked[2], (true, Event::Opened));
         assert!(o.is_open());
+        assert_eq!(o.selected(), Item::Hotkeys);
+        // The button's row is VOLTAR's on the main menu: a pointer left still
+        // there selects nothing; the first move hovers (selects) VOLTAR.
+        let back = o.item_rect(&look, 5).unwrap();
+        let (bx, by) = ((button[0] + button[2]) / 2, (button[1] + button[3]) / 2);
+        assert!(inside(back, bx, by));
+        let mut still = Input {
+            x: bx,
+            y: by,
+            ..Input::default()
+        };
+        assert_eq!(o.input(&look, &still).unwrap(), (true, Event::None));
+        assert_eq!(o.selected(), Item::Hotkeys, "still pointer selects nothing");
+        let mut first = vec![0; PIXELS];
+        o.draw(&look, &mut first).unwrap();
+        still.x += 1;
+        o.input(&look, &still).unwrap();
+        assert_eq!(o.selected(), Item::Back, "a move hovers again");
+        let mut lit = vec![0; PIXELS];
+        o.draw(&look, &mut lit).unwrap();
+        assert_ne!(lit, first);
+        o.close();
+        assert_eq!(click(&mut o, &look, button)[2], (true, Event::Opened));
+        // A deliberate click on VOLTAR, even without moving, still closes.
+        let mut press = Input {
+            x: bx,
+            y: by,
+            held: true,
+            ..Input::default()
+        };
+        o.input(&look, &press).unwrap();
+        assert_eq!(o.selected(), Item::Hotkeys);
+        press.released = true;
+        assert_eq!(o.input(&look, &press).unwrap(), (true, Event::Closed));
+        assert_eq!(click(&mut o, &look, button)[2], (true, Event::Opened));
+        // Keyboard navigation from a pointer clear of every item.
+        o.input(&look, &Input::default()).unwrap();
         assert_eq!(o.selected(), Item::Hotkeys);
         // Enter toggles the selected item; Down skips nothing when all are offered.
         let enter = Input {
@@ -794,9 +874,32 @@ mod tests {
         assert_ne!(a, vec![3; PIXELS]);
         // Pause 16 shows the button; result 19 does not, and nothing is taken there.
         o.close();
+        let button = o.button_rect(&look).unwrap();
+        assert_on_the_items_column(button, 6);
+        assert_eq!(button[1], 436);
         let mut picture = vec![3; PIXELS];
         assert!(o.overlay(&look, &mut picture).unwrap());
         assert_ne!(picture, vec![3; PIXELS]);
+        // The caption is drawn inside the button rectangle only.
+        assert!((0..PIXELS).filter(|&i| picture[i] != 3).all(|i| inside(
+            button,
+            (i % 800) as i32,
+            (i / 800) as i32
+        )));
+        // A menu without items leaves no row: an explicit error, not a guess.
+        let empty = MemoriaJogo::from_blocks([
+            (0x4e1d90, vec![0; 16]),
+            (crate::shell_menu::COUNT, vec![0, 0]),
+            (0x4e2f74, vec![1, 3, 4, 0, 16]),
+            (0x508f84, 9u32.to_le_bytes().to_vec()),
+        ])
+        .unwrap();
+        let look_empty = Look {
+            memory: &empty,
+            fonts: &fonts,
+            menu: &menu,
+        };
+        assert!(o.button_rect(&look_empty).is_err());
         let m19 = memory(19);
         let look19 = Look {
             memory: &m19,

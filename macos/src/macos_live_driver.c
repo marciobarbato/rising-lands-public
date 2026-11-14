@@ -755,8 +755,8 @@ int32_t macos_live_load(MacOSLiveDriver*d,const char*path){
  uint8_t*pixels=NULL,*palette=NULL;RlRenderResult rendered={0};
  if(!c){pixels=malloc(sizeof(d->pixels));palette=malloc(sizeof(d->palette));if(!pixels||!palette)c=RL_IO_ERROR;}
  /* A game saved from the original pause list is in mode16: AffGame does not
-  * draw it; its saved picture and the packaged game palette stand until the
-  * pause menu resumes play (the app reopens that menu on the next frame). */
+  * draw it; its saved picture and the packaged game palette stand until
+  * macos_live_load_resume continues it as the original load lists do. */
  uint32_t paused=0;if(!c&&d->rl_missao_tela(world,&paused))paused=0;
  if(!c&&paused==16){
   if(d->cd_inputs){c=d->rl_mundo_paleta_jogo(world,palette,768);if(!c)memcpy(pixels,view,480000);}
