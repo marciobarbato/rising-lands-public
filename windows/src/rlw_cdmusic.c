@@ -185,7 +185,7 @@ uint32_t rlw_cdplayer_pull(void *player, int16_t *stereo, uint32_t frames) {
  uint8_t *bytes = (uint8_t *)stereo;
  size_t got = fread(bytes, 1, (size_t)want, p->file); got -= got % 4;
  p->left -= got;
- /* PCM16 little endian on disk; the host is little endian (x86-64, ARM64). */
+ /* PCM16 little endian on disk; the host is little endian (x86-64). */
  if (!got) { p->left = 0; p->ended = 1; }
  return (uint32_t)(got / 4);
 }

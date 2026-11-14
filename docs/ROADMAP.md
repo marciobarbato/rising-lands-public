@@ -2,15 +2,15 @@
 
 [Português](#português) · [English](#english)
 
-Estado em 2026-11-12. / State on 2026-11-12.
+Estado em 2026-11-14. / State on 2026-11-14.
 
 | Frente / Front | Estado / State | Issue | Ajuda de fora / Outside help |
 |---|---|---|---|
-| Cliente Windows: jogo, menus, saves, Opções / Windows client: game, menus, saves, Options | Feito / Done | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) | — |
+| Cliente Windows: jogo, menus, saves, Opções / Windows client: game, menus, saves, Options | Feito; pré-alfa 4 publicada / Done; pre-alpha 4 released | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) (fechada / closed) | — |
 | Windows: build MSVC x64 / MSVC x64 build | Feito; só x86-64 desde 2026-11-14 (as pré-alfas 1 a 3 tinham ARM64); sem assinatura de código, por decisão / Done; x86-64 only since 2026-11-14 (pre-alphas 1 to 3 had ARM64); no code signing, by decision | — | — |
 | Windows: teste num PC de verdade / test on a real PC | Fica com a comunidade / Left to the community | [#6](https://github.com/marciobarbato/rising-lands-public/issues/6) | **Bem-vinda / Welcome** |
-| Windows: áudio, música do CD, FLC, filmes / audio, CD music, FLC, movies | Feito no código; entra na pré-alfa 4 / Done in the source; goes into pre-alpha 4 | [#4](https://github.com/marciobarbato/rising-lands-public/issues/4) | Testar num PC / Test on a PC (#6) |
-| Windows: menu Jogo, gerenciador de partidas salvas, salvamento automático, bandeirinhas da fila, DPI / Jogo menu, saved-games manager, periodic autosave, order queue flags, DPI | Feito no código; entra na pré-alfa 4 / Done in the source; goes into pre-alpha 4 | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) | — |
+| Windows: áudio, música do CD, FLC, filmes / audio, CD music, FLC, movies | Feito; na pré-alfa 4 / Done; in pre-alpha 4 | [#4](https://github.com/marciobarbato/rising-lands-public/issues/4) (fechada / closed) | Testar num PC / Test on a PC (#6) |
+| Windows: menu Jogo, gerenciador de partidas salvas, salvamento automático, bandeirinhas da fila, DPI, ícone original, reimportar o CD / Jogo menu, saved-games manager, periodic autosave, order queue flags, DPI, original icon, CD re-import | Feito; na pré-alfa 4 / Done; in pre-alpha 4 | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) (fechada / closed) | — |
 | Host Windows: atalhos modernos, configurar teclas, caminhos melhores / Windows host: modern shortcuts, key setup, better paths | Feito; na pré-alfa 3 / Done; in pre-alpha 3 | [#7](https://github.com/marciobarbato/rising-lands-public/issues/7) (fechada / closed) | — |
 | Atalhos modernos e fila de ordens / Modern shortcuts and order queue | Feito (macOS e Windows) / Done (macOS and Windows) | — | — |
 | Tela de Opções no estilo original / Options screen in the original style | Feito (macOS e Windows) / Done (macOS and Windows) | — | — |
@@ -40,12 +40,14 @@ macOS.
   mesmos quadros, o mesmo passeio pelos menus e os mesmos arquivos de save. Compila com mingw-w64 e com MSVC, só
   x86-64 desde 2026-11-14 (as pré-alfas 1 a 3 também tinham um `.exe` ARM64; o Windows em ARM pode rodar o x64 pela
   própria emulação, sem suporte); o CI gera os dois `.exe`, cada um com o seu SHA-256, e roda o `.exe` sem dados do
-  jogo (recusas da importação, primeira execução, bandeirinhas, DPI).
-- **Feito no código, para a pré-alfa 4 (ainda não publicada):** efeitos sonoros e o menu Áudio, a música do CD (do
+  jogo (recusas da importação, primeira execução, bandeirinhas, DPI, áudio).
+- **Feito na pré-alfa 4 (a versão atual do Windows, só x86-64):** efeitos sonoros e o menu Áudio, a música do CD (do
   `.BIN` do próprio jogador), as figuras de evento (FLC) e os filmes
   ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)); o menu Jogo do macOS, o gerenciador de
   partidas salvas, o salvamento automático periódico, a partida salva pela pausa voltando jogando, as bandeirinhas
-  da fila de ordens sobre o mapa e a janela ciente de DPI.
+  da fila de ordens sobre o mapa, a janela ciente de DPI, o ícone original (lido do `RISING.EXE` importado) com
+  atalhos no menu Iniciar e na Área de Trabalho, e Jogo → Importar o CD novamente… (quem vem das pré-alfas 1 a 3
+  precisa reimportar para ter sons e música).
 - **Sem assinatura de código:** decisão do projeto. O SmartScreen avisa na primeira execução; o SHA-256 e o commit de
   cada build estão no CI e nas notas da release.
 - **Testar num PC com Windows real ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)):** o autor
@@ -63,7 +65,7 @@ trabalhador ou militar ocioso, H seleciona o Santuário, e a **fila de ordens co
 marcados com bandeirinhas). Cada atalho vira uma entrada que o original já aceita; a fila é uma regra opcional do motor
 (`RL_REGRA_FILA_ORDENS`), desligada no jogo original. No Windows os mesmos atalhos e a janela de configurar teclas
 estão no código atual (`windows/src/rlw_modern.c`, `rlw_hotkeys.c`, `rlw_keys_dialog.c`), e as bandeirinhas da fila
-sobre o mapa também (`rlw_markers.c`; entram na pré-alfa 4).
+sobre o mapa também (`rlw_markers.c`; desde a pré-alfa 4).
 
 ### Tela de Opções no estilo original
 
@@ -110,12 +112,13 @@ The client is in [`windows/`](../windows/README.md): Win32 + GDI in C, with the 
   the same menu walk and the same save files. It builds with mingw-w64 and with MSVC, x86-64 only since 2026-11-14
   (pre-alphas 1 to 3 also shipped an ARM64 `.exe`; Windows on ARM may run the x64 one under its own emulation,
   unsupported); CI builds both `.exe` files, each with its SHA-256, and runs the `.exe` without game data (importer
-  refusals, first start, flags, DPI).
-- **Done in the source, for pre-alpha 4 (not released yet):** sound effects and the Áudio menu, CD music (from the
+  refusals, first start, flags, DPI, audio).
+- **Done in pre-alpha 4 (the current Windows release, x86-64 only):** sound effects and the Áudio menu, CD music (from the
   player's own `.BIN`), event pictures (FLC) and movies
   ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)); the macOS Jogo menu, the saved-games manager,
-  the periodic autosave, a pause-list save loading back into play, the order queue flags over the map and the
-  DPI-aware window.
+  the periodic autosave, a pause-list save loading back into play, the order queue flags over the map, the DPI-aware
+  window, the original icon (read from the imported `RISING.EXE`) with Start menu and Desktop shortcuts, and Jogo →
+  Importar o CD novamente… (players coming from pre-alphas 1 to 3 must re-import to get sound and music).
 - **No code signing:** a project decision. SmartScreen warns on the first run; each build's SHA-256 and commit are in
   CI and in the release notes.
 - **Test on a real Windows PC ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)):** the author will
@@ -133,7 +136,7 @@ military unit, H selects the Sanctuary, and the **Shift+click order queue** (way
 shortcut becomes input the original already accepts; the queue is an optional engine rule (`RL_REGRA_FILA_ORDENS`),
 off in the original game. On Windows the same shortcuts and the key dialog are in the current source
 (`windows/src/rlw_modern.c`, `rlw_hotkeys.c`, `rlw_keys_dialog.c`), and so are the queue's flags over the map
-(`rlw_markers.c`; in pre-alpha 4).
+(`rlw_markers.c`; since pre-alpha 4).
 
 ### Options screen in the original style
 

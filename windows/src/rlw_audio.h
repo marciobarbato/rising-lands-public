@@ -26,6 +26,8 @@ typedef struct RlwMixer RlwMixer;
 RlwMixer *rlw_mixer_create(uint32_t output_rate);
 void rlw_mixer_free(RlwMixer *m);
 uint32_t rlw_mixer_rate(const RlwMixer *m);
+/* A new output rate (the device took another): voices and music keep their position. */
+void rlw_mixer_set_rate(RlwMixer *m, uint32_t output_rate);
 /* Buffer `id` (non-zero) gets a sample (NULL = missing sample: its plays end at
  * once). The sample must outlive the buffer. 0 or 1 when no voice is free. */
 int rlw_mixer_buffer(RlwMixer *m, uint32_t id, const RlwSample *sample);
@@ -81,6 +83,7 @@ void rlw_audio_event_tick(RlwAudio *a, uint32_t frame);
 void rlw_audio_set_effects_gain(RlwAudio *a, float gain);
 void rlw_audio_set_music_gain(RlwAudio *a, float gain);
 void rlw_audio_set_music(RlwAudio *a, RlwMusicPull fn, void *ctx, uint32_t rate);
+void rlw_audio_set_rate(RlwAudio *a, uint32_t output_rate);
 /* Output thread. */
 void rlw_audio_render(RlwAudio *a, int16_t *out, uint32_t frames);
 void rlw_audio_stats(const RlwAudio *a, RlwAudioStats *out);

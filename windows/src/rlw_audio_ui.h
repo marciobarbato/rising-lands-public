@@ -41,6 +41,13 @@ int rlw_audio_ui_movie_message(UINT msg, WPARAM wp);
 int rlw_audio_ui_movie_present(HDC dc, const RECT *client, const RECT *view);
 /* Movies, credits, quitting: stops the CD music (NativeCDMusicHost.leaveStage). */
 void rlw_audio_ui_leave_stage(void);
+/* After a successful load + rlw_driver_load_resume (rlw_main.c load_slot). */
+void rlw_audio_ui_loaded(RlwDriver *d);
+/* Every menu-loop pass while a shell session is open (the credits stop the CD music). */
+void rlw_audio_ui_menu_tick(RlwDriver *d);
+/* --smoke-audio (CI): opens the sound host without game data, plays a synthetic
+ * tone and prints one line; 0 with or without an audio device. */
+int rlw_audio_ui_smoke(void);
 /* The "Áudio" popup appended to the menu bar; commands return 1 when handled. */
 void rlw_audio_ui_menu(HMENU menubar);
 int rlw_audio_ui_command(unsigned id);

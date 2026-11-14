@@ -1,4 +1,4 @@
-# Rising Lands for Windows (pre-alpha 3 out; pre-alpha 4 in progress)
+# Rising Lands for Windows (pre-alpha 4)
 
 > **Resumo em português.** Cliente Windows sobre o mesmo motor em Rust e a mesma ABI em C (`engine/include`) do app
 > macOS. Este primeiro marco importa o CD brasileiro do jogador (imagem `.BIN`/`.CUE`, `.ISO` ou pasta), roda a
@@ -17,13 +17,16 @@
 > automático (a cada 5, 10 ou 15 minutos de jogo, desligado por padrão, na posição própria "autosave"). Só x86-64:
 > Windows em ARM pode rodar o build x64 pela emulação do próprio Windows, sem suporte (as pré-alfas 1 a 3 também
 > tinham um build ARM64).
-> A pré-alfa 3 (publicada) trouxe a tela de Opções, os atalhos modernos, a janela de configurar teclas e os caminhos
-> melhores. Para a pré-alfa 4 (em andamento, ainda não publicada): efeitos sonoros e o menu "Áudio" (silenciar e
-> volume de efeitos e música), a música do CD (lida da imagem `.BIN`/`.CUE` do próprio jogador), as figuras de evento
-> (FLC) durante o jogo e os filmes originais (introdução, derrota, fim da campanha); as bandeiras da fila de ordens
-> (Shift+clique) desenhadas sobre o mapa, como no macOS; a imagem nítida em telas com escala (DPI por monitor); o menu
-> Jogo, o gerenciador de partidas salvas e o salvamento automático periódico; e smokes automáticos no CI sem dados do
-> jogo (recusas da importação, primeira execução, desenho das bandeiras, DPI).
+> A pré-alfa 3 trouxe a tela de Opções, os atalhos modernos, a janela de configurar teclas e os caminhos melhores.
+> A pré-alfa 4 (a versão atual, um único `RisingLands-windows-x86_64.exe`) traz efeitos sonoros e o menu "Áudio"
+> (silenciar e volume de efeitos e música), a música do CD (lida da imagem `.BIN`/`.CUE` do próprio jogador), as
+> figuras de evento (FLC) durante o jogo e os filmes originais (introdução, derrota, fim da campanha); as bandeiras da
+> fila de ordens (Shift+clique) desenhadas sobre o mapa, como no macOS; a imagem nítida em telas com escala (DPI por
+> monitor); o menu Jogo, o gerenciador de partidas salvas e o salvamento automático periódico; o ícone original do
+> jogo (a abóbora, lido em tempo de execução do `RISING.EXE` importado) na janela, num atalho no menu Iniciar e, se o
+> jogador quiser, na Área de Trabalho; Jogo → Importar o CD novamente… (quem vem das pré-alfas 1 a 3 precisa
+> reimportar para ter sons e música; o jogo avisa uma vez); e smokes automáticos no CI sem dados do jogo (recusas da
+> importação, primeira execução, desenho das bandeiras, DPI, áudio).
 > Nenhum dado do jogo vai para o repositório: tudo vem do CD importado na primeira execução.
 
 ## Stack and why
@@ -57,7 +60,11 @@
 | `src/rlw_modern.c/.h` | "Atalhos modernos", portable (port of `NativeModernHotkeys.swift`): read-only snapshot, target planner, the command job that turns a shortcut into ordinary input across frames |
 | `src/rlw_markers.c/.h` | Shift+click order queue markers, portable (port of `NativeOrderQueueMarkers` and `NativeLiveWindow.layoutWaypoints`): reader over one read-only snapshot plus `rl_fila_ordens`, the aspect-fit layout in window pixels |
 | `src/rlw_markers_gdi.c/.h` | Painting those markers with GDI over the map part of the picture (off-screen bitmap, clipped to the map) |
-| `src/rlw_smoke.c/.h` | CI smokes inside the real `.exe` without game data: `--smoke-markers`, `--smoke-window`, `--smoke-import-prompt` |
+| `src/rlw_smoke.c/.h` | CI smokes inside the real `.exe` without game data: `--smoke-markers`, `--smoke-window`, `--smoke-import-prompt` (`--smoke-audio` lives in `rlw_audio_ui.c`) |
+| `src/rlw_icon.c/.h` | The game's original icon, portable: the first icon group of the player's imported `RISING.EXE` (PE resources) written as `rising.ico` in the data folder at run time; no game bytes in the repository or the download |
+| `src/rlw_icon_win.c/.h` | That icon on the window and taskbar (`WM_SETICON`); the one time the `.ico` is made, a Start menu shortcut (`Rising Lands.lnk`) and a question about a Desktop shortcut; Jogo → Criar atalho na Área de Trabalho later |
+| `src/rlw_reimport.c/.h` | Jogo → Importar o CD novamente…, portable (port of the macOS player's `reimportCD`): the relaunch command line, the rule of the one-time notice for data imported before the sound |
+| `src/rlw_reimport_win.c/.h` | The re-import on Win32: the CD is chosen in the running game, which closes the sound host and starts again with `--cd <image> --reimport`, so the import runs before anything opens a file in `Dados`; a failed re-import keeps the installed data |
 | `src/rlw_dpi.c/.h` | DPI mixed mode: the game window per-monitor aware (sharp picture and real fullscreen resolution on scaled screens), fixed-layout windows unaware; the fullscreen fit to the monitor |
 | `src/rlw_gamemenu.c/.h` | The Jogo menu, portable (port of the macOS player menu): item ids, labels, enabled/checked state, decoded commands, the Opções… request during play |
 | `src/rlw_gamemenu_win.c/.h` | The Jogo popup on the Win32 menu bar |
@@ -67,7 +74,7 @@
 | `src/rlw_sound.c/.h` | The CD's A/B/P `.HED`/`.SND` sound banks, samples decoded in memory (IMA ADPCM, plain PCM), keyed like `MacOSAudioMapper` |
 | `src/rlw_sound_import.c/.h` | Sound import after the CD import: `INSTALHD/SOUND/{A,B,P}.{HED,SND}` into `Dados/sound`, SHA-256 pinned, staging folder |
 | `src/rlw_audio.c/.h` | Portable mixer (64 voices, DirectSound-style volume, loops, music stream input) and the play-mode sound host over `macos/src/macos_audio_mapper.c`, reused unchanged (port of `NativeAudioPlayback`); the Áudio settings |
-| `src/rlw_audio_win32.c/.h` | `waveOut` output (winmm only) and the driver pump; no device = real-time sink |
+| `src/rlw_audio_win32.c/.h` | `waveOut` output (winmm only) and the driver pump; no device = real-time sink, and a device that appears is picked up |
 | `src/rlw_audio_ui.c/.h` | The "Áudio" menu, its settings in `opcoes.ini`, the sound and music import after the CD import, the event picture and movie hooks of the window |
 | `src/rlw_cdmusic.c/.h` | CD music (port of `NativeCDMusicDisc/Host/Player`): the CUE track table, tracks 2 and 3 imported from the player's raw `.BIN` as pinned WAVs, a streaming player, the macOS selection policy |
 | `src/rlw_eventflc.c/.h` | In-game FLC event pictures (port of `NativeEventFLCPlayback` and `macos_event_flc.inc`): the decoded frame over the view at the file's speed, the event loop sound tick, one `rl_evento_flc_terminar_v1` after the last frame |
@@ -85,12 +92,14 @@
 | `tests/test_markers.c` | Portable unit tests: the order queue marker reader over a synthetic memory map (the macOS test case), limits, the aspect-fit layout |
 | `tests/test_savemgr.c` | Portable unit tests: saved-games list/rename/trash and the periodic autosave schedule |
 | `tests/test_gamemenu.c` | Portable unit tests of the Jogo menu model |
+| `tests/test_icon.c` | Portable unit tests: the icon reader over a synthetic PE with a real 32x32 icon (on Windows the written `.ico` is loaded with `LoadImageW`) |
+| `tests/test_reimport.c` | Portable unit tests: the re-import command line and the notice rule |
 | `tests/test_audio.c` | Portable unit tests: synthetic IMA ADPCM and banks, mixer and rendered WAV statistics, the sound host over the mapper, sound import, settings; synthetic CUE/BIN for the CD music import, player and policy; a synthetic FLC event; a synthetic Cinepak/MS ADPCM AVI |
 | `tests/parity.c`, `parity.sh` | Driver parity: the Windows driver vs the macOS driver over the same engine, per-tick frame hashes and the scripted menu walk |
 | `tests/audio_parity.c`, `tests/movie_parity.swift`, `audio_parity.sh` | Sound parity: the engine's sound and CD music requests through both drivers, the decoded samples, a rendered WAV, and every movie frame and sample against the macOS decoder |
 | `tests/import_cli.c` | `rlw-import`, the same importer as a portable CLI |
 | `../.github/workflows/windows-client.yml` | GitHub Actions workflow: jobs `mingw-x64` and `msvc-x64` on `windows-latest`; each build uploads its `.exe` with a SHA-256 |
-| `ci/smoke.sh` | Smokes without game data for any built `.exe`: `--selftest`, usage, the importer's refusals (no CD, a non-CD file, broken `.CUE`s, a folder without `INSTALHD`, a fake CD with the right names) with their messages and no `Dados` left behind, `--smoke-markers`, `--smoke-window`, `--smoke-import-prompt` (`--no-ui` skips the last) |
+| `ci/smoke.sh` | Smokes without game data for any built `.exe`: `--selftest`, usage, the importer's refusals (no CD, a non-CD file, broken `.CUE`s, a folder without `INSTALHD`, a fake CD with the right names) with their messages and no `Dados` left behind, `--smoke-markers`, `--smoke-window`, `--smoke-audio`, `--smoke-import-prompt` (`--no-ui` skips the last) |
 | `build.sh` | Engine static library + host executable with mingw-w64 (+ `test`) |
 | `build-msvc.ps1` | The same with MSVC x64 (+ `-Test`) |
 
@@ -259,10 +268,13 @@ smoke, demo and parity runs.
   `Dados/sound` (each checked by size and SHA-256, staging folder), and, from a raw `.BIN` (with its `.CUE`), CD audio
   tracks 2 and 3 are written as `Dados/music/TRACK02.wav` and `TRACK03.wav` (exact 44.1 kHz stereo PCM, pinned to the
   macOS player's WAV identity). Music comes only from the player's own `.BIN`; an `.ISO` or a folder has no CD audio. A
-  failure leaves the game playable without sound or music. An import from an earlier pre-alpha has neither: run once
-  with `--cd …` to import again (the Áudio menu says so).
+  failure leaves the game playable without sound or music. An import from pre-alphas 1–3 has neither: use **Jogo →
+  Importar o CD novamente…** (the game says so once at start, and the Áudio menu says why sound or music is missing);
+  from the command line, `--cd <image> --reimport` does the same.
 - Sound effects: the engine's sound requests go through `macos/src/macos_audio_mapper.c` (reused unchanged) into a
-  64-voice mixer, output with `waveOut` (winmm only). Samples are decoded in memory from the banks.
+  64-voice mixer, output with `waveOut` (winmm only). Samples are decoded in memory from the banks. Without a sound
+  device, or when it is unplugged, the game goes on silently and picks up a device that appears (or a new default
+  device) within about 3 s.
 - CD music: the game's MCICD_Play requests play the requested original track once, with the macOS policy (a stage
   start re-arms, the result screen keeps the track, leaving the stage, a movie or the credits stop it).
 - **Áudio** menu: Silenciar efeitos, Volume dos efeitos (100/75/50/25 %), Silenciar música, Volume da música; kept in
@@ -309,7 +321,16 @@ Same files, names and checks as the macOS app, so a `Partidas` folder can be cop
 The menu-bar popup is **Jogo**, the macOS player app's name (`src/rlw_gamemenu.c`): Pausar/Continuar (P), Velocidade
 (0,5x–4x, Mais rápido +, Mais devagar −), Dificuldade (next stage start), the save items above, Opções… (in play it
 pauses and opens the screen over the pause), Configurar teclas…, Atalhos modernos and Caminhos melhores (checked when
-on). The **Áudio** popup sits beside it.
+on), **Importar o CD novamente…** (asks for the CD image, then the game restarts itself to import it: game files,
+sound banks, CD music and the icon) and **Criar atalho na Área de Trabalho**. The **Áudio** popup sits beside it.
+
+### Icon and shortcuts
+
+The window, the taskbar and the shortcuts show the game's original icon. It is not in the repository or the download:
+at run time `src/rlw_icon.c` reads the first icon group of the player's imported `RISING.EXE` and writes it as
+`rising.ico` in the data folder (`%LOCALAPPDATA%\RisingLands-ptbr`). The one time that file is made, the game puts a
+`Rising Lands` shortcut in the Start menu and asks once whether to put one on the Desktop; **Jogo → Criar atalho na
+Área de Trabalho** makes it later. Frame-count and headless runs make no shortcuts.
 
 Test switches: `--selftest` (engine ABI versions, no data), `--import-only`, `--frames N` (run N frames as fast as
 possible in the window, then exit; with `--screenshot out.bmp` saves the presented client area), `--headless` (no
@@ -320,7 +341,8 @@ scripted save walk, writing in its own empty folder, never in the player's saves
 paints a synthetic picture with order queue markers through the real GDI path into a memory DC at 1:1, 2x letterboxed
 and a small size, and checks flags, dots, dashes, the clip under the map and that nothing spills outside the picture;
 exit 0/1), `--smoke-window` (no data: a per-monitor-aware and an unaware window, the 800x600 client at the window's
-DPI and the borderless fullscreen rect of its monitor; exit 0/1), `--smoke-import-prompt --data EMPTY` (no data: the
+DPI and the borderless fullscreen rect of its monitor; exit 0/1), `--smoke-audio` (no data: the sound host starts and
+plays a synthetic buffer, with or without a sound device; exit 0/1), `--smoke-import-prompt --data EMPTY` (no data: the
 player's first start, whose import notice and CD file dialog must open; a watcher thread closes each as Cancel would;
 exit 0 only if both opened and no `Dados` was created; a watchdog ends it with 9 after 60 s). `--frames`/`--headless`
 without `--mission` start MONDE01 as in milestone 1.
@@ -329,12 +351,12 @@ without `--mission` start MONDE01 as in milestone 1.
 
 | Test | Needs | What it shows |
 |---|---|---|
-| `windows/build.sh test` | any OS with a C compiler | SHA-256, ISO 9660 reader over ISO/BIN MODE1+CUE/BIN MODE2/folder, import (menus, briefings, movies), refusals, atomic replacement; menu routing; FLC decoding; save folder (durable replace, `nomes.plist`, list captions, CP1252); saved-games manager and autosave schedule; Jogo menu model; bindings, router, modern shortcuts; order queue markers (reader, layout); sound banks, mixer, sound host, CD music import/player/policy, event FLC, movie decoding (all synthetic) |
+| `windows/build.sh test` | any OS with a C compiler | SHA-256, ISO 9660 reader over ISO/BIN MODE1+CUE/BIN MODE2/folder, import (menus, briefings, movies), refusals, atomic replacement; menu routing; FLC decoding; save folder (durable replace, `nomes.plist`, list captions, CP1252); saved-games manager and autosave schedule; Jogo menu model; bindings, router, modern shortcuts; order queue markers (reader, layout); sound banks, mixer, sound host, CD music import/player/policy, event FLC, movie decoding (all synthetic); the icon reader over a synthetic PE; the re-import command line and notice rule |
 | `windows/build.sh` | mingw-w64 | the engine and host build for Windows; `objdump -p` shows only system DLL imports |
 | `windows/parity.sh --cd …/RISING_LANDS_BR_.cue 300` | macOS + the player's CD | the Windows driver and the macOS driver give identical per-tick frame hashes with the same input (`PARIDADE OK`), then identical lines for the scripted menu walk: main menu, Novo jogo, briefing page, stage start, 150 frames, pause, objectives page, Enter back to the pause, Escape to resume, pause, restart, 60 frames (`PARIDADE DOS MENUS OK`); then the save walk: stage autosave, 120 frames, save, 60 frames, load and the same 60 frames (compared), autosave load and its first 30 frames (compared), the pause list's save over the same slot, the pause list's load of that paused save, the reopened pause, continue, 20 frames; the lines carry the SHA-256 of every slot and `.view` file, so both drivers must write identical files (`PARIDADE DOS SAVES OK`) |
 | `windows/audio_parity.sh --cd …/RISING_LANDS_BR_.cue 600` | macOS + the player's CD | the sound and CD music requests of the Windows and macOS drivers are identical tick by tick in play and over the menu walk, the play run holds sound requests and renders to a non-silent, unclipped WAV, the music tracks match their pins, and every frame and sample of the three original AVIs decoded by `rlw_movie.c` equals the macOS decoder's (needs `swiftc`) (`SONS OK`). `--build-only` builds without data |
 | `RisingLands.exe --selftest` | Windows, wine or CI | engine ABI/extension versions inside the Windows build |
-| `ci/smoke.sh RisingLands.exe` | Windows (Git Bash), wine or CI | every case above without game data: self-test, usage, six import refusals with their messages and nothing left in the data folder, the GDI marker paint, the DPI mixed mode and fullscreen rect, the first start's import dialogs |
+| `ci/smoke.sh RisingLands.exe` | Windows (Git Bash), wine or CI | every case above without game data: self-test, usage, six import refusals with their messages and nothing left in the data folder, the GDI marker paint, the DPI mixed mode and fullscreen rect, the audio start, the first start's import dialogs |
 | `RisingLands.exe --headless --cd … --frames 300 --demo-input --hashes w.txt` | Windows/wine + CD | MONDE01 runs; the hashes must equal `parity.sh`'s `windows.txt` (cross-platform determinism) |
 | `RisingLands.exe --cd … --frames 300 --screenshot s.bmp` | Windows/wine + CD | presentation (palette, aspect-fit) |
 | `RisingLands.exe --cd … --menu-demo m.txt` | Windows/wine + CD | the menu walk on Windows; must equal `parity.sh`'s `windows-menu.txt` |

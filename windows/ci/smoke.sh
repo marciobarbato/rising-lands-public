@@ -31,6 +31,7 @@ no_dados() {
 }
 
 expect "self-test (ABI do motor, SHA-256)" 0 "selftest ok" -- "$EXE" --selftest
+expect "áudio sem dados nem dispositivo" 0 "audio smoke ok" -- "$EXE" --smoke-audio
 expect "argumento desconhecido -> uso" 64 "" -- "$EXE" --nao-existe
 expect "dificuldade fora de 0..2 -> uso" 64 "" -- "$EXE" --difficulty 3 --headless
 expect "velocidade fora de 0..3 -> uso" 64 "" -- "$EXE" --speed 4 --headless

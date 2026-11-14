@@ -37,6 +37,8 @@ int main(int argc, char **argv) {
  rlw_gamemenu_label(&s, RLW_GM_OPTIONS, text, sizeof(text)); CHECK(!strcmp(text, "Op\xc3\xa7\xc3\xb5" "es\xe2\x80\xa6"));
  rlw_gamemenu_label(&s, RLW_GM_AUTOSAVE + 1, text, sizeof(text)); CHECK(!strcmp(text, "A cada 5 minutos"));
  rlw_gamemenu_label(&s, RLW_GM_MANAGE, text, sizeof(text)); CHECK(!strcmp(text, "Gerenciar partidas salvas\xe2\x80\xa6"));
+ rlw_gamemenu_label(&s, RLW_GM_SHORTCUT, text, sizeof(text)); CHECK(!strcmp(text, "Criar atalho na \xc3\x81rea de Trabalho"));
+ rlw_gamemenu_label(&s, RLW_GM_REIMPORT, text, sizeof(text)); CHECK(!strcmp(text, "Importar o CD novamente\xe2\x80\xa6"));
  rlw_gamemenu_label(&s, 99, text, sizeof(text)); CHECK(!text[0]);
 
  /* In play: everything but the loads of absent files. */
@@ -59,6 +61,9 @@ int main(int argc, char **argv) {
  s.shell_mode = 17; CHECK(enabled(&s, RLW_GM_MANAGE) && !enabled(&s, RLW_GM_OPTIONS));
  /* Smoke runs: no save folder, no options. */
  RlwGameMenuState smoke = playing(); smoke.saves = 0; smoke.options = 0; smoke.keys = 0;
+ CHECK(enabled(&s, RLW_GM_REIMPORT) && !enabled(&smoke, RLW_GM_REIMPORT) && rlw_gamemenu_decode(&s, RLW_GM_REIMPORT).action == RLW_GM_REIMPORT);
+ s.writing = 1; CHECK(!enabled(&s, RLW_GM_REIMPORT)); s.writing = 0;
+ CHECK(enabled(&s, RLW_GM_SHORTCUT) && !enabled(&smoke, RLW_GM_SHORTCUT) && rlw_gamemenu_decode(&s, RLW_GM_SHORTCUT).action == RLW_GM_SHORTCUT);
  CHECK(!enabled(&smoke, RLW_GM_QUICK_SAVE) && !enabled(&smoke, RLW_GM_OPTIONS) && !enabled(&smoke, RLW_GM_MODERN) && !enabled(&smoke, RLW_GM_KEYS) && enabled(&smoke, RLW_GM_SPEED));
  /* Stopped menus: nothing that touches the game. */
  s = playing(); s.failed = 1; CHECK(!enabled(&s, RLW_GM_PAUSE) && !enabled(&s, RLW_GM_QUICK_SAVE) && !enabled(&s, RLW_GM_OPTIONS));

@@ -14,7 +14,8 @@
  *   Gerenciar partidas salvas…
  *   Salvamento automático > Desligado | A cada 5/10/15 minutos | (Conta o tempo de jogo…)
  *   ---
- *   Opções… / Configurar teclas… / Atalhos modernos / Caminhos melhores
+ *   Opções… / Configurar teclas… / Atalhos modernos / Caminhos melhores / Criar atalho na Área de Trabalho /
+ *   Importar o CD novamente…
  *
  * Ids 100..199 belong to this menu (other popups, e.g. Áudio, use other ids). */
 #ifndef RLW_GAMEMENU_H
@@ -33,7 +34,7 @@ enum {
  RLW_GM_SPEED = 170,         /* + 0..3: 0,5x 1x 2x 4x */
  RLW_GM_FASTER = 174, RLW_GM_SLOWER = 175,
  RLW_GM_DIFFICULTY = 180,    /* + 0..2: Fácil Normal Difícil */
- RLW_GM_OPTIONS = 190, RLW_GM_MODERN = 191, RLW_GM_PATHS = 192,
+ RLW_GM_OPTIONS = 190, RLW_GM_MODERN = 191, RLW_GM_PATHS = 192, RLW_GM_SHORTCUT = 193, RLW_GM_REIMPORT = 194,
  RLW_GM_FIRST = 100, RLW_GM_LAST = 199
 };
 #define RLW_GM_POSITIONS 5 /* the menus show positions 1..5 (the original lists 1..10) */
@@ -49,7 +50,7 @@ typedef struct {
  int saves;             /* the player's save folder is in use (not in smoke runs) */
  int writing;           /* a save is still being written */
  int keys;              /* Configurar teclas… offered */
- int options;           /* Opções… and the option items offered (players' runs) */
+ int options;           /* Opções…, the option items and the desktop shortcut offered (players' runs) */
  unsigned speed;        /* 0..3 */
  unsigned difficulty;   /* 0..2 */
  unsigned atalhos, caminhos, autosave_minutes;

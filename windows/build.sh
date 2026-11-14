@@ -41,6 +41,14 @@ if [ "${1:-}" = test ]; then
     $TEST_LIBS -o "$OUT/test_gamemenu"
   "$OUT/test_gamemenu" "$OUT"
   "$HOST_CC" -std=c11 -O1 -g -Wall -Wextra -Werror -Wno-format-truncation -I"$HERE/src" \
+    "$HERE/tests/test_icon.c" "$HERE/src/rlw_icon.c" "$HERE/src/rlw_fs.c" \
+    $TEST_LIBS -o "$OUT/test_icon"
+  "$OUT/test_icon" "$OUT"
+  "$HOST_CC" -std=c11 -O1 -g -Wall -Wextra -Werror -Wno-format-truncation -I"$HERE/src" \
+    "$HERE/tests/test_reimport.c" "$HERE/src/rlw_reimport.c" "$HERE/src/rlw_fs.c" \
+    $TEST_LIBS -o "$OUT/test_reimport"
+  "$OUT/test_reimport" "$OUT"
+  "$HOST_CC" -std=c11 -O1 -g -Wall -Wextra -Werror -Wno-format-truncation -I"$HERE/src" \
     "$HERE/tests/test_hotkeys.c" "$HERE/src/rlw_hotkeys.c" "$HERE/src/rlw_modern.c" \
     $TEST_LIBS -o "$OUT/test_hotkeys"
   "$OUT/test_hotkeys"
@@ -70,7 +78,7 @@ echo "== host ($CC)"
   "$HERE/src/rlw_menu.c" "$HERE/src/rlw_menu_ops.c" "$HERE/src/rlw_menu_demo.c" "$HERE/src/rlw_flc.c" \
   "$HERE/src/rlw_saves.c" "$HERE/src/rlw_hotkeys.c" "$HERE/src/rlw_modern.c" "$HERE/src/rlw_keys_dialog.c" \
   "$HERE/src/rlw_markers.c" "$HERE/src/rlw_markers_gdi.c" "$HERE/src/rlw_smoke.c" "$HERE/src/rlw_dpi.c" \
-  "$HERE/src/rlw_savemgr.c" "$HERE/src/rlw_savemgr_dialog.c" "$HERE/src/rlw_autosave.c" "$HERE/src/rlw_gamemenu.c" "$HERE/src/rlw_gamemenu_win.c" \
+  "$HERE/src/rlw_savemgr.c" "$HERE/src/rlw_savemgr_dialog.c" "$HERE/src/rlw_autosave.c" "$HERE/src/rlw_gamemenu.c" "$HERE/src/rlw_gamemenu_win.c" "$HERE/src/rlw_icon.c" "$HERE/src/rlw_icon_win.c" "$HERE/src/rlw_reimport.c" "$HERE/src/rlw_reimport_win.c" \
   "$HERE/src/rlw_audio.c" "$HERE/src/rlw_audio_win32.c" "$HERE/src/rlw_audio_ui.c" "$HERE/src/rlw_sound.c" "$HERE/src/rlw_sound_import.c" "$HERE/src/rlw_cdmusic.c" "$HERE/src/rlw_eventflc.c" "$HERE/src/rlw_movie.c" \
   "$REPO/macos/src/macos_audio_mapper.c" "$LIB" \
   -static -static-libgcc \

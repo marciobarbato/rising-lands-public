@@ -77,6 +77,8 @@ if ($Test) {
     @{ Name = 'test_saves'; Defines = @(); Files = @('tests\test_saves.c', 'src\rlw_saves.c', 'src\rlw_fs.c') },
     @{ Name = 'test_savemgr'; Defines = @(); Files = @('tests\test_savemgr.c', 'src\rlw_saves.c', 'src\rlw_savemgr.c', 'src\rlw_autosave.c', 'src\rlw_fs.c') },
     @{ Name = 'test_gamemenu'; Defines = @(); Files = @('tests\test_gamemenu.c', 'src\rlw_gamemenu.c', 'src\rlw_saves.c', 'src\rlw_savemgr.c', 'src\rlw_autosave.c', 'src\rlw_fs.c') },
+    @{ Name = 'test_icon'; Defines = @(); Files = @('tests\test_icon.c', 'src\rlw_icon.c', 'src\rlw_fs.c') },
+    @{ Name = 'test_reimport'; Defines = @(); Files = @('tests\test_reimport.c', 'src\rlw_reimport.c', 'src\rlw_fs.c') },
     @{ Name = 'test_hotkeys'; Defines = @(); Files = @('tests\test_hotkeys.c', 'src\rlw_hotkeys.c', 'src\rlw_modern.c') },
     @{ Name = 'test_markers'; Defines = @(); Files = @('tests\test_markers.c', 'src\rlw_markers.c') },
     @{ Name = 'test_audio'; Defines = @('/DRLW_TESTING', "/I$Mac"); Files = @('tests\test_audio.c', 'src\rlw_audio.c', 'src\rlw_sound.c', 'src\rlw_sound_import.c', 'src\rlw_cdmusic.c', 'src\rlw_eventflc.c', 'src\rlw_flc.c', 'src\rlw_movie.c', 'src\rlw_cd.c', 'src\rlw_fs.c', 'src\rlw_sha256.c', '..\macos\src\macos_audio_mapper.c') }
@@ -95,6 +97,8 @@ if ($Test) {
     Invoke-Checked (Join-Path $T 'test_saves.exe') @($T)
     Invoke-Checked (Join-Path $T 'test_savemgr.exe') @($T)
     Invoke-Checked (Join-Path $T 'test_gamemenu.exe') @($T)
+    Invoke-Checked (Join-Path $T 'test_icon.exe') @($T)
+    Invoke-Checked (Join-Path $T 'test_reimport.exe') @($T)
     Invoke-Checked (Join-Path $T 'test_hotkeys.exe') @()
     Invoke-Checked (Join-Path $T 'test_markers.exe') @()
     Invoke-Checked (Join-Path $T 'test_audio.exe') @((Join-Path $T 'test-audio'))
@@ -122,7 +126,7 @@ $obj = Join-Path $Out 'obj'
 New-Item -ItemType Directory -Force -Path $obj | Out-Null
 $Sources = @('rlw_main.c', 'rlw_driver.c', 'rlw_cd.c', 'rlw_fs.c', 'rlw_sha256.c', 'rlw_menu.c', 'rlw_menu_ops.c',
   'rlw_menu_demo.c', 'rlw_flc.c', 'rlw_saves.c', 'rlw_hotkeys.c', 'rlw_modern.c', 'rlw_keys_dialog.c',
-  'rlw_markers.c', 'rlw_markers_gdi.c', 'rlw_smoke.c', 'rlw_dpi.c', 'rlw_savemgr.c', 'rlw_savemgr_dialog.c', 'rlw_autosave.c', 'rlw_gamemenu.c', 'rlw_gamemenu_win.c',
+  'rlw_markers.c', 'rlw_markers_gdi.c', 'rlw_smoke.c', 'rlw_dpi.c', 'rlw_savemgr.c', 'rlw_savemgr_dialog.c', 'rlw_autosave.c', 'rlw_gamemenu.c', 'rlw_gamemenu_win.c', 'rlw_icon.c', 'rlw_icon_win.c', 'rlw_reimport.c', 'rlw_reimport_win.c',
   'rlw_audio.c', 'rlw_audio_win32.c', 'rlw_audio_ui.c', 'rlw_sound.c', 'rlw_sound_import.c', 'rlw_cdmusic.c', 'rlw_eventflc.c', 'rlw_movie.c') | ForEach-Object { Join-Path $Src $_ }
 $Sources += Join-Path $Mac 'macos_audio_mapper.c'
 # Win32 libraries of the host, then what the Rust std needs on windows-msvc

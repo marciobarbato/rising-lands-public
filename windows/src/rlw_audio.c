@@ -37,6 +37,15 @@ RlwMixer *rlw_mixer_create(uint32_t output_rate) {
 }
 void rlw_mixer_free(RlwMixer *m) { if (m) { free(m->mix); free(m); } }
 uint32_t rlw_mixer_rate(const RlwMixer *m) { return m ? m->rate : 0; }
+void rlw_mixer_set_rate(RlwMixer *m, uint32_t output_rate) {
+ if (!m || output_rate < 8000 || output_rate > 192000 || output_rate == m->rate) return;
+ m->rate = output_rate;
+ for (unsigned i = 0; i < RLW_MIXER_VOICES; i++) {
+  Voice *v = &m->voices[i];
+  if (v->id && v->sample && v->sample->rate) v->step = ((uint64_t)v->sample->rate << 16) / m->rate;
+ }
+ if (m->music) m->music_step = ((uint64_t)m->music_rate << 16) / m->rate;
+}
 
 static Voice *voice(RlwMixer *m, uint32_t id) {
  if (!m || !id) return NULL;
@@ -266,6 +275,7 @@ void rlw_audio_event_tick(RlwAudio *a, uint32_t frame) {
 }
 void rlw_audio_set_effects_gain(RlwAudio *a, float gain) { if (a) { lock(a); rlw_mixer_set_effects_gain(a->mixer, gain); unlock(a); } }
 void rlw_audio_set_music_gain(RlwAudio *a, float gain) { if (a) { lock(a); rlw_mixer_set_music_gain(a->mixer, gain); unlock(a); } }
+void rlw_audio_set_rate(RlwAudio *a, uint32_t output_rate) { if (a) { lock(a); rlw_mixer_set_rate(a->mixer, output_rate); unlock(a); } }
 void rlw_audio_set_music(RlwAudio *a, RlwMusicPull fn, void *ctx, uint32_t rate) { if (a) { lock(a); rlw_mixer_set_music(a->mixer, fn, ctx, rate); unlock(a); } }
 void rlw_audio_render(RlwAudio *a, int16_t *out, uint32_t frames) {
  if (!a) { if (out) memset(out, 0, (size_t)frames * 2 * sizeof(int16_t)); return; }

@@ -36,7 +36,7 @@ HMENU rlw_gamemenu_create(void) {
  AppendMenuW(periodic, MF_SEPARATOR, 0, NULL); append(periodic, MF_STRING | MF_GRAYED, 0, "Conta o tempo de jogo, s\xc3\xb3 com a partida em andamento");
  popup(game, periodic, "Salvamento autom\xc3\xa1tico");
  AppendMenuW(game, MF_SEPARATOR, 0, NULL);
- item(game, RLW_GM_OPTIONS); item(game, RLW_GM_KEYS); item(game, RLW_GM_MODERN); item(game, RLW_GM_PATHS);
+ item(game, RLW_GM_OPTIONS); item(game, RLW_GM_KEYS); item(game, RLW_GM_MODERN); item(game, RLW_GM_PATHS); item(game, RLW_GM_SHORTCUT); item(game, RLW_GM_REIMPORT);
  popup(bar, game, "Jogo");
  return bar;
 }

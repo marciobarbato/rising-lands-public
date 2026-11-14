@@ -41,6 +41,11 @@
 #include "rlw_autosave.h"
 #include "rlw_savemgr_dialog.h"
 #include "rlw_gamemenu_win.h"
+#include "rlw_icon_win.h"
+#include "rlw_reimport.h"
+#include "rlw_reimport_win.h"
+#include "rlw_sound_import.h"
+#include "rlw_cdmusic.h"
 #include "rlw_sha256.h"
 #include "rising_engine.h"
 
@@ -51,9 +56,10 @@ static const double NORMAL_FRAME_RATE = 30.0, MAXIMUM_BACKLOG = 0.25;
 typedef struct {
  const char *cd, *data, *mission, *hashes, *screenshot, *menu_demo, *save_directory, *save_demo;
  unsigned difficulty, frames, speed;
- int selftest, import_only, headless, fullscreen, no_verify_image, demo_input;
+ int selftest, import_only, headless, fullscreen, no_verify_image, demo_input, reimport;
  int difficulty_given, speed_given; /* explicit --difficulty/--speed win over opcoes.ini */
  int smoke_markers, smoke_prompt, smoke_window; /* rlw_smoke.h: CI smokes without game data */
+ int smoke_audio; /* rlw_audio_ui.h: sound host + synthetic tone, with or without a device (front 2) */
 } Options;
 
 static struct {
@@ -547,6 +553,7 @@ static int load_slot(const char *slot, int report) {
  int c = rlw_driver_load(G.driver, path);
  if (c) { if (report) save_failed("Não foi possível carregar a partida"); return c; }
  if (rlw_driver_load_resume(G.driver)) save_failed("Retomada da partida carregada");
+ rlw_audio_ui_loaded(G.driver); /* CD music after a load, as macOS (front 2) */
  rlw_autosave_restart(&autosave_schedule);
  rlw_menu_reset(&G.menu); G.menu_failed = 0; G.stopped_reported = 0; G.left_held = 0;
  if (GetCapture() == G.hwnd) ReleaseCapture();
@@ -661,6 +668,21 @@ static void manage_saves(void) {
  rlw_mkdirs(G.saves); rlw_savemgr_dialog_run(G.hwnd, G.saves);
  G.deadline = now_seconds(); refresh_save_menus(); SetFocus(G.hwnd);
 }
+/* Jogo > Importar o CD novamente… (NativePlayerApp.reimportCD): the CD is chosen
+ * here, then the game starts again with --cd … --reimport so the import (game
+ * files, sound, music, icon) runs before anything opens a file in Dados. */
+static char *choose_cd(void);
+static void reimport_cd(void) {
+ if (MessageBoxW(G.hwnd, L"Os dados do CD serão conferidos e copiados de novo; o jogo será reaberto. As partidas salvas não são alteradas.",
+                 L"Importar o CD novamente?", MB_ICONQUESTION | MB_OKCANCEL) != IDOK) return;
+ if (in_menu()) { rlw_menu_reset(&G.menu); G.left_held = 0; } else release_all();
+ char *source = choose_cd(); G.deadline = now_seconds();
+ if (!source) return;
+ SV.retry_slot[0] = 0; save_poll(1); rlw_audio_ui_close();
+ if (rlw_reimport_relaunch(source)) { message_box("Não foi possível reabrir o Rising Lands para importar o CD.", "Rising Lands", MB_ICONWARNING | MB_OK); rlw_audio_ui_open(G.dados, G.options_path, options_store); }
+ else { G.quit = 1; PostQuitMessage(0); }
+ free(source);
+}
 static void command(unsigned id) {
  if (rlw_audio_ui_command(id)) return; /* Áudio (front 2) */
  RlwGameMenuState m; menu_state(&m); RlwGameMenuCommand c = rlw_gamemenu_decode(&m, id);
@@ -673,6 +695,8 @@ static void command(unsigned id) {
  case RLW_GM_PATHS: G.caminhos = c.arg; apply_rules(); options_store(); options_resync(); break;
  case RLW_GM_OPTIONS: open_options(); break;
  case RLW_GM_KEYS: show_keys(); break;
+ case RLW_GM_SHORTCUT: rlw_icon_desktop_shortcut(G.hwnd); break;
+ case RLW_GM_REIMPORT: reimport_cd(); break;
  case RLW_GM_AUTOSAVE: autosave_minutes = c.arg; rlw_autosave_set_interval(&autosave_schedule, rlw_autosave_frames(autosave_minutes)); options_store(); break;
  case RLW_GM_MANAGE: manage_saves(); break;
  case RLW_GM_QUICK_SAVE: save_now("rapido", 0, NULL); break;
@@ -879,7 +903,7 @@ static void usage(void) {
         "  testes: --selftest | --import-only | --frames N [--headless] [--hashes ARQ] [--screenshot ARQ.bmp] [--demo-input]\n"
         "          --menu-demo ARQ (percurso fixo pelos menus, sem janela; igual ao parity.sh)\n"
         "          --save-demo ARQ [--save-directory PASTA_VAZIA] (percurso fixo de salvar/carregar; igual ao parity.sh)\n"
-        "          --smoke-markers | --smoke-window | --smoke-import-prompt --data PASTA_VAZIA (CI, sem dados do jogo)\n"
+        "          --smoke-markers | --smoke-window | --smoke-audio | --smoke-import-prompt --data PASTA_VAZIA (CI, sem dados do jogo)\n"
         "  --save-directory PASTA: partidas salvas (padrão: Partidas na pasta de dados do usuário).\n"
         "  --cd: RISING_LANDS_BR_.BIN, .CUE, .ISO ou a pasta do CD (importa na primeira execução).\n"
         "  Teclas do host: P/Pause pausa, +/- velocidade, F5 salvar rápido, F9 carregar rápido, F11 tela cheia.\n"
@@ -906,6 +930,7 @@ static int parse(int argc, char **argv, Options *o) {
   else if (!strcmp(a, "--save-directory")) { VALUE(); o->save_directory = v; }
   else if (!strcmp(a, "--selftest")) o->selftest = 1;
   else if (!strcmp(a, "--import-only")) o->import_only = 1;
+  else if (!strcmp(a, "--reimport")) o->reimport = 1; /* Jogo > Importar o CD novamente… (with --cd) */
   else if (!strcmp(a, "--headless")) o->headless = 1;
   else if (!strcmp(a, "--fullscreen")) o->fullscreen = 1;
   else if (!strcmp(a, "--no-verify-image")) o->no_verify_image = 1;
@@ -913,6 +938,7 @@ static int parse(int argc, char **argv, Options *o) {
   else if (!strcmp(a, "--smoke-markers")) o->smoke_markers = 1;
   else if (!strcmp(a, "--smoke-import-prompt")) o->smoke_prompt = 1;
   else if (!strcmp(a, "--smoke-window")) o->smoke_window = 1;
+  else if (!strcmp(a, "--smoke-audio")) o->smoke_audio = 1;
   else return -1;
 #undef VALUE
  }
@@ -954,6 +980,7 @@ static int ensure_import(const char *data_root) {
  if (rc) {
   attach_console(); fprintf(stderr, "importação: %s\n", error);
   if (!G.opt.headless && !G.opt.import_only) message_box(error, "Rising Lands — importação", MB_ICONERROR | MB_OK);
+  if (G.opt.reimport && rlw_cd_installed(data_root)) return 0; /* a failed re-import keeps the installed data */
  }
  return rc;
 }
@@ -989,6 +1016,7 @@ int main_utf8(int argc, char **argv) {
  }
  if (G.opt.smoke_markers) { attach_console(); return rlw_smoke_markers(); }
  if (G.opt.smoke_window) { attach_console(); return rlw_smoke_window(); }
+ if (G.opt.smoke_audio) { attach_console(); return rlw_audio_ui_smoke(); }
  char data_root[4096];
  if (G.opt.data) snprintf(data_root, sizeof(data_root), "%s", G.opt.data);
  else if (rlw_user_data_dir(data_root, sizeof(data_root))) { message_box("Pasta de dados do usuário indisponível.", "Rising Lands", MB_ICONERROR); return 1; }
@@ -1086,6 +1114,9 @@ int main_utf8(int argc, char **argv) {
  ShowWindow(G.hwnd, SW_SHOW); update_viewport();
  if (G.opt.fullscreen) set_fullscreen(1);
  SetForegroundWindow(G.hwnd); SetFocus(G.hwnd);
+ rlw_icon_setup(G.hwnd, data_root, !G.opt.frames && !G.opt.headless); /* the original pumpkin, from the imported RISING.EXE */
+ if (!G.opt.frames && !G.opt.headless && rlw_reimport_notice_due(data_root, rlw_sound_installed(G.dados), rlw_cdmusic_installed(G.dados))) {
+  message_box(RLW_REIMPORT_NOTICE, "Rising Lands", MB_ICONINFORMATION | MB_OK); (void)rlw_reimport_notice_done(data_root); } /* once, for pre-alpha 3 data */
  if (rlw_shell_mode(G.driver)) menu_attach();
  update_title();
  timeBeginPeriod(1);
@@ -1104,6 +1135,7 @@ int main_utf8(int argc, char **argv) {
   if (SV.retry_slot[0] && now_seconds() >= SV.retry_at) { char slot[32], name[RLW_SAVE_NAME_CAPACITY]; snprintf(slot, sizeof(slot), "%s", SV.retry_slot); snprintf(name, sizeof(name), "%s", SV.retry_name); save_attempt(slot, SV.retry_named, name, SV.retries); }
   if (G.menu_failed) { MsgWaitForMultipleObjects(0, NULL, FALSE, 50, QS_ALLINPUT); if (G.opt.frames) { rc = 2; break; } continue; }
   if (in_menu()) {
+   rlw_audio_ui_menu_tick(G.driver); /* credits stop the CD music (front 2) */
    if (rlw_audio_ui_movie_active()) { /* original movie (front 2): frames by the clock, then its completion */
     uint32_t done = 0; int step = rlw_audio_ui_movie_step(&done);
     if (step == 1) { int c = rlw_shell_movie_finish(G.driver, done); if (c) { char why[512]; rlw_shell_error(G.driver, why, sizeof(why)); menu_failed(why[0] ? why : "Filme original"); } else menu_result(RLW_MENU_REPAINT); }

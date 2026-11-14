@@ -38,6 +38,21 @@ void rlw_audio_ui_import(const char *source, const char *data_root) {
  if (rlw_cdmusic_import(source, data_root, error, sizeof(error)) == 1) fprintf(stderr, "importação da música: %s\n", error);
 }
 void rlw_audio_ui_leave_stage(void) { rlw_audio_host_leave_stage(U.host); }
+void rlw_audio_ui_loaded(RlwDriver *d) { rlw_audio_host_loaded(U.host, d); }
+/* Menu ticks: the credits screen stops the CD music, as the macOS host's
+ * leaveStage when it shows the credits (once per visit). */
+static int in_credits;
+void rlw_audio_ui_menu_tick(RlwDriver *d) {
+ int credits = d && rlw_shell_mode(d) == RL_SHELL_CREDITS_SCREEN;
+ if (credits && !in_credits) rlw_audio_host_leave_stage(U.host);
+ in_credits = credits;
+ rlw_audio_host_maintain(U.host);   /* device lost/back while in the menus too */
+}
+int rlw_audio_ui_smoke(void) {
+ char report[256] = {0}; int rc = rlw_audio_host_smoke(report, sizeof(report));
+ printf("%s\n", report); fflush(stdout);
+ return rc;
+}
 
 void rlw_audio_ui_open(const char *dados, const char *options_path, void (*store)(void)) {
  rlw_audio_settings_default(&U.settings);

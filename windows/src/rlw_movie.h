@@ -1,8 +1,8 @@
 /* Original movies for the Windows host (front 2), portable C. Port of
  * NativeDefeatMovie.swift: EVENTS\OVER_FR.AVI, EXTROFR.AVI and INTROFR.AVI are
  * Cinepak 640x480 video at 15 frames/s with Microsoft ADPCM 22,050 Hz audio.
- * The host decodes them itself (no system codec: Cinepak is not on every
- * Windows, ARM64 included). Decoding is presentation only: the engine owns the
+ * The host decodes them itself (no system codec: a 64-bit Cinepak codec is not
+ * on every Windows). Decoding is presentation only: the engine owns the
  * request and the return to MenuInit 2 (rlw_shell_movie_finish).
  *
  * PlayVideo 0x47c82c: a movie that cannot be opened is "unavailable"; otherwise

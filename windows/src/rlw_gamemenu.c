@@ -43,6 +43,8 @@ RlwGameMenuItem rlw_gamemenu_item(const RlwGameMenuState *s, unsigned id) {
  else if (id == RLW_GM_OPTIONS) r.enabled = options_ready(s);
  else if (id == RLW_GM_MODERN) { r.enabled = s->options; r.checked = s->atalhos != 0; }
  else if (id == RLW_GM_PATHS) { r.enabled = s->options; r.checked = s->caminhos != 0; }
+ else if (id == RLW_GM_SHORTCUT) r.enabled = s->options;
+ else if (id == RLW_GM_REIMPORT) r.enabled = s->options && !s->writing && !s->failed;
  return r;
 }
 
@@ -63,6 +65,8 @@ void rlw_gamemenu_label(const RlwGameMenuState *s, unsigned id, char *out, size_
  else if (id == RLW_GM_OPTIONS) text = "Op\xc3\xa7\xc3\xb5" "es\xe2\x80\xa6";
  else if (id == RLW_GM_MODERN) text = "Atalhos modernos";
  else if (id == RLW_GM_PATHS) text = "Caminhos melhores";
+ else if (id == RLW_GM_SHORTCUT) text = "Criar atalho na \xc3\x81rea de Trabalho";
+ else if (id == RLW_GM_REIMPORT) text = "Importar o CD novamente\xe2\x80\xa6";
  else if (id >= RLW_GM_AUTOSAVE && id < RLW_GM_AUTOSAVE + 4) { rlw_autosave_title(RLW_AUTOSAVE_CHOICES[id - RLW_GM_AUTOSAVE], out, capacity); return; }
  snprintf(out, capacity, "%s", text);
 }

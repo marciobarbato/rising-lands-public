@@ -166,12 +166,25 @@ static void delete_selected(void) {
  if (c) report(error);
 }
 
+/* GetDpiForWindow/GetSystemMetricsForDpi (Windows 10 1607+), looked up at run
+ * time so older systems keep the system metric. */
+typedef UINT (WINAPI *DpiForWindowFn)(HWND);
+typedef int (WINAPI *MetricsForDpiFn)(int, UINT);
+static int scroll_width(HWND window) {
+ HMODULE user = GetModuleHandleW(L"user32.dll");
+ DpiForWindowFn dpi_for = user ? (DpiForWindowFn)(void (*)(void))GetProcAddress(user, "GetDpiForWindow") : NULL;
+ MetricsForDpiFn metrics_for = user ? (MetricsForDpiFn)(void (*)(void))GetProcAddress(user, "GetSystemMetricsForDpi") : NULL;
+ UINT dpi = dpi_for ? dpi_for(window) : 0;
+ return dpi && metrics_for ? metrics_for(SM_CXVSCROLL, dpi) : GetSystemMetrics(SM_CXVSCROLL);
+}
 static INT_PTR CALLBACK manager_proc(HWND dialog, UINT msg, WPARAM wp, LPARAM lp) {
  switch (msg) {
  case WM_INITDIALOG: {
   M.dialog = dialog; HWND list = GetDlgItem(dialog, ID_LIST);
   SendMessageW(list, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
-  RECT r; GetClientRect(list, &r); int width = r.right - r.left - GetSystemMetrics(SM_CXVSCROLL);
+  /* Columns share the list's real (already DPI-scaled) width; the scroll bar
+   * allowance follows the window's DPI too (per-monitor aware, front 3). */
+  RECT r; GetClientRect(list, &r); int width = r.right - r.left - scroll_width(dialog);
   static const wchar_t *const headings[3] = {L"Nome", L"Fase", L"Data"}; static const int share[3] = {46, 27, 27};
   for (int i = 0; i < 3; i++) {
    LVCOLUMNW column; memset(&column, 0, sizeof(column)); column.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;

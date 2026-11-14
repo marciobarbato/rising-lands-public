@@ -190,6 +190,12 @@ static void test_mixer(const char *work) {
  rlw_mixer_play(m, 7, 0, 0); rlw_mixer_render(m, out, 1000); rlw_mixer_play(m, 7, 0, 0);
  CHECK(rlw_mixer_finished(m, ids, 8) == 0);
  rlw_mixer_silence(m); CHECK(rlw_mixer_playing(m) == 0);
+ /* Another output rate (the device took 22,050): the same 220 frames now last 220 output frames. */
+ rlw_mixer_set_rate(m, 22050); CHECK(rlw_mixer_rate(m) == 22050);
+ rlw_mixer_buffer(m, 5, &s); rlw_mixer_play(m, 5, 0, 0); rlw_mixer_render(m, out, 300);
+ CHECK(out[2 * 219] == 1000 && out[2 * 220] == 0 && rlw_mixer_finished(m, ids, 8) == 1);
+ rlw_mixer_buffer(m, 5, &s); rlw_mixer_play(m, 5, 0, 1); rlw_mixer_set_rate(m, 44100); rlw_mixer_render(m, out, 10);
+ CHECK(out[0] == 1000); rlw_mixer_silence(m);
  /* Clipping is clamped and counted. */
  int16_t loud[100]; for (int i = 0; i < 100; i++) loud[i] = 30000;
  RlwSample l = {loud, 100, 44100};

@@ -136,10 +136,16 @@ static int op_save(void *driver, const char *p) { return macos_live_save(D, p); 
 static int op_autosave(void *driver, const char *p) { return macos_live_autosave(D, p); }
 static int op_load_file(void *driver, const char *p) { return macos_live_load(D, p); }
 static int op_save_slot(void *driver, const char *p, int32_t *saved) { return macos_live_shell_save_slot(D, p, saved); }
+static int op_options_show(void *driver) { return macos_live_options_show(D); }
+static int op_load_resume(void *driver) { return macos_live_load_resume(D); }
+static int op_probe(void *driver, uint8_t b[2], uint64_t *t, uint32_t *ms) {
+ static const uint32_t addresses[2] = {0x4e2f78, 0x4e05a2}, sizes[2] = {1, 1}; MacOSLiveStatus s; macos_live_status(D, &s);
+ return macos_live_peek(D, addresses, sizes, 2, b) || rl_relogio((RlMundo)s.world, t, ms);
+}
 static int op_advance(void *driver) { int c = op_advance_raw(driver); g_tick++; log_sounds(driver); if (!c) log_cd(driver); return c; }
 static const RlwDemoOps OPS = {{op_mode, op_state, op_input, op_draw, op_show, op_prepare, op_request, op_load, op_slots, op_zone,
- macos_live_shell_click_clock, op_credits_frame, op_credits_present, op_error, op_options_input, op_options_open, op_options_sync, op_options_button}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
- op_save, op_autosave, op_load_file, op_save_slot};
+ macos_live_shell_click_clock, op_credits_frame, op_credits_present, op_error, op_options_input, op_options_open, op_options_sync, op_options_button, op_options_show}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
+ op_save, op_autosave, op_load_file, op_save_slot, op_load_resume, op_probe};
 #undef D
 #else
 static int op_advance(void *driver) { int c = RLW_WINDOWS_OPS.advance(driver); g_tick++; log_sounds(driver); if (!c) log_cd(driver); return c; }

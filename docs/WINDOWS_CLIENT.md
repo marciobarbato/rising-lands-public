@@ -11,12 +11,14 @@
 > estático, um único `RisingLands.exe`): importa o CD, abre no menu principal original, joga a campanha, salva e
 > carrega no mesmo formato do macOS e tem a tela de Opções, com paridade quadro a quadro com o macOS. Desde a #7 também
 > tem os caminhos melhores, os atalhos modernos (N duas vezes, Home, ponto, vírgula, H) e a janela de configurar
-> teclas, com os mesmos padrões do macOS (atalhos modernos ligados, caminhos melhores desligados). Para a pré-alfa 4
-> (em andamento, ainda não publicada) chegaram os efeitos sonoros com o menu Áudio, a música do CD (lida do `.BIN` do
-> próprio jogador), as figuras de evento (FLC) e os filmes (#4); as bandeiras da fila de ordens sobre o mapa; o menu
-> "Jogo" do macOS (substitui "Partida"); o gerenciador de partidas salvas e o salvamento automático periódico; a
-> partida salva pela lista da pausa voltando jogando; a janela ciente de DPI por monitor; e smokes do `.exe` no CI sem
-> dados do jogo. Compila com mingw-w64 e com MSVC, só x86-64 (decisão de 2026-11-14; as pré-alfas 1 a 3 também
+> teclas, com os mesmos padrões do macOS (atalhos modernos ligados, caminhos melhores desligados). A pré-alfa 4, a
+> versão atual do Windows (um único `RisingLands-windows-x86_64.exe` em
+> [Releases](https://github.com/marciobarbato/rising-lands-public/releases)), traz os efeitos sonoros com o menu Áudio,
+> a música do CD (lida do `.BIN` do próprio jogador), as figuras de evento (FLC) e os filmes (#4); as bandeiras da fila
+> de ordens sobre o mapa; o menu "Jogo" do macOS (substitui "Partida"), com Importar o CD novamente… (quem vem das
+> pré-alfas 1 a 3 precisa reimportar para ter sons e música); o ícone original do jogo, lido do `RISING.EXE` importado,
+> na janela e nos atalhos; o gerenciador de partidas salvas e o salvamento automático periódico; a partida salva pela
+> lista da pausa voltando jogando; a janela ciente de DPI por monitor; e smokes do `.exe` no CI sem dados do jogo. Compila com mingw-w64 e com MSVC, só x86-64 (decisão de 2026-11-14; as pré-alfas 1 a 3 também
 > tinham um build ARM64; o Windows em ARM pode rodar o build x64 pela própria emulação, sem suporte). Falta um teste
 > num PC com Windows de verdade (#6), que fica com quem tem Windows. Os binários não são assinados, e não há plano de
 > assiná-los. Este guia continua valendo como mapa da camada de host.
@@ -47,9 +49,11 @@ checks run on macOS. Testing on Windows is left to the community (#6).
 | Saved-games manager (Jogo → Gerenciar partidas salvas…: list, rename, Recycle Bin) | `NativeSaveLibrary.swift`, `NativeSaveManager.swift` | `rlw_savemgr.c` (portable, `tests/test_savemgr.c`), `rlw_savemgr_dialog.c` (Win32, `SHFileOperationW` with `FOF_ALLOWUNDO`) — done |
 | Periodic autosave (Jogo → Salvamento automático: off, 5/10/15 game minutes, slot `autosave`) | `NativePlayerOptions.swift` (`NativeAutosaveInterval`, `NativeAutosaveSchedule`), `NativeLiveWindow.swift` | `rlw_autosave.c` (portable), `rlw_main.c` (`autosave=` in `opcoes.ini`) — done |
 | Jogo menu (replaces "Partida"): Pausar/Continuar, Velocidade, Dificuldade, saves, Opções… (in play over the pause), Configurar teclas…, Atalhos modernos, Caminhos melhores | `NativePlayerApp.swift` (`makePlayerMenu`), `main.swift`, `macos_options.inc` | `rlw_gamemenu.c` (portable, `tests/test_gamemenu.c`), `rlw_gamemenu_win.c` (Win32 popup) — done |
-| Sound effects | `NativeAudio.swift`, `macos_audio_mapper.c` | `rlw_sound.c` (banks decoded in memory), `rlw_audio.c` (mixer and sound host over `macos_audio_mapper.c`, reused unchanged), `rlw_audio_win32.c` (`waveOut`) — done; Áudio menu (mute and volume for effects and music) in `rlw_audio_ui.c` |
+| Sound effects | `NativeAudio.swift`, `macos_audio_mapper.c` | `rlw_sound.c` (banks decoded in memory), `rlw_audio.c` (mixer and sound host over `macos_audio_mapper.c`, reused unchanged), `rlw_audio_win32.c` (`waveOut`; without a device, or when it is unplugged, the game goes on silently and picks up a device within about 3 s) — done; Áudio menu (mute and volume for effects and music) in `rlw_audio_ui.c` |
 | CD music | `NativeCDMusicHost.swift`, `NativeCDMusicPlayer.swift`, `NativeCDMusicDisc.swift` | `rlw_cdmusic.c` — done: tracks from the player's own `.BIN`, the macOS selection policy |
 | Event pictures (FLC) | `NativeEventFLCPlayback.swift`, `macos_event_flc.inc` | `rlw_eventflc.c` — done: the picture over the view at the file's speed, with its sound ticks |
+| The game's icon on the window, the Start menu and the Desktop | the app bundle's icon | `rlw_icon.c` (portable: the first icon group of the player's imported `RISING.EXE` written as `rising.ico` in the data folder at run time; no game bytes in the repository or the download), `rlw_icon_win.c` (window and taskbar icon; the one time the `.ico` is made, a Start menu shortcut and a question about a Desktop shortcut; **Jogo → Criar atalho na Área de Trabalho** later) — done |
+| Re-import of the CD (**Jogo → Importar o CD novamente…**) and a one-time notice for data imported before the sound | `NativePlayerApp.swift` (`reimportCD`) | `rlw_reimport.c` (portable: relaunch command line, notice rule), `rlw_reimport_win.c` (the game closes and starts again with `--cd <image> --reimport`, so the import runs before anything opens a file in `Dados`; a failed re-import keeps the installed data) — done |
 | Movies (AVI: introduction, defeat, campaign end) | `NativeDefeatMovie.swift` | `rlw_movie.c` — done: Cinepak and Microsoft ADPCM decoded by the host (no system codec), Escape key-up ends it |
 | "Opções" screen over the main and pause menus, settings kept between runs | `macos_options.inc`, `NativeLiveWindow.swift` | `rlw_options.inc`, `rlw_main.c` (`opcoes.ini` beside `Dados` and `Partidas`) — done, with the macOS defaults (section 0.1) |
 | Key window ("Configurar teclas"): one row per action, alternatives, capture field, defaults, apply/cancel | `NativeHotkeyPreferences.swift` | `rlw_keys_dialog.c` (plain Win32 controls), editor and `teclas.ini` format in `rlw_hotkeys.c` — done; opened from the Opções item and **Jogo → Configurar teclas…** |
@@ -94,11 +98,14 @@ macOS file's action names.
 - `windows/build.sh test` (and `build-msvc.ps1 -Test`): portable unit tests, among them `windows/tests/test_hotkeys.c`
   (bindings, router, the `teclas.ini` format, the editor, the snapshot over a synthetic memory map, planner and job),
   `test_markers.c` (order queue markers), `test_savemgr.c` (saved-games manager, autosave schedule),
-  `test_gamemenu.c` (Jogo menu model) and `test_audio.c` (sound banks, mixer, sound host, CD music import and policy,
-  event FLC, movie decoding; all synthetic). CI runs them on `windows-latest` with gcc and with cl.
+  `test_gamemenu.c` (Jogo menu model), `test_audio.c` (sound banks, mixer, sound host, CD music import and policy,
+  event FLC, movie decoding; all synthetic), `test_icon.c` (the icon reader over a synthetic PE with a 32x32 icon; on
+  the Windows CI jobs the written `.ico` is loaded with `LoadImageW`) and `test_reimport.c` (relaunch command line,
+  notice rule). CI runs them on `windows-latest` with gcc and with cl.
 - `windows/ci/smoke.sh` runs the built `.exe` in CI without game data: `--selftest`, usage, the importer's refusals
   with their messages and no `Dados` left behind, the order queue markers through GDI (`--smoke-markers`), the DPI
-  mixed mode (`--smoke-window`) and the first start's import dialogs (`--smoke-import-prompt`).
+  mixed mode (`--smoke-window`), the audio start and a synthetic buffer with or without a sound device
+  (`--smoke-audio`) and the first start's import dialogs (`--smoke-import-prompt`).
 - `windows/parity.sh --cd …` on macOS with the player's CD: the Windows and macOS drivers give the same frames tick by
   tick, the same menu walk and the same save files, with every option off; then "REGRAS DAS OPÇÕES": each
   combination of the two items gives the created world exactly those `regras` (with Caminhos melhores on, `rl_regras`
@@ -107,8 +114,8 @@ macOS file's action names.
 - `windows/audio_parity.sh --cd …` on macOS with the player's CD: the sound and CD music requests of both drivers are
   identical, the play run renders to a non-silent, unclipped WAV, and every frame and sample of the original movies
   decoded by `rlw_movie.c` equals the macOS decoder's.
-- Sound, music, movies, the key window and the modern shortcuts are built by CI but have not been tried interactively
-  on a real Windows PC (#6).
+- Sound, music, movies, the icon and shortcuts, the re-import, the key window and the modern shortcuts are built by CI
+  but have not been tried interactively on a real Windows PC (#6).
 
 The rest of this guide is the original contributor map, kept for anyone working on the open parts.
 

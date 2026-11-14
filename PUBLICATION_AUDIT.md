@@ -553,3 +553,27 @@ Checked before the push: `windows/build.sh test` (8 suites) and `windows/build.s
 `parity.sh`/`audio_parity.sh --build-only`. In the private repository: `scripts/check.py --domain windows`, `parity.sh`
 300 (PARIDADE 301, MENUS 410, SAVES 481, REGRAS 6), `audio_parity.sh` 600 (SONS OK, movies identical to the macOS
 decoder) and the private CI's two x86-64 jobs.
+
+### 2026-11-14 (second): private `main` `f4f77491` — Windows pre-alpha 4
+
+Previous synchronisation: public `d0a10b8` (private `main` `cb046634`). No engine or macOS source changed.
+
+Copied (path-mapped patch of `apps/windows/`):
+
+| Private change | Public files |
+|---|---|
+| `0b827943`, `ecc71fce`, `49a6d5a0`, `440c2826` the original pumpkin icon, read at run time from the player's imported `RISING.EXE` (first RT_GROUP_ICON) into `rising.ico` in the data folder; window icon, a Start menu shortcut and a one-time Desktop question, Jogo → Criar atalho na Área de Trabalho. **No icon bytes in the repository or the release** | `windows/src/rlw_icon*`, `windows/tests/test_icon.c` (synthetic PE) |
+| `3290ea0c`, `a8107949` Jogo → Importar o CD novamente… (relaunch with `--cd <image> --reimport`) and the one-time notice for imports without sound banks or music | `windows/src/rlw_reimport*`, `windows/tests/test_reimport.c` |
+| `bd3a3233`, `b77cb6f2`, `84c54e9d`, `066bf728` CD music on loads and credits as on macOS; no/lost audio device keeps the game running silently, retried every 3 s; `--smoke-audio` | `windows/src/rlw_audio*`, `rlw_cdmusic.c`, `rlw_main.c`, `windows/ci/smoke.sh` |
+| `03e5cdd4` the macOS ops table in `audio_parity.c` | `windows/tests/audio_parity.c` |
+
+Docs (Windows parts of `README.md`, `README.en.md`, `docs/ROADMAP.md`, `docs/WINDOWS_CLIENT.md`, `windows/README.md`):
+pre-alpha 4 is the current Windows release (x86-64 only), the icon and the in-app re-import; #1 and #4 done.
+
+The release `v0.1.0-prealpha.4-windows` is built by the public CI from the commit that carries this entry (job
+`mingw-x64`), with its SHA-256 in the release notes; no game data is bundled.
+
+Checked before the push: `windows/build.sh test` (10 suites) and `windows/build.sh` in this clone. In the private
+repository: `check.py --domain windows` (13 tests), `parity.sh` 300 (PARIDADE 301, MENUS 410, SAVES 481, REGRAS 6),
+`audio_parity.sh` 600 (SONS OK, samples, WAV render, movies identical to the macOS decoder), private CI mingw-x64 and
+msvc-x64 green.
