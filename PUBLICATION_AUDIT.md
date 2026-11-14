@@ -577,3 +577,15 @@ Checked before the push: `windows/build.sh test` (10 suites) and `windows/build.
 repository: `check.py --domain windows` (13 tests), `parity.sh` 300 (PARIDADE 301, MENUS 410, SAVES 481, REGRAS 6),
 `audio_parity.sh` 600 (SONS OK, samples, WAV render, movies identical to the macOS decoder), private CI mingw-x64 and
 msvc-x64 green.
+
+### 2026-11-14 (third): docs only — macOS alpha 3 published
+
+Previous synchronisation: public `ce0ceff`. No source changed.
+
+The release `v0.1.0-alpha.3` (macOS) is public: built, signed with Developer ID and notarized on the MacBook from the
+public commit `2a8398e` (tag `v0.1.0-alpha.3` on that commit), asset `RisingLands-macOS-2a8398e.dmg`, SHA-256
+`fd9244b99a9f94d1799adb77363889d9b979594618c932228543cd85389a3b4c`. No game data is bundled.
+
+Docs (macOS parts of `README.md` and `README.en.md`): alpha 3 is the current macOS release; the features marked
+"coming in the next macOS release" (Options screen, modern shortcuts, better paths, Áudio menu, saved-games manager,
+autosave) now say "since alpha 3".

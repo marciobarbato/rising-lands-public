@@ -8,7 +8,7 @@ This repository holds a reimplementation of the **Rising Lands** (1997, Microïd
 
 ## Download and play (macOS)
 
-1. Download the `.dmg` of the latest version from **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. The current one is the alpha `v0.1.0-alpha.2`. The app is signed with Developer ID and notarized by Apple.
+1. Download the `.dmg` of the latest version from **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. The current one is the alpha `v0.1.0-alpha.3`. The app is signed with Developer ID and notarized by Apple.
 2. Open the `.dmg` and drag **Rising Lands** to **Applications**.
 3. Get the CD image (see "Where to get the CD").
 4. Open the app. In the **"Rising Lands — importar o CD original"** window, click **Escolher o CD…** and select **RISING_LANDS_BR_.BIN**. The .CUE, an .ISO or the folder with the CD files also work, but music comes only from the .BIN.
@@ -56,27 +56,27 @@ The original Brazilian CD image can be found on the **Internet Archive**. Downlo
 - The campaign runs on all 25 stages. An automated bot played every one of them, each game up to 72,000 frames, with no engine stop. The first missions were also played by hand without problems.
 - Nobody has finished the whole campaign yet. That is where your testing helps.
 - If the game reaches something not ported yet, it does not freeze silently: it shows a **stop panel** with the original routine's address. That text is the most useful part of a report.
-- macOS: alpha `v0.1.0-alpha.2`. The source already has new work for the next release: the monastery clock with the side panel hidden, the balloon leaving the hangar, the modern shortcuts and the Shift+click order queue, the **Options screen**, **better unit paths**, the **Áudio** menu and sounds that did not play before (event sounds, vehicles moving, turret impacts; silence on pause and on the result screen) (see "Controls").
+- macOS: alpha `v0.1.0-alpha.3`, with the **Options screen**, the modern shortcuts and the Shift+click order queue, **better unit paths**, the **Áudio** menu and sounds that did not play before, the **saved-games manager** and the **periodic autosave** (see "Controls").
 - Windows: pre-alpha 4, x86-64 only; game, menus, saves, the Options screen, modern shortcuts, the key dialog, better unit paths, audio, CD music, event pictures, movies, the Jogo menu, the saved-games manager and the periodic autosave (see "Windows (pre-alpha)").
 - Only the Brazilian Portuguese release of the game is supported.
 
 ## Controls
 
 - **Speed:** menu **Jogo → Velocidade**, with 0,5x, 1x, 2x and 4x (15, 30, 60 and 120 frames per second). Normal speed (1x) is 30 frames per second. Shortcuts: **⌘]** faster, **⌘[** slower, **⌘P** pause and resume.
-- **Saved games** (in the current source, coming in the next macOS release): **Jogo → Gerenciar partidas salvas…** lists the saves with name, stage and date, to **rename** them (the name shows in the game's lists) or **delete** them (to the Trash). The game pauses while the window is open. **Jogo → Salvamento automático** (off by default): every 5, 10 or 15 game minutes, in its own slot that never takes one of your positions; it shows in **Jogo → Carregar partida**.
-- **Sound:** menu **Áudio**, with mute and volume (100%, 75%, 50%, 25%) for effects and music, kept and applied at once (in the current source, coming in the next macOS release).
+- **Saved games** (since alpha 3): **Jogo → Gerenciar partidas salvas…** lists the saves with name, stage and date, to **rename** them (the name shows in the game's lists) or **delete** them (to the Trash). The game pauses while the window is open. **Jogo → Salvamento automático** (off by default): every 5, 10 or 15 game minutes, in its own slot that never takes one of your positions; it shows in **Jogo → Carregar partida**.
+- **Sound:** menu **Áudio**, with mute and volume (100%, 75%, 50%, 25%) for effects and music, kept and applied at once (since alpha 3).
 - **Fullscreen:** menu **Janela → Tela cheia** (**⌃⌘F**). Fullscreen shows only the game, on black.
 - **Moving around the map:** push the mouse against the edge. In fullscreen, move the mouse to the edge of the screen. In a window, the map scrolls while the mouse is inside the window, at its edge. The arrow keys also scroll.
 - **Keyboard:** Enter, Esc, Space, arrows, Delete, X, Tab (minimap) and the digits 0–9, as in the original. Keys can be remapped in **Jogo → Configurar teclas…**. The original's F11 (switch to 640x480) is not used.
-- **Modern shortcuts** (Age of Empires II style; in the current source, coming in the next macOS release). Each shortcut becomes input the original already accepts (a key or a click), through the same path as the player's own input; nothing changes game state behind the game's back.
+- **Modern shortcuts** (Age of Empires II style; since alpha 3). Each shortcut becomes input the original already accepts (a key or a click), through the same path as the player's own input; nothing changes game state behind the game's back.
   - **N twice** (groups 1–9): selects the group and centres on it (the original's Shift+N). Ctrl+N, N and Shift+N stay as in the original.
   - **Home:** last alert (the original's X).
   - **.** (period): next idle worker. **,** (comma): next idle military unit.
   - **H:** selects the Sanctuary.
   - **Shift+click** on open ground with units selected: queues a waypoint. Units walk the waypoints in order, and a plain order replaces the queue. Waypoints show as small flags joined by a dashed line. In the original this click does nothing; the queue is an optional engine rule that follows the **Atalhos modernos** option. Changing the option applies to games started afterwards; the game in progress and its following stages keep the rules it started with, and a save keeps its own.
   - They are on by default. To turn them off, untick **Jogo → Atalhos modernos**. Keys can be remapped in **Jogo → Configurar teclas…**. The key shortcuts do nothing in menus, in the briefing or while paused.
-- **Better unit paths** (optional, off by default; in the current source, coming in the next macOS release): menu **Jogo → Caminhos melhores**. Units plan the whole path before walking, a group spreads its goals instead of fighting over one cell, and a blocked unit waits and replans instead of giving up. Combat, AI and speeds do not change. It applies from the next stage start; a save keeps the rules of its game. Details in [docs/MODERN_PATHS.md](docs/MODERN_PATHS.md).
-- **Options screen** (in the current source, coming in the next macOS release): the **OPÇÕES** item on the wooden floor of the main and pause menus, or the menu **Jogo → Opções…** (**⌘O**), opens a screen in the game's look with modern shortcuts, better paths, difficulty, speed and key setup. During a game, **⌘O** first pauses the game, like Esc, and opens the screen over the pause menu. **Esc** or **Voltar** closes it. They are the same options as the app menus. The original game has no such screen; it is drawn only with material from your CD.
+- **Better unit paths** (optional, off by default; since alpha 3): menu **Jogo → Caminhos melhores**. Units plan the whole path before walking, a group spreads its goals instead of fighting over one cell, and a blocked unit waits and replans instead of giving up. Combat, AI and speeds do not change. It applies from the next stage start; a save keeps the rules of its game. Details in [docs/MODERN_PATHS.md](docs/MODERN_PATHS.md).
+- **Options screen** (since alpha 3): the **OPÇÕES** item on the wooden floor of the main and pause menus, or the menu **Jogo → Opções…** (**⌘O**), opens a screen in the game's look with modern shortcuts, better paths, difficulty, speed and key setup. During a game, **⌘O** first pauses the game, like Esc, and opens the screen over the pause menu. **Esc** or **Voltar** closes it. They are the same options as the app menus. The original game has no such screen; it is drawn only with material from your CD.
 
 ## Reporting problems
 
@@ -125,7 +125,7 @@ Tests that need the original game files are skipped when the files are absent. W
 
 ## Work fronts
 
-What is being worked on, the state of each front and where outside help fits: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Done since the last published macOS release: the Options screen and better unit paths (on Windows they are in pre-alpha 3). The Windows client ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)) and audio and movies on Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) are done in pre-alpha 4. The open fronts each have an issue: testing on a Windows PC ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), other CDs and languages ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) and in-game checks ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Before starting anything large, comment on the front's issue.
+What is being worked on, the state of each front and where outside help fits: **[docs/ROADMAP.md](docs/ROADMAP.md)**. macOS alpha 3 and Windows pre-alpha 4 came out on 2026-11-14. The Windows client ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)) and audio and movies on Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) are done in pre-alpha 4. The open fronts each have an issue: testing on a Windows PC ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), other CDs and languages ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) and in-game checks ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Before starting anything large, comment on the front's issue.
 
 ## Help wanted
 

@@ -8,7 +8,7 @@ Este repositório contém uma reimplementação do motor do jogo **Rising Lands*
 
 ## Baixar e jogar (macOS)
 
-1. Baixe o `.dmg` da versão mais recente em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. A versão atual é a alfa `v0.1.0-alpha.2`. O aplicativo é assinado com Developer ID e notarizado pela Apple.
+1. Baixe o `.dmg` da versão mais recente em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. A versão atual é a alfa `v0.1.0-alpha.3`. O aplicativo é assinado com Developer ID e notarizado pela Apple.
 2. Abra o `.dmg` e arraste o **Rising Lands** para **Aplicativos**.
 3. Consiga a imagem do CD (veja "Onde conseguir o CD").
 4. Abra o aplicativo. Na janela **"Rising Lands — importar o CD original"**, clique em **Escolher o CD…** e selecione o arquivo **RISING_LANDS_BR_.BIN**. Também servem o .CUE, um .ISO ou a pasta com os arquivos do CD, mas a música só vem do .BIN.
@@ -56,27 +56,27 @@ A imagem do CD original brasileiro pode ser encontrada no **Internet Archive**. 
 - A campanha roda nas 25 fases. Um bot automático jogou todas elas, cada partida com até 72.000 quadros, sem nenhuma parada do motor. As primeiras missões também foram jogadas à mão sem problemas.
 - Ninguém terminou a campanha inteira ainda. É aí que os testes de vocês ajudam.
 - Se o jogo chegar a um trecho ainda não portado, ele não trava em silêncio: mostra um **painel de parada** com o endereço da rotina do original. Esse texto é o que mais ajuda num relato.
-- macOS: alfa `v0.1.0-alpha.2`. O código já tem novidades que entram na próxima versão: o relógio do mosteiro com o painel lateral escondido, o balão saindo do hangar, os atalhos modernos e a fila de ordens com Shift+clique, a **tela de Opções**, os **caminhos melhores**, o menu **Áudio** e sons que antes não tocavam (o som dos eventos, o andar dos veículos, o impacto das torres; silêncio na pausa e na tela de resultado) (veja "Controles").
+- macOS: alfa `v0.1.0-alpha.3`, com a **tela de Opções**, os atalhos modernos e a fila de ordens com Shift+clique, os **caminhos melhores**, o menu **Áudio** e sons que antes não tocavam, o **gerenciador de partidas salvas** e o **salvamento automático** (veja "Controles").
 - Windows: pré-alfa 4, só x86-64; jogo, menus, saves, tela de Opções, atalhos modernos, configurar teclas, caminhos melhores, áudio, música do CD, figuras de evento, filmes, o menu Jogo, o gerenciador de partidas salvas e o salvamento automático (veja "Windows (pré-alfa)").
 - Só a versão brasileira do jogo, em português, é suportada.
 
 ## Controles
 
 - **Velocidade:** menu **Jogo → Velocidade**, com 0,5x, 1x, 2x e 4x (15, 30, 60 e 120 quadros por segundo). A velocidade normal (1x) é 30 quadros por segundo. Atalhos: **⌘]** mais rápido, **⌘[** mais devagar, **⌘P** pausa e continua.
-- **Partidas salvas** (no código atual, entra na próxima versão do macOS): **Jogo → Gerenciar partidas salvas…** lista as partidas com nome, fase e data, para **renomear** (o nome aparece nas listas do jogo) ou **apagar** (vai para a Lixeira). Com a janela aberta o jogo fica pausado. **Jogo → Salvamento automático** (desligado por padrão): a cada 5, 10 ou 15 minutos de jogo, num slot próprio que nunca ocupa as suas posições; ele aparece em **Jogo → Carregar partida**.
-- **Som:** menu **Áudio**, com silenciar e volume (100%, 75%, 50%, 25%) dos efeitos e da música, guardados e valendo na hora (no código atual, entra na próxima versão do macOS).
+- **Partidas salvas** (desde a alfa 3): **Jogo → Gerenciar partidas salvas…** lista as partidas com nome, fase e data, para **renomear** (o nome aparece nas listas do jogo) ou **apagar** (vai para a Lixeira). Com a janela aberta o jogo fica pausado. **Jogo → Salvamento automático** (desligado por padrão): a cada 5, 10 ou 15 minutos de jogo, num slot próprio que nunca ocupa as suas posições; ele aparece em **Jogo → Carregar partida**.
+- **Som:** menu **Áudio**, com silenciar e volume (100%, 75%, 50%, 25%) dos efeitos e da música, guardados e valendo na hora (desde a alfa 3).
 - **Tela cheia:** menu **Janela → Tela cheia** (**⌃⌘F**). Em tela cheia aparece só o jogo, sobre fundo preto.
 - **Andar pelo mapa:** encoste o mouse na borda. Em tela cheia, basta levar o mouse até a borda da tela. Em janela, o mapa rola enquanto o mouse estiver dentro da janela, junto à borda. As setas do teclado também rolam o mapa.
 - **Teclado:** Enter, Esc, Espaço, setas, Delete, X, Tab (minimapa) e os números 0–9, como no original. As teclas podem ser trocadas em **Jogo → Configurar teclas…**. A tecla F11 do original (trocar para 640x480) não é usada.
-- **Atalhos modernos** (no estilo de Age of Empires II; no código atual, entram na próxima versão do macOS). Cada atalho vira uma entrada que o original já aceita (tecla ou clique), pelo mesmo caminho do jogador; nada mexe no estado do jogo por fora.
+- **Atalhos modernos** (no estilo de Age of Empires II; desde a alfa 3). Cada atalho vira uma entrada que o original já aceita (tecla ou clique), pelo mesmo caminho do jogador; nada mexe no estado do jogo por fora.
   - **N duas vezes** (grupos 1–9): seleciona o grupo e centraliza nele (o Shift+N do original). Ctrl+N, N e Shift+N continuam como no original.
   - **Home:** último alerta (o X do original).
   - **.** (ponto): próximo trabalhador ocioso. **,** (vírgula): próximo militar ocioso.
   - **H:** seleciona o Santuário.
   - **Shift+clique** no chão com unidades selecionadas: enfileira um ponto de passagem. As unidades andam pelos pontos em ordem, e uma ordem comum substitui a fila. Os pontos aparecem como bandeirinhas ligadas por uma linha tracejada. No original, esse clique não faz nada; a fila é uma regra opcional do motor que segue a opção **Atalhos modernos**. Mudar a opção vale para os jogos começados depois; o jogo em andamento e as fases seguintes mantêm as regras com que ele começou, e um save guarda as suas.
   - Vêm ligados. Para desligar, desmarque **Jogo → Atalhos modernos**. As teclas podem ser trocadas em **Jogo → Configurar teclas…**. Os atalhos de tecla não funcionam nos menus, no briefing nem com o jogo pausado.
-- **Caminhos melhores** (opcional, desligado por padrão; no código atual, entra na próxima versão do macOS): menu **Jogo → Caminhos melhores**. As unidades planejam o caminho inteiro antes de andar, um grupo espalha os destinos em vez de brigar por uma célula, e uma unidade bloqueada espera e recalcula em vez de desistir. Combate, IA e velocidades não mudam. Vale a partir do início da próxima fase; um save guarda as regras da partida. Detalhes em [docs/MODERN_PATHS.md](docs/MODERN_PATHS.md).
-- **Tela de Opções** (no código atual, entra na próxima versão do macOS): o item **OPÇÕES**, no chão de madeira dos menus principal e de pausa, ou o menu **Jogo → Opções…** (**⌘O**), abre uma tela no visual do jogo com atalhos modernos, caminhos melhores, dificuldade, velocidade e configurar teclas. Durante a partida, o **⌘O** primeiro pausa o jogo, como o Esc, e abre a tela por cima do menu de pausa. **Esc** ou **Voltar** fecha a tela. São as mesmas opções dos menus do aplicativo. O jogo original não tem essa tela; ela é desenhada só com o material do seu CD.
+- **Caminhos melhores** (opcional, desligado por padrão; desde a alfa 3): menu **Jogo → Caminhos melhores**. As unidades planejam o caminho inteiro antes de andar, um grupo espalha os destinos em vez de brigar por uma célula, e uma unidade bloqueada espera e recalcula em vez de desistir. Combate, IA e velocidades não mudam. Vale a partir do início da próxima fase; um save guarda as regras da partida. Detalhes em [docs/MODERN_PATHS.md](docs/MODERN_PATHS.md).
+- **Tela de Opções** (desde a alfa 3): o item **OPÇÕES**, no chão de madeira dos menus principal e de pausa, ou o menu **Jogo → Opções…** (**⌘O**), abre uma tela no visual do jogo com atalhos modernos, caminhos melhores, dificuldade, velocidade e configurar teclas. Durante a partida, o **⌘O** primeiro pausa o jogo, como o Esc, e abre a tela por cima do menu de pausa. **Esc** ou **Voltar** fecha a tela. São as mesmas opções dos menus do aplicativo. O jogo original não tem essa tela; ela é desenhada só com o material do seu CD.
 
 ## Problemas
 
@@ -125,7 +125,7 @@ Os testes que precisam dos arquivos originais do jogo pulam quando eles não est
 
 ## Frentes de trabalho
 
-O que está sendo feito, o estado de cada frente e onde alguém de fora pode ajudar: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Feitos desde a última versão publicada do macOS: a tela de Opções e os caminhos melhores (no Windows, estão na pré-alfa 3). O cliente Windows ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)) e o áudio e os filmes no Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) estão feitos na pré-alfa 4. As frentes abertas têm uma issue: teste num PC com Windows ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), outros CDs e idiomas ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) e testes em jogo ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Antes de começar algo grande, comente na issue da frente.
+O que está sendo feito, o estado de cada frente e onde alguém de fora pode ajudar: **[docs/ROADMAP.md](docs/ROADMAP.md)**. A alfa 3 do macOS e a pré-alfa 4 do Windows saíram em 2026-11-14. O cliente Windows ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)) e o áudio e os filmes no Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) estão feitos na pré-alfa 4. As frentes abertas têm uma issue: teste num PC com Windows ([#6](https://github.com/marciobarbato/rising-lands-public/issues/6)), outros CDs e idiomas ([#8](https://github.com/marciobarbato/rising-lands-public/issues/8)) e testes em jogo ([#9](https://github.com/marciobarbato/rising-lands-public/issues/9)). Antes de começar algo grande, comente na issue da frente.
 
 ## Ajuda bem-vinda
 
