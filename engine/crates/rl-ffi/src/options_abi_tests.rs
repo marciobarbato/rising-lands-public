@@ -16,24 +16,25 @@ fn last_error() -> String {
 }
 fn defaults() -> RlOpcoesValores {
     RlOpcoesValores {
-        version: 2,
+        version: 3,
         atalhos: 1,
         caminhos: 0,
         dificuldade: 1,
         velocidade: 1,
-        disponivel: 0x7f,
+        disponivel: 0xff,
         idioma: 0,
         wasd: 0,
+        redistribuir: 1,
     }
 }
 
 #[test]
 fn options_abi_layout_and_invalid_arguments_leave_outputs_unchanged() {
-    assert_eq!(size_of::<RlOpcoesValores>(), 32);
+    assert_eq!(size_of::<RlOpcoesValores>(), 36);
     assert_eq!(size_of::<RlOpcoesEntrada>(), 32);
-    assert_eq!(size_of::<RlOpcoesEvento>(), 48);
+    assert_eq!(size_of::<RlOpcoesEvento>(), 52);
     assert_eq!(align_of::<RlOpcoesEvento>(), 4);
-    assert_eq!(rl_opcoes_versao(), 2);
+    assert_eq!(rl_opcoes_versao(), 3);
     let background = vec![0u8; PIXELS];
     let bytes = RlShellBytes {
         data: background.as_ptr(),
@@ -43,7 +44,7 @@ fn options_abi_layout_and_invalid_arguments_leave_outputs_unchanged() {
     unsafe {
         for bad in [
             RlOpcoesValores {
-                version: 3,
+                version: 4,
                 ..defaults()
             },
             RlOpcoesValores {
@@ -55,11 +56,15 @@ fn options_abi_layout_and_invalid_arguments_leave_outputs_unchanged() {
                 ..defaults()
             },
             RlOpcoesValores {
-                disponivel: 0x80,
+                disponivel: 0x100,
                 ..defaults()
             },
             RlOpcoesValores {
                 wasd: 2,
+                ..defaults()
+            },
+            RlOpcoesValores {
+                redistribuir: 2,
                 ..defaults()
             },
             RlOpcoesValores {
@@ -97,7 +102,7 @@ fn options_abi_layout_and_invalid_arguments_leave_outputs_unchanged() {
             ..Default::default()
         };
         let i = RlOpcoesEntrada {
-            version: 2,
+            version: 3,
             ..Default::default()
         };
         assert_eq!(rl_opcoes_entrada(handle, 999_999, &i, &mut e), 2);
@@ -258,7 +263,7 @@ fn shell_over(world: u64, blobs: &[Vec<u8>], surface: &[u8], titre: &[u8]) -> Sh
 }
 fn entrada(x: i32, y: i32, ae: u32, af: u32, keys: u32) -> RlOpcoesEntrada {
     RlOpcoesEntrada {
-        version: 2,
+        version: 3,
         keys,
         mouse_x: x as u32,
         mouse_y: y as u32,
@@ -531,7 +536,7 @@ fn options_screen_over_the_real_main_and_pause_menus() {
     capture("options-en.png", &draw(o, a.handle).0, &palette);
     // A host without a key dialog (Windows today) offers no "configurar teclas".
     let without_keys = RlOpcoesValores {
-        disponivel: 0x7f & !2,
+        disponivel: 0xff & !2,
         ..e.values
     };
     unsafe { ok(rl_opcoes_definir(o, &without_keys)) };

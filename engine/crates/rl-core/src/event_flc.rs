@@ -236,6 +236,25 @@ pub fn message_box_run(m: &mut MemoriaJogo) -> Result<()> {
     }
     Ok(())
 }
+/// MessageBoxAffiche 0x469c44, its game-memory part. With a head notification
+/// whose word +0x104 is not 399 (0x469c7d), the original calls InitGameZone(1)
+/// at 0x469cae on every drawn AffGame, which is what places mouse zone 27 over
+/// the notification icon (the clapperboard of an event). The text and icon are
+/// the renderer's (`render_hud::message_box`); its own zone writes stay
+/// presentation overrides, so the logic side must make the same call.
+pub fn message_box_zones(m: &mut MemoriaJogo) -> Result<()> {
+    let head = m.u16(0x507d54)?;
+    if head == m.u16(0x507d56)? {
+        return Ok(());
+    }
+    if head >= 256 {
+        return stop("MessageBoxAffiche queue index", 0x469c44);
+    }
+    if m.u16(0x4e7754 + 518 * u32::from(head) + 0x104)? == 399 {
+        return Ok(());
+    }
+    crate::frame_core::init_zone(m, 1).map(|_| ())
+}
 /// MessageBoxNext 0x469b85: drop the head notification.
 fn message_box_next(m: &mut MemoriaJogo) -> Result<()> {
     m.set_u16(0x507d54, ((u32::from(m.u16(0x507d54)?) + 1) % 256) as u16)?;
@@ -353,6 +372,55 @@ impl World {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The minimum InitGameZone(1) reads: 800x600, 25x17 view, no minimap,
+    /// no market contact, no margin, local player 0.
+    fn zone_world(head: u16, tail: u16, word_104: u16) -> MemoriaJogo {
+        let mut record = vec![0u8; 518 * 256];
+        record[0] = 10;
+        record[0x104..0x106].copy_from_slice(&word_104.to_le_bytes());
+        let mut queue = head.to_le_bytes().to_vec();
+        queue.extend_from_slice(&tail.to_le_bytes());
+        MemoriaJogo::from_blocks([
+            (0x4e7754, record),
+            (0x507d54, queue),
+            (
+                0x49a018,
+                [800u16.to_le_bytes(), 600u16.to_le_bytes()].concat(),
+            ),
+            (0x497285, vec![0]),
+            (
+                0x508724,
+                [25u16.to_le_bytes(), 17u16.to_le_bytes()].concat(),
+            ),
+            (0x508041, vec![0]),
+            (0x508f90, vec![0]),
+            (0x4e2928, vec![1, 0, 0, 0]),
+            (0x4e2e7c, vec![0; 8]),
+            (0x5080b0, vec![0; 64]),
+            (0x5099b4, vec![0; 16 * 40]),
+            (0x50a9b4, vec![0; 6]),
+        ])
+        .unwrap()
+    }
+    fn zone27(m: &MemoriaJogo) -> [u32; 4] {
+        [0, 1, 2, 3].map(|n| m.u32(0x5099b4 + 27 * 16 + 4 * n).unwrap())
+    }
+
+    #[test]
+    fn message_box_zones_place_zone_27_over_a_shown_notification() {
+        // A queued notification: InitGameZone(1) puts zone 27 at the icon,
+        // x 0..45, y 512..544 above the HUD strip (0x469cae).
+        let mut m = zone_world(0, 1, 400);
+        message_box_zones(&mut m).unwrap();
+        assert_eq!(zone27(&m), [0, 512, 45, 544]);
+        // Empty queue, or the 399 word: no call, the zones stay as they were.
+        for (head, tail, word) in [(1, 1, 400), (0, 1, 399)] {
+            let mut m = zone_world(head, tail, word);
+            message_box_zones(&mut m).unwrap();
+            assert_eq!(zone27(&m), [0; 4]);
+        }
+    }
 
     fn header(frames: u16, width: u16, height: u16) -> Vec<u8> {
         let mut h = vec![0u8; 128];

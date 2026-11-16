@@ -21,7 +21,10 @@ option (private research repository issue #7, `RlOpcoesValores.idioma`).
 
 ## Versioning
 
-`rl_opcoes_versao() == RL_OPCOES_VERSION == 2`. Version 2 (2026-11-16) adds the item ROLAR COM WASD
+`rl_opcoes_versao() == RL_OPCOES_VERSION == 3`. Version 3 (2026-11-16) adds REDISTRIBUIR DESCOBERTAS
+(`RL_OPCOES_REDISTRIBUIR = 6`, `RL_OPCOES_VOLTAR` 7, `RL_OPCOES_TODOS` 0xff) and the field `redistribuir` after
+`wasd` (`RlOpcoesValores` 36 bytes, `RlOpcoesEvento` 52); the host then offers the briefing's −/+ of
+[rising_research.h](rising_research.h). Version 2 (2026-11-16) adds the item ROLAR COM WASD
 (`RL_OPCOES_WASD = 5`, so `RL_OPCOES_VOLTAR` became 6 and `RL_OPCOES_TODOS` 0x7f) and turns the last field of
 `RlOpcoesValores`, formerly `reserved` (always 0), into `wasd`; the layout and sizes are unchanged. This is an additive extension
 with its own version, like the shell (`rl_shell_version`), mission and save
@@ -113,6 +116,7 @@ activates the row without a move (on the main menu it toggles ROLAR COM WASD).
 | DIFICULDADE: FÁCIL/NORMAL/DIFÍCIL | `dificuldade` | stage-start preset (next New game, Restart or Next stage) |
 | VELOCIDADE: 0,5x/1x/2x/4x | `velocidade` | host pace |
 | ROLAR COM WASD: SIM/NÃO | `wasd` | host key routing: W/A/S/D act as the arrow channels (the original scrolls the map on GetAsyncKeyState 0x25..0x28) unless the player bound that key to something else |
+| REDISTRIBUIR DESCOBERTAS: SIM/NÃO | `redistribuir` | the briefing's −/+ on the research pillars (`rising_research.h`); the hosts' default is SIM |
 | VOLTAR | closes | — |
 
 Unavailable items are engraved: AffText's layout in the item font with

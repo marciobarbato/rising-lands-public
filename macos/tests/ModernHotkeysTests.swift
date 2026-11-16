@@ -426,8 +426,18 @@ struct ModernHotkeysTests {
         try check(NativeWasdScrolling.isEnabled(defaults), "stored")
     }
 
+    static func researchRedistribution() throws {
+        let defaults = UserDefaults(suiteName: "redistribuir-\(UUID().uuidString)")!
+        try check(NativeResearchRedistribution.isEnabled(defaults), "on when unset")
+        NativeResearchRedistribution.store(false, defaults)
+        try check(!NativeResearchRedistribution.isEnabled(defaults), "stored off")
+        NativeResearchRedistribution.store(true, defaults)
+        try check(NativeResearchRedistribution.isEnabled(defaults), "stored on")
+    }
+
     static func main() throws {
         try wasdScrolling(); print("PASS WASD scrolling: unbound W/A/S/D are the arrows, off by default")
+        try researchRedistribution(); print("PASS Redistribuir descobertas: on by default, stored either way")
         try routerCommands(); print("PASS router: modern keys, exact defaults, double tap only for original groups 1-9")
         try fixedSteps(); print("PASS fixed steps: original Shift+N and X only, foreign channels refused")
         try snapshotGeometry(); print("PASS geometry: minimap_center replica, zone-0 click pixels, margin, hidden minimap")

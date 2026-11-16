@@ -736,3 +736,39 @@ fn shell_abi_original_prepared_equivalence() {
     assert_eq!(seen_requests, (0..=11).collect());
     eprintln!("SHELL_ABI_FIXTURES {{\"entries\":{checked_entries},\"frames\":{checked_frames},\"inputs\":{checked_inputs},\"request_kinds\":12,\"s0_sha256\":\"{hash}\",\"native_differentials_rerun\":false}}");
 }
+
+#[test]
+fn redistribution_abi_layout_and_bad_arguments_leave_outputs_unchanged() {
+    assert_eq!(size_of::<RlRedistribuicao>(), 60);
+    assert_eq!(rl_redistribuir_versao(), 1);
+    let mut state = RlRedistribuicao {
+        version: 77,
+        ..Default::default()
+    };
+    let (mut ramo, mut delta, mut g, mut mudou) = (9u32, 9i32, 9u64, 9u32);
+    let mut pixels = vec![3u8; 480000];
+    let palette = vec![0u8; 768];
+    unsafe {
+        assert_eq!(rl_redistribuir_estado(0, &mut state), 2);
+        assert_eq!(rl_redistribuir_alvo(0, 1, 1, &mut ramo, &mut delta), 2);
+        assert_eq!(rl_redistribuir_passo(0, 0, 0, 1, &mut g, &mut mudou), 2);
+        // Branch above 3 or a delta other than ±1 is refused before the handle.
+        assert_eq!(rl_redistribuir_passo(0, 0, 4, 1, &mut g, &mut mudou), 1);
+        assert_eq!(rl_redistribuir_passo(0, 0, 0, 0, &mut g, &mut mudou), 1);
+        assert_eq!(
+            rl_redistribuir_sobrepor(0, pixels.as_mut_ptr(), 480000, palette.as_ptr(), 768, 0),
+            2
+        );
+        assert_eq!(
+            rl_redistribuir_sobrepor(0, pixels.as_mut_ptr(), 480000, palette.as_ptr(), 768, 2),
+            1
+        );
+        assert_eq!(
+            rl_redistribuir_alvo(0, 1, 1, ptr::null_mut(), &mut delta),
+            1
+        );
+    }
+    assert_eq!(state.version, 77);
+    assert_eq!((ramo, delta, g, mudou), (9, 9, 9, 9));
+    assert!(pixels.iter().all(|&p| p == 3));
+}

@@ -48,3 +48,50 @@ int32_t macos_live_options_button(MacOSLiveDriver*d,int32_t rect[4]){
  if(!d||!rect||!d->options||!d->shell)return RL_INVALID_ARGUMENT;
  return d->rl_opcoes_botao(d->options,d->shell,rect);
 }
+/* Port-only "Redistribuir descobertas" consumer (rising_research.h). The
+ * engine owns every rule (limits, free points, giving them back when the
+ * briefing is left inside rl_shell_input) and the drawing; the host stores the
+ * Options value, routes the clicks and repaints. */
+static int redistribution_available(MacOSLiveDriver*d){
+ return !d->validation&&d->rl_redistribuir_versao&&d->rl_redistribuir_estado&&d->rl_redistribuir_alvo&&d->rl_redistribuir_passo&&d->rl_redistribuir_sobrepor&&d->rl_redistribuir_versao()==RL_REDISTRIBUIR_VERSION;
+}
+static int redistribution_briefing(MacOSLiveDriver*d){
+ return d->shell&&!d->shell_request.kind&&d->shell_mode==RL_SHELL_BRIEFING&&!d->options_open;
+}
+static int redistribution_active(MacOSLiveDriver*d){
+ return d&&d->redistribuir&&redistribution_available(d)&&redistribution_briefing(d);
+}
+int32_t macos_live_redistribution_enable(MacOSLiveDriver*d,uint32_t on,uint32_t*repainted){
+ if(!d||!repainted||on>1)return RL_INVALID_ARGUMENT;
+ *repainted=0;
+ if(!redistribution_available(d)){d->redistribuir=0;return RL_UNSUPPORTED_PATH;}
+ if(d->redistribuir==on)return 0;
+ d->redistribuir=on;
+ if(!redistribution_briefing(d))return 0;
+ /* A fresh copy of the session's picture, with the overlay only when on. */
+ int c=shell_copy_picture(d);if(!c)*repainted=1;
+ return c?save_result(d,c,"Redistribuir descobertas"):0;
+}
+int32_t macos_live_redistribution_target(MacOSLiveDriver*d,uint32_t x,uint32_t y,uint32_t*ramo,int32_t*delta){
+ if(!d||!ramo||!delta)return RL_INVALID_ARGUMENT;
+ *ramo=0;*delta=0;
+ if(!redistribution_active(d))return 0;
+ uint32_t r=0;int32_t k=0;
+ /* A failed hit test (it never changes the session) is no button: the click goes to the shell. */
+ if(d->rl_redistribuir_alvo(d->shell,x,y,&r,&k)||k<-1||k>1||r>3)return 0;
+ *ramo=r;*delta=k;return 0;
+}
+int32_t macos_live_redistribution_step(MacOSLiveDriver*d,uint32_t ramo,int32_t delta,uint32_t*changed){
+ if(!d||!changed||ramo>3||(delta!=1&&delta!=-1))return RL_INVALID_ARGUMENT;
+ *changed=0;
+ if(!redistribution_active(d))return 0;
+ uint64_t g=d->shell_generation;uint32_t m=0;
+ int c=d->rl_redistribuir_passo(d->shell,d->shell_generation,ramo,delta,&g,&m);
+ if(c)return save_result(d,c,"Redistribuir descobertas");
+ if(!m)return 0;
+ /* The step advanced the session like an input: keep its generation, then
+  * repaint the briefing (background + research block) and copy it with the overlay. */
+ d->shell_generation=g;*changed=1;
+ c=shell_paint(d);
+ return c?save_result(d,c,"Redistribuir descobertas"):0;
+}

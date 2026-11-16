@@ -40,6 +40,10 @@ struct RlwDriver {
  RlShell shell; uint64_t shell_generation; uint32_t shell_mode; RlShellInput shell_input; RlShellEvent shell_request;
  /* Port-only "Opções" screen (rising_options.h): one handle for the driver's lifetime. */
  RlOpcoes options; int options_open;
+ /* Port-only "Redistribuir descobertas" (rising_research.h): the briefing's
+  * -/+ on the research pillars, on only when the host's option is (players'
+  * runs; 0 keeps smoke, demo and parity pictures original). */
+ int research;
  /* menu_world: started in the original main menu (no frame state, no renderer).
   * new_campaign: START_MISSION loads without a victory: 1 after "Novo jogo", the
   * current stage after the pause menu's "Reiniciar a missão". */

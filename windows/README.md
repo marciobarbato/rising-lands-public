@@ -235,8 +235,10 @@ the original shell unchanged. Up/Down/Enter/Escape and Left/Right (only while it
 worlds created afterwards), "Caminhos melhores" (the engine's modern unit paths,
 `RL_REGRA_CAMINHOS_MELHORES`, for worlds created afterwards), difficulty (next stage start), speed (at once, like `+`/`-`) and "Rolar com WASD" (since beta 4, off by default: the
 key router sends an unbound W/A/S/D as the arrow channels, which the original reads to scroll the map; a key the player
-bound in "Atalhos de teclado" keeps its binding). "Configurar teclas" opens the "Atalhos de teclado"
-window (below). The settings live in `opcoes.ini` beside `Dados` and `Partidas` (`atalhos`, `caminhos`, `wasd`,
+bound in "Atalhos de teclado" keeps its binding) and "Redistribuir descobertas" (since beta 5, on by default: the
+engine's −/+ on the briefing's research pillars, `rising_research.h`; the menu layer swallows a press on an acting
+button and its release and steps when the release lands on the same button). "Configurar teclas" opens the "Atalhos de teclado"
+window (below). The settings live in `opcoes.ini` beside `Dados` and `Partidas` (`atalhos`, `caminhos`, `wasd`, `redistribuir`,
 `dificuldade`, `velocidade`); `--difficulty`/`--speed` override them for one run. Defaults when a key is missing
 are the macOS app's: Atalhos modernos on, Caminhos melhores off, Normal, 1x (since 2026-11-12; before, Atalhos
 modernos was off on Windows). The two rule items work as on

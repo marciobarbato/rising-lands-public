@@ -750,6 +750,9 @@ pub fn affgame(m: &mut MemoriaJogo) -> Result<u32> {
     if event {
         crate::event_flc::affiche(m)?;
     }
+    // MessageBoxAffiche follows EvenementAffiche in AffGame's tail; its
+    // InitGameZone(1) is game memory (mouse zone 27, the notification icon).
+    crate::event_flc::message_box_zones(m)?;
     if m.player.is_some() {
         // AffGame's post-flip cursor handoff, 0x417db2..0x417e78.
         // The software cursor uses this flag on the *following* draw. ShowCursor

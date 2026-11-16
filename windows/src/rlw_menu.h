@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include "rising_shell.h"
 #include "rising_options.h"
+#include "rising_research.h"
 #include "rlw_flc.h"
 
 typedef struct {
@@ -40,6 +41,12 @@ typedef struct {
  int (*options_button)(void *driver, int32_t rect[4]);
  /* Jogo > Opções… (rlw_options_show / macos_live_options_show); optional. */
  int (*options_show)(void *driver);
+ /* Port-only "Redistribuir descobertas" (rising_research.h), optional (NULL =
+  * none): on the briefing, research_target gives the -/+ under an 800x600 point
+  * (*delta 0: none, or the option is off); research_step takes one step and,
+  * when *changed, the driver's picture is already the repainted briefing. */
+ int (*research_target)(void *driver, uint32_t x, uint32_t y, uint32_t *ramo, int32_t *delta);
+ int (*research_step)(void *driver, uint32_t ramo, int32_t delta, uint32_t *changed);
 } RlwMenuOps;
 
 enum {
@@ -68,6 +75,9 @@ typedef struct {
  char credits_path[4096]; RlwFlc credits; int credits_open; double credits_read_ms;
  RlShellEvent host_event;
  RlOpcoesEvento options_event;
+ /* A left press swallowed on a briefing -/+ (never seen by the shell), and its
+  * button: the release acts when it lands on the same one, and is swallowed too. */
+ int research_down; uint32_t research_ramo; int32_t research_delta;
  char error[512];
 } RlwMenu;
 

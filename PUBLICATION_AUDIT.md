@@ -736,3 +736,24 @@ Docs: `README.md` and `README.en.md` no longer send Mac players to beta 3.
 
 No source changed. `README.md` and `README.en.md` now say that missions 1 to 6 were played by hand to the end (the
 author's report), and the `v0.1.0-beta.4` notes say the same next to "nobody has finished the campaign by hand".
+
+### 2026-11-16 (seventh): private `main` `2e27c819` — event clapperboard click, Redistribuir descobertas
+
+Previous synchronisation: public `320fd7b` (source identical to `8c9685c`).
+
+Copied (path-mapped patch: `motor/` → `engine/`, `apps/macos-preview/src/native/` → `macos/src/`,
+`apps/macos-preview/testes/ModernHotkeysTests.swift` → `macos/tests/`, `apps/windows/` → `windows/`):
+
+| Private change | Public files |
+|---|---|
+| `73c83ee3` MessageBoxAffiche 0x469c44 calls InitGameZone(1) at 0x469cae on every drawn AffGame while a notification is shown, which places mouse zone 27 over the notification icon; the port ran it only inside the renderer, so clicking a discovery's clapperboard never opened its event FLC (player report). AffGame's logic side now makes the call after EvenementAffiche. MONDE01 gate re-pinned (20 x 36,000 frames, 16/20 passed, no stop; only bot order counts move) | `engine/crates/rl-core/src/event_flc.rs`, `frame_input.rs` |
+| `ea4c08e9`, `5e740ba7` "Redistribuir descobertas": the briefing's −/+ on the research pillars (`engine/include/rising_research.h`, `research_redistribution.rs`, five `rl_redistribuir_*` functions in `shell_abi.rs`); each step stores the local player's levels and reruns the original RechercheCalculNew 0x47150f, equal to the original's own path to that split (CD test on MONDE07); pending points return when the briefing is left. Options v3: item REDISTRIBUIR DESCOBERTAS, field `redistribuir` | `engine/crates/rl-core/src/research_redistribution.rs` (new; without the private-only `hd` mirror field), `engine/crates/rl-core/tests/research_redistribution.rs` (new), `lib.rs`, `options_screen.rs`, `engine/crates/rl-ffi/src/options_abi*.rs`, `shell_abi*.rs`, `engine/include/rising_options.h`, `rising_research.h` (new), `options-screen.md` |
+| `a3659c78` Windows host: option stored as `redistribuir=` (on by default), overlay after the Opções one, press/release routing in the menu layer; unit test | `windows/src/rlw_main.c`, `rlw_driver.c/.h`, `rlw_options.inc`, `rlw_shell.inc`, `rlw_menu.c/.h`, `rlw_menu_ops.c`, `windows/tests/test_menu.c`, `parity.c`, `audio_parity.c` |
+| `2d740055` macOS host: preference `RisingLandsRedistribuirDescobertas` (on by default), the five functions loaded as optional symbols, overlay in `shell_copy_picture`, click routing before the shell | `macos/src/macos_live_driver.c` (the load line placed by hand: the public file lacks the private 2x lines), `MacOSLiveDriver.h`, `macos_options.inc`, `macos_campaign_shell.inc`, `NativeModernHotkeys.swift`, `NativeLiveWindow.swift`, `macos/tests/ModernHotkeysTests.swift` |
+
+No game data is added. Checked in this repository's tree (scratch clone with these patches): engine tests (with the CD
+test), `macos/tests/run.sh`, `./build-macos.sh` (ad hoc), `windows/build.sh test`. In the private repository:
+`validate.sh` (in `workstream.py integrate` for maintenance, windows and macos), MONDE01 gate `a27c55cb…`, the
+Windows parity run (ticks, menus, saves, rules identical), the macOS options world test with the CD.
+
+Docs: `README.md`, `README.en.md` (Controles / Controls) and `windows/README.md` describe the option.

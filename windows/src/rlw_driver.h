@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include "rising_shell.h"
 #include "rising_options.h"
+#include "rising_research.h"
 
 typedef struct RlwDriver RlwDriver;
 typedef struct {
@@ -142,6 +143,16 @@ int rlw_options_button(RlwDriver *d, int32_t rect[4]);
  * pause menu; rlw_options_redraw repaints an open screen after a host sync. */
 int rlw_options_show(RlwDriver *d);
 int rlw_options_redraw(RlwDriver *d);
+/* ---- Port-only "Redistribuir descobertas" (rising_research.h) ----
+ * enable: the host's Opções value (off by default). Returns 1 when a briefing
+ * on screen was copied again with (or without) the -/+ overlay: present it.
+ * target: the acting -/+ under an 800x600 point (*delta 0: none, the option is
+ * off, or the briefing is not on screen without a pending request). step: one
+ * rl_redistribuir_passo; when *changed the shell generation moved on and
+ * rlw_driver_pixels/palette are the repainted briefing with its overlay. */
+int rlw_research_enable(RlwDriver *d, int on);
+int rlw_research_target(RlwDriver *d, uint32_t x, uint32_t y, uint32_t *ramo, int32_t *delta);
+int rlw_research_step(RlwDriver *d, uint32_t ramo, int32_t delta, uint32_t *changed);
 /* Rule set (RL_REGRA_*) for worlds created afterwards: "Atalhos modernos" turns
  * on the Shift+click order queue (RL_REGRA_FILA_ORDENS) and "Caminhos melhores"
  * the modern unit paths (RL_REGRA_CAMINHOS_MELHORES), as on macOS. The menu

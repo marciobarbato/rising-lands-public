@@ -22,6 +22,8 @@ static uint32_t op_options_open(void *driver) { return rlw_options_open(D); }
 static int op_options_sync(void *driver, const RlOpcoesValores *v) { return rlw_options_sync(D, v); }
 static int op_options_button(void *driver, int32_t r[4]) { return rlw_options_button(D, r); }
 static int op_options_show(void *driver) { return rlw_options_show(D); }
+static int op_research_target(void *driver, uint32_t x, uint32_t y, uint32_t *r, int32_t *s) { return rlw_research_target(D, x, y, r, s); }
+static int op_research_step(void *driver, uint32_t r, int32_t s, uint32_t *changed) { return rlw_research_step(D, r, s, changed); }
 static int op_advance(void *driver) { return rlw_driver_advance(D); }
 static int op_event(void *driver, uint32_t k, uint32_t m, int32_t x, int32_t y, uint32_t w, uint32_t v, uint32_t dn) { return rlw_driver_event(D, k, m, x, y, w, v, dn); }
 static int op_begin(void *driver) { return rlw_shell_begin(D); }
@@ -40,6 +42,7 @@ static int op_probe(void *driver, uint8_t b[2], uint64_t *t, uint32_t *ms) {
  return rlw_driver_peek(D, addresses, sizes, 2, b) || rlw_driver_clock(D, t, ms);
 }
 const RlwDemoOps RLW_WINDOWS_OPS = {{op_mode, op_state, op_input, op_draw, op_show, op_prepare, op_request, op_load, op_slots, op_zone,
- rlw_shell_click_clock, op_credits_frame, op_credits_present, op_error, op_options_input, op_options_open, op_options_sync, op_options_button, op_options_show}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
+ rlw_shell_click_clock, op_credits_frame, op_credits_present, op_error, op_options_input, op_options_open, op_options_sync, op_options_button, op_options_show,
+ op_research_target, op_research_step}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
  op_save, op_autosave, op_load_file, op_save_slot, op_load_resume, op_probe};
 #undef D

@@ -45,7 +45,7 @@ static int f_credits_frame(void *d, uint32_t ms, RlShellCredits *o) {
 static int f_credits_present(void *d, const RlShellCredits *fr, const uint8_t *p, const uint8_t *c) { (void)d; (void)fr; (void)p; (void)c; return 0; }
 static void f_error(void *d, char *o, size_t n) { (void)d; snprintf(o, n, "fake"); }
 static const RlwMenuOps OPS = {f_mode, f_state, f_input, f_draw, f_show, f_prepare, f_request, f_load, f_slots, f_zone, f_clock,
- f_credits_frame, f_credits_present, f_error, NULL, NULL, NULL, NULL, NULL};
+ f_credits_frame, f_credits_present, f_error, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 static void fresh(Fake *f, RlwMenu *m, uint32_t mode) {
  memset(f, 0, sizeof(*f)); f->mode = mode; f->state.version = 1; f->state.clock_7c = 13; f->state.animation_84 = 40;
@@ -133,7 +133,7 @@ static int f_options_input(void *d, const RlShellInput *in, uint32_t keys, RlOpc
 }
 static uint32_t f_options_open(void *d) { (void)d; return (uint32_t)fo.open; }
 static const RlwMenuOps OPTIONS_OPS = {f_mode, f_state, f_input, f_draw, f_show, f_prepare, f_request, f_load, f_slots, f_zone, f_clock,
- f_credits_frame, f_credits_present, f_error, f_options_input, f_options_open, NULL, NULL, NULL};
+ f_credits_frame, f_credits_present, f_error, f_options_input, f_options_open, NULL, NULL, NULL, NULL, NULL};
 
 static void test_options(void) {
  Fake f; RlwMenu m; memset(&fo, 0, sizeof(fo));
@@ -154,6 +154,47 @@ static void test_options(void) {
  CHECK(f.input_count == 1 && f.draws == 1);
  /* Closed again: the shell gets the next tick. */
  CHECK(rlw_menu_tick(&m, 0) == RLW_MENU_REPAINT && f.input_count == 2);
+}
+
+/* ---- simulated "Redistribuir descobertas" (rising_research.h): a + on branch
+ * 2 at x 640..660, y 100..130 while the option is on; each step changes. ---- */
+typedef struct { int on; unsigned targets, steps; uint32_t ramo; int32_t delta; } FakeResearch;
+static FakeResearch fr;
+static int f_research_target(void *d, uint32_t x, uint32_t y, uint32_t *ramo, int32_t *delta) {
+ (void)d; fr.targets++; *ramo = 0; *delta = 0;
+ if (fr.on && x >= 640 && x <= 660 && y >= 100 && y <= 130) { *ramo = 2; *delta = 1; }
+ return 0;
+}
+static int f_research_step(void *d, uint32_t ramo, int32_t delta, uint32_t *changed) {
+ (void)d; fr.steps++; fr.ramo = ramo; fr.delta = delta; *changed = 1; return 0;
+}
+static const RlwMenuOps RESEARCH_OPS = {f_mode, f_state, f_input, f_draw, f_show, f_prepare, f_request, f_load, f_slots, f_zone, f_clock,
+ f_credits_frame, f_credits_present, f_error, NULL, NULL, NULL, NULL, NULL, f_research_target, f_research_step};
+
+static void test_research(void) {
+ Fake f; RlwMenu m; memset(&fr, 0, sizeof(fr)); fr.on = 1;
+ fresh(&f, &m, RL_SHELL_BRIEFING); m.ops = &RESEARCH_OPS;
+ /* Press and release on the +: neither reaches the shell; the release steps. */
+ CHECK(rlw_menu_mouse(&m, 0x201, 650, 110, 0) == RLW_MENU_IDLE && f.input_count == 0 && m.research_down && !m.mouse_down);
+ /* While held, a tick carries the pointer there without a held button. */
+ CHECK(rlw_menu_tick(&m, 0) == RLW_MENU_REPAINT && f.input_count == 1 && f.inputs[0].mouse_x == 650 && f.inputs[0].mouse_ae == 0);
+ CHECK(rlw_menu_mouse(&m, 0x202, 652, 112, 0) == RLW_MENU_REPAINT && f.input_count == 1 && fr.steps == 1 && fr.ramo == 2 && fr.delta == 1 && !m.research_down);
+ /* A release elsewhere after a swallowed press: swallowed, no step. */
+ CHECK(rlw_menu_mouse(&m, 0x201, 650, 110, 0) == RLW_MENU_IDLE);
+ CHECK(rlw_menu_mouse(&m, 0x202, 300, 300, 0) == RLW_MENU_IDLE && f.input_count == 1 && fr.steps == 1);
+ CHECK(rlw_menu_flush_move(&m, 0) == RLW_MENU_REPAINT && f.inputs[1].mouse_x == 300 && f.inputs[1].mouse_ae == 0 && f.inputs[1].mouse_af == 0);
+ /* A press elsewhere is the shell's, and so is its release over the +. */
+ CHECK(rlw_menu_mouse(&m, 0x201, 50, 60, 0) == RLW_MENU_REPAINT && f.inputs[2].mouse_ae == 1);
+ CHECK(rlw_menu_mouse(&m, 0x202, 650, 110, 0) == RLW_MENU_REPAINT && f.inputs[3].mouse_af == 1 && fr.steps == 1);
+ /* Option off (the driver answers delta 0): everything goes to the shell. */
+ fr.on = 0; unsigned before = f.input_count;
+ CHECK(rlw_menu_mouse(&m, 0x201, 650, 110, 0) == RLW_MENU_REPAINT && rlw_menu_mouse(&m, 0x202, 650, 110, 0) == RLW_MENU_REPAINT);
+ CHECK(f.input_count == before + 2 && fr.steps == 1);
+ /* Outside the briefing the driver is not even asked. */
+ fr.on = 1; fresh(&f, &m, RL_SHELL_MAIN); m.ops = &RESEARCH_OPS; fr.targets = 0;
+ CHECK(rlw_menu_mouse(&m, 0x201, 650, 110, 0) == RLW_MENU_REPAINT && rlw_menu_mouse(&m, 0x202, 650, 110, 0) == RLW_MENU_REPAINT);
+ CHECK(fr.targets == 0 && fr.steps == 1 && f.input_count == 2);
+ rlw_menu_close(&m);
 }
 
 static void test_flc(void) {
@@ -197,8 +238,9 @@ static void test_flc(void) {
 int main(void) {
  test_menu();
  test_options();
+ test_research();
  test_flc();
  if (failures) { fprintf(stderr, "%d falha(s)\n", failures); return 1; }
- printf("test_menu ok: menu routing (keys, coalesced moves, pages, requests, credits, options screen) and FLC decoding\n");
+ printf("test_menu ok: menu routing (keys, coalesced moves, pages, requests, credits, options screen, briefing -/+) and FLC decoding\n");
  return 0;
 }

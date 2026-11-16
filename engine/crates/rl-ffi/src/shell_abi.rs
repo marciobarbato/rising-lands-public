@@ -3,6 +3,7 @@ use super::*;
 use rl_core::{
     render::{Cache, Error, Renderer},
     render_assets::Assets,
+    research_redistribution::{self as redistribution, Redistribution, Target, BRIEFING},
     shell::{self, Banks, Request, Screen},
     shell_briefing::Files,
     shell_input::Keys,
@@ -108,6 +109,9 @@ struct Session {
     banks: Banks,
     generation: u64,
     request: Request,
+    /// Port-only research redistribution of the current briefing
+    /// (rising_research.h); empty outside an edit.
+    redistribution: Redistribution,
 }
 struct Sessions {
     entries: BTreeMap<u64, Session>,
@@ -471,6 +475,7 @@ pub unsafe extern "C" fn rl_shell_create(
                     banks,
                     generation: 0,
                     request: Request::None,
+                    redistribution: Redistribution::default(),
                 },
             );
             Ok(handle)
@@ -616,6 +621,13 @@ pub unsafe extern "C" fn rl_shell_input(
             )
             .map_err(error)?;
             let e = event(request.clone(), g)?;
+            // Leaving the briefing (mode change or a request such as Voltar):
+            // free redistribution points return to their pillars first.
+            if s.memory.u8(rl_core::shell_state::MODE)? == BRIEFING
+                && (memory.u8(rl_core::shell_state::MODE)? != BRIEFING || request != Request::None)
+            {
+                s.redistribution.give_back(&mut memory)?;
+            }
             // Prepared API semantics: common-tail 0x5099b0 clear is host-owned.
             s.memory = memory;
             s.generation = g;
@@ -1167,3 +1179,168 @@ mod shell_campaign_tests;
 #[cfg(test)]
 #[path = "shell_pause_save_tests.rs"]
 mod shell_pause_save_tests;
+
+// ---- Port-only research redistribution on the briefing (rising_research.h) ----
+const REDISTRIBUTION_VERSION: u32 = 1;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RlRedistribuicao {
+    pub version: u32,
+    pub ativo: u32,
+    pub livres: u32,
+    pub nivel: [u32; 4],
+    pub minimo: [u32; 4],
+    pub maximo: [u32; 4],
+}
+#[no_mangle]
+pub extern "C" fn rl_redistribuir_versao() -> u32 {
+    REDISTRIBUTION_VERSION
+}
+fn engine(e: rl_core::EngineError) -> AbiError {
+    AbiError::from(e)
+}
+/// # Safety
+/// output is aligned and writable.
+#[no_mangle]
+pub unsafe extern "C" fn rl_redistribuir_estado(handle: u64, output: *mut RlRedistribuicao) -> i32 {
+    status(|| {
+        aligned(output)?;
+        let state = sessions(|r| {
+            let s = r.entries.get(&handle).ok_or(AbiError::InvalidHandle)?;
+            let mut out = RlRedistribuicao {
+                version: REDISTRIBUTION_VERSION,
+                ativo: u32::from(s.memory.u8(rl_core::shell_state::MODE)? == BRIEFING),
+                livres: s.redistribution.free(&s.memory).map_err(engine)?,
+                ..Default::default()
+            };
+            for (b, p) in redistribution::pillars(&s.memory)
+                .map_err(engine)?
+                .into_iter()
+                .enumerate()
+            {
+                out.nivel[b] = u32::from(p.level);
+                out.minimo[b] = u32::from(p.minimum);
+                out.maximo[b] = u32::from(p.maximum);
+            }
+            Ok(out)
+        })?;
+        unsafe { output.write(state) };
+        Ok(())
+    })
+}
+/// # Safety
+/// ramo/delta are aligned, writable and disjoint.
+#[no_mangle]
+pub unsafe extern "C" fn rl_redistribuir_alvo(
+    handle: u64,
+    x: u32,
+    y: u32,
+    ramo: *mut u32,
+    delta: *mut i32,
+) -> i32 {
+    status(|| {
+        aligned(ramo)?;
+        aligned(delta)?;
+        if x > 65535 || y > 65535 {
+            return Err(AbiError::InvalidArgument);
+        }
+        let target = sessions(|r| {
+            let s = r.entries.get(&handle).ok_or(AbiError::InvalidHandle)?;
+            s.redistribution
+                .target_at(&s.memory, x as i32, y as i32)
+                .map_err(engine)
+        })?;
+        let (b, d) = target.map_or((0, 0), |t| (u32::from(t.branch), i32::from(t.delta)));
+        unsafe {
+            ramo.write(b);
+            delta.write(d);
+        }
+        Ok(())
+    })
+}
+/// # Safety
+/// new_generation/mudou are aligned, writable and disjoint.
+#[no_mangle]
+pub unsafe extern "C" fn rl_redistribuir_passo(
+    handle: u64,
+    generation: u64,
+    ramo: u32,
+    delta: i32,
+    new_generation: *mut u64,
+    mudou: *mut u32,
+) -> i32 {
+    status(|| {
+        aligned(new_generation)?;
+        aligned(mudou)?;
+        if ramo > 3 || !(delta == 1 || delta == -1) {
+            return Err(AbiError::InvalidArgument);
+        }
+        let (g, changed) = session(handle, generation, |s| {
+            let target = Target {
+                branch: ramo as u8,
+                delta: delta as i8,
+            };
+            if !s
+                .redistribution
+                .enabled(&s.memory, target)
+                .map_err(engine)?
+            {
+                return Ok((s.generation, false));
+            }
+            let g = next(s)?;
+            // Work on copies so a failure leaves the session unchanged.
+            let mut memory = s.memory.clone();
+            let mut state = s.redistribution.clone();
+            if !state.step(&mut memory, target).map_err(engine)? {
+                return Ok((s.generation, false));
+            }
+            s.memory = memory;
+            s.redistribution = state;
+            s.generation = g;
+            Ok((g, true))
+        })?;
+        unsafe {
+            new_generation.write(g);
+            mudou.write(u32::from(changed));
+        }
+        Ok(())
+    })
+}
+/// # Safety
+/// pixels writable for capacity (>= 480000), palette readable for 768 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rl_redistribuir_sobrepor(
+    handle: u64,
+    pixels: *mut u8,
+    capacity: u32,
+    palette: *const u8,
+    palette_length: u32,
+    idioma: u32,
+) -> i32 {
+    status(|| {
+        if pixels.is_null() || palette.is_null() || idioma > 1 {
+            return Err(AbiError::InvalidArgument);
+        }
+        if (capacity as usize) < PIXELS || palette_length < 768 {
+            return Err(AbiError::BufferTooSmall);
+        }
+        disjoint(&[span(pixels, PIXELS)?, span(palette, 768)?])?;
+        let target = unsafe { std::slice::from_raw_parts_mut(pixels, PIXELS) };
+        let colors = unsafe { std::slice::from_raw_parts(palette, 768) }.to_vec();
+        let mut copy = target.to_vec();
+        sessions(|r| {
+            let s = r.entries.get(&handle).ok_or(AbiError::InvalidHandle)?;
+            redistribution::draw(
+                &s.redistribution,
+                &s.memory,
+                &s.renderer.assets,
+                &mut copy,
+                &colors,
+                idioma == 1,
+            )
+            .map_err(error)
+        })?;
+        target.copy_from_slice(&copy);
+        Ok(())
+    })
+}

@@ -54,3 +54,42 @@ int rlw_options_redraw(RlwDriver *d) {
  int c = rl_opcoes_desenhar(d->options, d->shell, d->pixels, 480000, d->palette, 768);
  return c ? save_result(d, c, "Tela de opções") : 0;
 }
+
+/* ---- Port-only "Redistribuir descobertas" (rising_research.h) ----
+ * The engine owns every rule; the driver only gates the calls on the host's
+ * option and the briefing (mode 17, no pending request) and repaints. */
+static int research_active(const RlwDriver *d) {
+ return d && d->research && d->shell && !d->shell_request.kind && d->shell_mode == RL_SHELL_BRIEFING && !d->options_open;
+}
+int rlw_research_enable(RlwDriver *d, int on) {
+ if (!d) return 0;
+ int want = on && rl_redistribuir_versao() == RL_REDISTRIBUIR_VERSION;
+ if (want == d->research) return 0;
+ d->research = want;
+ /* A briefing on screen gets (or loses) its overlay on a fresh copy. */
+ if (!d->shell || d->shell_request.kind || d->shell_mode != RL_SHELL_BRIEFING) return 0;
+ return shell_copy_picture(d) ? 0 : 1;
+}
+int rlw_research_target(RlwDriver *d, uint32_t x, uint32_t y, uint32_t *ramo, int32_t *delta) {
+ if (!ramo || !delta) return RL_INVALID_ARGUMENT;
+ *ramo = 0; *delta = 0;
+ if (!research_active(d)) return 0;
+ uint32_t r = 0; int32_t s = 0;
+ int c = rl_redistribuir_alvo(d->shell, x, y, &r, &s);
+ if (c) return save_result(d, c, "Redistribuir descobertas");
+ *ramo = r; *delta = s; return 0;
+}
+int rlw_research_step(RlwDriver *d, uint32_t ramo, int32_t delta, uint32_t *changed) {
+ if (!changed) return RL_INVALID_ARGUMENT;
+ *changed = 0;
+ if (!research_active(d)) return 0;
+ uint64_t generation = d->shell_generation; uint32_t mudou = 0;
+ int c = rl_redistribuir_passo(d->shell, d->shell_generation, ramo, delta, &generation, &mudou);
+ if (c) return save_result(d, c, "Redistribuir descobertas");
+ if (!mudou) return 0;
+ /* The session memory changed: the briefing picture (pillars) is painted again
+  * from its CD background, then copied with both overlays (shell_paint). */
+ d->shell_generation = generation; *changed = 1;
+ c = shell_paint(d);
+ return c ? save_result(d, c, "Redistribuir descobertas") : 0;
+}

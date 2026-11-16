@@ -63,6 +63,20 @@ enum NativeWasdScrolling {
     }
 }
 
+/// "Redistribuir descobertas" (Opções, engine options v3): the briefing's −/+
+/// on the research pillars (motor/include/rising_research.h). The engine owns
+/// every rule; the host only routes clicks and draws the overlay. On by
+/// default (user decision): an unset preference counts as on.
+enum NativeResearchRedistribution {
+    static let preferenceKey = "RisingLandsRedistribuirDescobertas"
+    static func isEnabled(_ defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: preferenceKey) == nil ? true : defaults.bool(forKey: preferenceKey)
+    }
+    static func store(_ enabled: Bool, _ defaults: UserDefaults = .standard) {
+        defaults.set(enabled, forKey: preferenceKey)
+    }
+}
+
 /// "Caminhos melhores": the engine's optional modern unit paths,
 /// `RL_REGRA_CAMINHOS_MELHORES` (bit 0 of regras). Off by default (user
 /// decision): with it off the game moves units exactly as the original.

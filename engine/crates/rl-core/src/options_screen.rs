@@ -37,6 +37,8 @@ pub struct Values {
     /// W/A/S/D also scroll the map, as the original's arrow keys (host routing
     /// only: the game still reads the arrows through GetAsyncKeyState).
     pub wasd: bool,
+    /// The briefing's −/+ on the research pillars (host-offered, port-only).
+    pub redistribute: bool,
     /// Stage-start difficulty preset 0 easy, 1 normal, 2 hard.
     pub difficulty: u8,
     /// Host pace 0 = 0.5x, 1 = 1x, 2 = 2x, 3 = 4x.
@@ -47,7 +49,8 @@ pub struct Values {
 }
 impl Values {
     pub fn validate(&self) -> Result<()> {
-        if self.difficulty > 2 || self.speed > 3 || self.available & !ALL != 0 {
+        // `available` is a u8 and ALL covers all eight bits since version 3.
+        if self.difficulty > 2 || self.speed > 3 {
             return Err(Error::Invalid("options values outside their ranges"));
         }
         Ok(())
@@ -68,18 +71,20 @@ pub enum Item {
     Difficulty = 3,
     Speed = 4,
     Wasd = 5,
-    Back = 6,
+    Redistribute = 6,
+    Back = 7,
 }
-pub const ITEMS: [Item; 7] = [
+pub const ITEMS: [Item; 8] = [
     Item::Hotkeys,
     Item::ConfigureKeys,
     Item::Paths,
     Item::Difficulty,
     Item::Speed,
     Item::Wasd,
+    Item::Redistribute,
     Item::Back,
 ];
-pub const ALL: u8 = 0x7f;
+pub const ALL: u8 = 0xff;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Event {
@@ -238,6 +243,15 @@ fn text(language: Language, item: Item, values: &Values) -> String {
                 "WASD SCROLLING"
             },
             yes_no(values.wasd)
+        ),
+        Item::Redistribute => format!(
+            "{}: {}",
+            if pt {
+                "REDISTRIBUIR DESCOBERTAS"
+            } else {
+                "REDISTRIBUTE DISCOVERIES"
+            },
+            yes_no(values.redistribute)
         ),
         Item::Back => if pt { "VOLTAR" } else { "BACK" }.into(),
     }
@@ -438,7 +452,12 @@ impl Options {
             let item = self.selected();
             if matches!(
                 item,
-                Item::Difficulty | Item::Speed | Item::Hotkeys | Item::Paths | Item::Wasd
+                Item::Difficulty
+                    | Item::Speed
+                    | Item::Hotkeys
+                    | Item::Paths
+                    | Item::Wasd
+                    | Item::Redistribute
             ) {
                 return Ok((
                     true,
@@ -490,6 +509,7 @@ impl Options {
             Item::Hotkeys => self.values.hotkeys = !self.values.hotkeys,
             Item::Paths => self.values.paths = !self.values.paths,
             Item::Wasd => self.values.wasd = !self.values.wasd,
+            Item::Redistribute => self.values.redistribute = !self.values.redistribute,
             Item::Difficulty => self.values.difficulty = cycle(self.values.difficulty, 3),
             Item::Speed => self.values.speed = cycle(self.values.speed, 4),
             _ => {}
@@ -690,6 +710,7 @@ mod tests {
             hotkeys: true,
             paths: false,
             wasd: false,
+            redistribute: true,
             difficulty: 1,
             speed: 1,
             available: ALL,
@@ -871,6 +892,13 @@ mod tests {
             (true, Event::Changed(Item::Wasd))
         );
         assert!(!o.values.wasd);
+        // REDISTRIBUIR DESCOBERTAS: on in these values; Enter turns it off.
+        o.input(&look, &down).unwrap();
+        assert_eq!(
+            o.input(&look, &enter).unwrap(),
+            (true, Event::Changed(Item::Redistribute))
+        );
+        assert!(!o.values.redistribute);
         // A mouse click on Back closes; Escape closes too.
         let back = o.item_rect(&look, Item::Back as usize).unwrap();
         let clicked = click(&mut o, &look, back);

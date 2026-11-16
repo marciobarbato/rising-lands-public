@@ -4,6 +4,7 @@
 #include "rising_engine.h"
 #include "rising_shell.h"
 #include "rising_options.h"
+#include "rising_research.h"
 #include "MacOSAudioMapper.h"
 typedef struct MacOSLiveDriver MacOSLiveDriver;
 typedef struct {
@@ -167,6 +168,19 @@ uint32_t macos_live_options_open(MacOSLiveDriver *);
  * RL_UNSUPPORTED_PATH without the extension. The picture is ready on 0. */
 int32_t macos_live_options_show(MacOSLiveDriver *);
 int32_t macos_live_options_button(MacOSLiveDriver *,int32_t rect[4]);
+/* Port-only "Redistribuir descobertas" (motor/include/rising_research.h): the
+ * briefing's -/+ on the research pillars, drawn and ruled by the engine. Active
+ * only with the host's Options value on, the engine's symbols present, and the
+ * prepared shell in briefing 17 with no pending request (never in validation).
+ * enable: stores the Options value; *repainted 1 when the briefing on screen
+ * was copied again with (or without) the overlay. RL_UNSUPPORTED_PATH without
+ * the extension. target: the button under the 800x600 point (*delta +1/-1),
+ * or *delta 0 when none or inactive (then the click belongs to the shell).
+ * step: one -/+; on *changed 1 the driver's shell generation advanced and the
+ * briefing picture (with the overlay) is repainted and ready to present. */
+int32_t macos_live_redistribution_enable(MacOSLiveDriver *,uint32_t on,uint32_t *repainted);
+int32_t macos_live_redistribution_target(MacOSLiveDriver *,uint32_t x,uint32_t y,uint32_t *ramo,int32_t *delta);
+int32_t macos_live_redistribution_step(MacOSLiveDriver *,uint32_t ramo,int32_t delta,uint32_t *changed);
 int32_t macos_live_selection(MacOSLiveDriver *,char *mission,uint32_t capacity,uint32_t *difficulty);
 /* Preset (0..2) of the next stage start: New game, Restart or Next stage. */
 int32_t macos_live_set_difficulty(MacOSLiveDriver *,uint32_t difficulty);

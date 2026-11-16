@@ -76,7 +76,7 @@ static struct {
  char saves[4096]; HMENU menubar, save_menu, load_menu; char notice[96]; double notice_until;
  /* The port's "Opções" screen: settings kept in <user data>/opcoes.ini (players'
   * runs only; "" in smoke/demo runs, which keep the original defaults). */
- char options_path[4200]; unsigned atalhos, caminhos, wasd;
+ char options_path[4200]; unsigned atalhos, caminhos, wasd, redistribuir;
  /* Keyboard bindings and "Atalhos modernos" (rlw_hotkeys.h, rlw_modern.h): the
   * router, the running command (between frames, on the driver it started on),
   * the player's pointer, a command waiting for the left button's release. */
@@ -346,8 +346,8 @@ static void start_modern(int command, uint32_t digit) {
 static unsigned autosave_minutes; static RlwAutosave autosave_schedule;
 static void options_store(void) {
  if (!G.options_path[0]) return;
- char text[400]; int n = snprintf(text, sizeof(text), "atalhos=%u\r\ncaminhos=%u\r\nwasd=%u\r\ndificuldade=%u\r\nvelocidade=%u\r\nautosave=%u\r\n",
-                                  G.atalhos, G.caminhos, G.wasd, G.opt.difficulty, G.speed, autosave_minutes);
+ char text[400]; int n = snprintf(text, sizeof(text), "atalhos=%u\r\ncaminhos=%u\r\nwasd=%u\r\nredistribuir=%u\r\ndificuldade=%u\r\nvelocidade=%u\r\nautosave=%u\r\n",
+                                  G.atalhos, G.caminhos, G.wasd, G.redistribuir, G.opt.difficulty, G.speed, autosave_minutes);
  if (n > 0 && (size_t)n < sizeof(text)) n += (int)rlw_audio_ui_ini(text + n, sizeof(text) - (size_t)n); /* Áudio (front 2) */
  if (n > 0) (void)rlw_durable_write(G.options_path, (const uint8_t *)text, (size_t)n, NULL, 0);
 }
@@ -360,6 +360,7 @@ static void options_load(void) {
   if (!strncmp(line, "atalhos=", 8) && v <= 1) G.atalhos = v;
   else if (!strncmp(line, "caminhos=", 9) && v <= 1) G.caminhos = v;
   else if (!strncmp(line, "wasd=", 5) && v <= 1) G.wasd = v;
+  else if (!strncmp(line, "redistribuir=", 13) && v <= 1) G.redistribuir = v;
   else if (!strncmp(line, "dificuldade=", 12) && v <= 2 && !G.opt.difficulty_given) G.opt.difficulty = v;
   else if (!strncmp(line, "velocidade=", 11) && v <= 3 && !G.opt.speed_given) G.opt.speed = v;
   else (void)rlw_autosave_option(line, &autosave_minutes);
@@ -445,10 +446,12 @@ static void menu_attach(void) {
  /* The port's "Opções" button over the main and pause menus (players' runs). */
  if (G.options_path[0]) {
   RlOpcoesValores v; memset(&v, 0, sizeof(v));
-  v.version = RL_OPCOES_VERSION; v.atalhos = G.atalhos; v.caminhos = G.caminhos; v.wasd = G.wasd; v.dificuldade = G.opt.difficulty; v.velocidade = G.speed;
+  v.version = RL_OPCOES_VERSION; v.atalhos = G.atalhos; v.caminhos = G.caminhos; v.wasd = G.wasd; v.redistribuir = G.redistribuir; v.dificuldade = G.opt.difficulty; v.velocidade = G.speed;
   /* "Configurar teclas" opens the "Atalhos de teclado" window (show_keys). */
   v.disponivel = RL_OPCOES_TODOS; v.idioma = 0;
   (void)rlw_options_sync(G.driver, &v);
+  /* "Redistribuir descobertas": the briefing's -/+ (rising_research.h). */
+  (void)rlw_research_enable(G.driver, G.redistribuir != 0);
  }
  /* startShell(): the first shellTick comes 50 ms after the session opens. */
  G.menu_tick = now_seconds() + 0.05; G.menu_flush = 0;
@@ -654,7 +657,7 @@ static void build_menu(void) { G.menubar = rlw_gamemenu_create(); rlw_audio_ui_m
 static void options_resync(void) {
  if (!G.options_path[0] || !G.driver) return;
  RlOpcoesValores v; memset(&v, 0, sizeof(v));
- v.version = RL_OPCOES_VERSION; v.atalhos = G.atalhos; v.caminhos = G.caminhos; v.wasd = G.wasd; v.dificuldade = G.opt.difficulty; v.velocidade = G.speed;
+ v.version = RL_OPCOES_VERSION; v.atalhos = G.atalhos; v.caminhos = G.caminhos; v.wasd = G.wasd; v.redistribuir = G.redistribuir; v.dificuldade = G.opt.difficulty; v.velocidade = G.speed;
  v.disponivel = RL_OPCOES_TODOS; v.idioma = 0;
  if (!rlw_options_sync(G.driver, &v) && rlw_options_open(G.driver) && !rlw_options_redraw(G.driver)) present_now();
 }
@@ -777,6 +780,9 @@ static void menu_result(int r) {
    case RL_OPCOES_WASD: G.wasd = e->values.wasd; rlw_router_reset(&G.router); G.router.wasd_enabled = G.wasd != 0; break;
    case RL_OPCOES_DIFICULDADE: G.opt.difficulty = e->values.dificuldade; (void)rlw_driver_set_difficulty(G.driver, G.opt.difficulty); break;
    case RL_OPCOES_VELOCIDADE: set_speed(e->values.velocidade); break;
+   /* REDISTRIBUIR DESCOBERTAS: a briefing on screen gains or loses its -/+ at once
+    * (present_now below shows the new copy). */
+   case RL_OPCOES_REDISTRIBUIR: G.redistribuir = e->values.redistribuir; (void)rlw_research_enable(G.driver, G.redistribuir != 0); break;
    default: break;
    }
    options_store();
@@ -1088,7 +1094,7 @@ int main_utf8(int argc, char **argv) {
   /* The macOS app's defaults (NativeModernHotkeys/NativeModernPaths,
    * NativeDifficulty, NativeGameSpeed): Atalhos modernos on, Caminhos melhores
    * off, Normal, 1x. A key in opcoes.ini wins. */
-  G.atalhos = 1; G.caminhos = 0;
+  G.atalhos = 1; G.caminhos = 0; G.redistribuir = 1;
   options_load(); G.speed = G.opt.speed; rlw_driver_default_rules(options_rules());
   rlw_autosave_init(&autosave_schedule, rlw_autosave_frames(autosave_minutes));
   G.router.modern_enabled = G.atalhos != 0; G.router.wasd_enabled = G.wasd != 0;

@@ -62,6 +62,9 @@ static int shell_copy_picture(RlwDriver *d) {
  /* Port-only "Opções" button over main 2 / pause 16 (no-op elsewhere), on this
   * copy only; a failure leaves the original picture as it is. */
  if (!c && d->options) (void)rl_opcoes_sobrepor(d->options, d->shell, d->pixels, 480000);
+ /* Port-only briefing -/+ (rlw_research_enable), on this copy only, likewise. */
+ if (!c && d->research && d->shell_mode == RL_SHELL_BRIEFING && !d->shell_request.kind)
+  (void)rl_redistribuir_sobrepor(d->shell, d->pixels, 480000, d->palette, 768, 0);
  return c;
 }
 static int shell_paint(RlwDriver *d) {

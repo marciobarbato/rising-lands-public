@@ -153,6 +153,7 @@ mod player_loop;
 mod player_orders;
 mod player_sight;
 pub(crate) mod player_spy;
+pub mod research_redistribution;
 pub mod shell;
 pub mod shell_animation;
 pub mod shell_briefing;

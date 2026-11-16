@@ -144,7 +144,8 @@ static int op_probe(void *driver, uint8_t b[2], uint64_t *t, uint32_t *ms) {
 }
 static int op_advance(void *driver) { int c = op_advance_raw(driver); g_tick++; log_sounds(driver); if (!c) log_cd(driver); return c; }
 static const RlwDemoOps OPS = {{op_mode, op_state, op_input, op_draw, op_show, op_prepare, op_request, op_load, op_slots, op_zone,
- macos_live_shell_click_clock, op_credits_frame, op_credits_present, op_error, op_options_input, op_options_open, op_options_sync, op_options_button, op_options_show}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
+ macos_live_shell_click_clock, op_credits_frame, op_credits_present, op_error, op_options_input, op_options_open, op_options_sync, op_options_button, op_options_show,
+ NULL, NULL}, op_advance, op_event, op_begin, op_screen, op_frames, op_pixels, op_palette, op_stop,
  op_save, op_autosave, op_load_file, op_save_slot, op_load_resume, op_probe};
 #undef D
 #else

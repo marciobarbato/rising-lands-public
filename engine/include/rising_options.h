@@ -16,12 +16,13 @@ extern "C" {
  * 0x4e2f74..76, MENU.CMP, mode, counter 0x508f84) and never change it: not its
  * surface, memory, generation or request. No RNG, clock or game memory use.
  * Without these calls the shell and its pictures stay byte for byte the same. */
-#define RL_OPCOES_VERSION 2u
+#define RL_OPCOES_VERSION 3u
 typedef uint64_t RlOpcoes;
 /* Items, in screen order; bit (1<<item) of disponivel offers it. */
 enum { RL_OPCOES_ATALHOS=0, RL_OPCOES_TECLAS=1, RL_OPCOES_CAMINHOS=2,
- RL_OPCOES_DIFICULDADE=3, RL_OPCOES_VELOCIDADE=4, RL_OPCOES_WASD=5, RL_OPCOES_VOLTAR=6 };
-#define RL_OPCOES_TODOS 0x7fu
+ RL_OPCOES_DIFICULDADE=3, RL_OPCOES_VELOCIDADE=4, RL_OPCOES_WASD=5, RL_OPCOES_REDISTRIBUIR=6,
+ RL_OPCOES_VOLTAR=7 };
+#define RL_OPCOES_TODOS 0xffu
 typedef struct {
  uint32_t version;     /* RL_OPCOES_VERSION */
  uint32_t atalhos;     /* modern hotkeys (+ order queue) 0/1 */
@@ -31,6 +32,7 @@ typedef struct {
  uint32_t disponivel;  /* offered items mask (<= RL_OPCOES_TODOS); VOLTAR always */
  uint32_t idioma;      /* 0 pt-BR, 1 English (prepared for the language option) */
  uint32_t wasd;        /* v2: W/A/S/D also scroll the map (host key routing) 0/1 */
+ uint32_t redistribuir; /* v3: briefing -/+ on the research pillars (rising_research.h) 0/1 */
 } RlOpcoesValores;
 /* Keys: RL_SHELL_ENTER/UP/DOWN/ESCAPE plus LEFT/RIGHT (completed presses). */
 enum { RL_OPCOES_ESQUERDA=16, RL_OPCOES_DIREITA=32 };

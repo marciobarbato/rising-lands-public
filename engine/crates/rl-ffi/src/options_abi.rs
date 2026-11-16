@@ -11,7 +11,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
 const PIXELS: usize = options_screen::PIXELS;
 
 #[repr(C)]
@@ -26,6 +26,8 @@ pub struct RlOpcoesValores {
     pub idioma: u32,
     /// W/A/S/D also scroll the map (v2; was `reserved`, always 0).
     pub wasd: u32,
+    /// v3: the briefing's −/+ on the research pillars (host-offered).
+    pub redistribuir: u32,
 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -63,6 +65,7 @@ fn values(v: &RlOpcoesValores) -> Result<(Values, Language)> {
         || v.idioma > 1
         || v.disponivel > u32::from(options_screen::ALL)
         || v.wasd > 1
+        || v.redistribuir > 1
     {
         return Err(AbiError::InvalidArgument);
     }
@@ -70,6 +73,7 @@ fn values(v: &RlOpcoesValores) -> Result<(Values, Language)> {
         hotkeys: v.atalhos != 0,
         paths: v.caminhos != 0,
         wasd: v.wasd != 0,
+        redistribute: v.redistribuir != 0,
         difficulty: u8::try_from(v.dificuldade).map_err(|_| AbiError::InvalidArgument)?,
         speed: u8::try_from(v.velocidade).map_err(|_| AbiError::InvalidArgument)?,
         available: v.disponivel as u8,
@@ -92,6 +96,7 @@ fn c_values(o: &Options) -> RlOpcoesValores {
         disponivel: u32::from(o.values.available),
         idioma: o.language as u32,
         wasd: u32::from(o.values.wasd),
+        redistribuir: u32::from(o.values.redistribute),
     }
 }
 

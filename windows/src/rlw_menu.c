@@ -8,10 +8,10 @@ void rlw_menu_init(RlwMenu *m, const RlwMenuOps *ops, void *driver, const char *
  memset(m, 0, sizeof(*m)); m->ops = ops; m->driver = driver;
  snprintf(m->credits_path, sizeof(m->credits_path), "%s", credits_path ? credits_path : "");
 }
-void rlw_menu_reset(RlwMenu *m) { memset(m->held, 0, sizeof(m->held)); m->move_pending = 0; m->mouse_down = 0; }
+void rlw_menu_reset(RlwMenu *m) { memset(m->held, 0, sizeof(m->held)); m->move_pending = 0; m->mouse_down = 0; m->research_down = 0; }
 static void close_credits(RlwMenu *m) { if (m->credits_open) rlw_flc_free(&m->credits); m->credits_open = 0; }
 void rlw_menu_close(RlwMenu *m) { close_credits(m); }
-void rlw_menu_cancel(RlwMenu *m) { m->move_pending = 0; m->mouse_down = 0; }
+void rlw_menu_cancel(RlwMenu *m) { m->move_pending = 0; m->mouse_down = 0; m->research_down = 0; }
 uint32_t rlw_menu_tick_ms(const RlwMenu *m) { return m->ops->mode(m->driver) == RL_SHELL_CREDITS_SCREEN ? 10 : 50; }
 
 static int failed(RlwMenu *m, int code, const char *fallback) {
@@ -181,9 +181,35 @@ int rlw_menu_key(RlwMenu *m, uint32_t vk, int down, double now_ms) {
  return keys ? rlw_menu_keys(m, keys, now_ms) : RLW_MENU_IDLE;
 }
 
+/* "Redistribuir descobertas": a left press on an acting briefing -/+ is the
+ * port's, not the shell's. It and its release are swallowed (the shell only
+ * sees the pointer move there, through the next flush or tick); the release on
+ * the same button takes the step. Returns -1 when the message is not ours. */
+static int research_mouse(RlwMenu *m, uint32_t msg, uint32_t x, uint32_t y) {
+ int press = msg == 0x201 || msg == 0x203;
+ if (msg == 0x202 && m->research_down) {
+  uint32_t ramo = 0, changed = 0; int32_t delta = 0; int c = 0;
+  m->research_down = 0; m->move_pending = 1; m->move_x = x; m->move_y = y;
+  if (m->ops->mode(m->driver) != RL_SHELL_BRIEFING) return RLW_MENU_IDLE;
+  c = m->ops->research_target(m->driver, x, y, &ramo, &delta);
+  if (!c && delta && ramo == m->research_ramo && delta == m->research_delta) c = m->ops->research_step(m->driver, ramo, delta, &changed);
+  if (c) return failed(m, c, "Redistribuir descobertas");
+  return changed ? RLW_MENU_REPAINT : RLW_MENU_IDLE;
+ }
+ if (!press || m->mouse_down || !m->ops->research_target || !m->ops->research_step || m->ops->mode(m->driver) != RL_SHELL_BRIEFING) return -1;
+ uint32_t ramo = 0; int32_t delta = 0;
+ int c = m->ops->research_target(m->driver, x, y, &ramo, &delta);
+ if (c) return failed(m, c, "Redistribuir descobertas");
+ if (!delta) return -1;
+ m->research_down = 1; m->research_ramo = ramo; m->research_delta = delta;
+ m->move_pending = 1; m->move_x = x; m->move_y = y;
+ return RLW_MENU_IDLE;
+}
+
 /* shellEvent(), mouse branch. */
 int rlw_menu_mouse(RlwMenu *m, uint32_t msg, uint32_t x, uint32_t y, double now_ms) {
  if (msg == 0x200) { m->move_pending = 1; m->move_x = x; m->move_y = y; return RLW_MENU_IDLE; }
+ int research = research_mouse(m, msg, x, y); if (research >= 0) return research;
  m->move_pending = 0; /* the press/release carries the newer position */
  RlShellInput input; if (m->ops->state(m->driver, &input)) return RLW_MENU_IDLE;
  input.mouse_x = x; input.mouse_y = y; input.mouse_af = 0; input.mouse_b0 = 0;

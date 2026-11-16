@@ -1,4 +1,5 @@
 /* Private C consumer of the prepared-shell ABI. No game rules live here. */
+static int redistribution_active(MacOSLiveDriver*d);
 static int shell_copy_picture(MacOSLiveDriver*d){
  uint8_t*p=malloc(480000+768);if(!p)return RL_IO_ERROR;
  int c=d->rl_shell_copy(d->shell,d->shell_generation,p,480000,p+480000,768);
@@ -6,6 +7,8 @@ static int shell_copy_picture(MacOSLiveDriver*d){
  /* Port-only "Opções" button over main 2 / pause 16 (no-op elsewhere). It draws
   * on this copy only; a failure leaves the original picture as it is. */
  if(!c&&d->options&&d->rl_opcoes_sobrepor)(void)d->rl_opcoes_sobrepor(d->options,d->shell,d->pixels,480000);
+ /* Port-only research -/+ over briefing 17 (Options value on), same rule. */
+ if(!c&&redistribution_active(d))(void)d->rl_redistribuir_sobrepor(d->shell,d->pixels,480000,d->palette,768,0);
  return c;
 }
 static int shell_paint(MacOSLiveDriver*d){

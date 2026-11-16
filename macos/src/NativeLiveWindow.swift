@@ -498,6 +498,9 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     var campaignEnd:MacOSCampaignEnd?
     var shellHeld=Set<Int>()
     var shellMouseDown=false
+    /// Worker. The briefing's −/+ ("Redistribuir descobertas") whose press was
+    /// taken from the shell; its release is taken too.
+    var redistributionPress:(ramo:UInt32,delta:Int32)?
     var shellRun:UInt64=0
     let defeatMovie=NativeDefeatMovie()
     var movieActive=false
@@ -1267,7 +1270,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     var shellLastMove=0.0
     var shellMovesReceived=0,shellMovesApplied=0
     var shellZones=[UInt32:[Int32]]()
-    /// Last values handed to the options screen (atalhos, caminhos, dificuldade, velocidade).
+    /// Last values handed to the options screen (atalhos, caminhos, wasd, redistribuir, dificuldade, velocidade).
     var optionsSynced:[UInt32]?
     /// Worker. Jogo > Opções… pressed in play: the synthetic Escape is held in
     /// the world until the original pause appears (or this frame passes).
@@ -1330,7 +1333,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         }
         guard !hostRequest else{return}
         // An interrupted press is not a menu click in the original screens.
-        if event["cancel"] as? Bool == true{shellPendingMove=nil;shellMouseDown=false;return}
+        if event["cancel"] as? Bool == true{shellPendingMove=nil;shellMouseDown=false;redistributionPress=nil;return}
         let kind=event["kind"] as? String
         let mode=macos_live_shell_mode(driver)
         let pages=mode==UInt32(RL_SHELL_BRIEFING) || mode==UInt32(RL_SHELL_OBJECTIVES)
@@ -1359,6 +1362,8 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
             input.mouse_x=UInt32(event["x"] as? Int ?? 0);input.mouse_y=UInt32(event["y"] as? Int ?? 0)
             input.mouse_af=0;input.mouse_b0=0
             let press=message==0x201 || message==0x203
+            // The port's research −/+ on the briefing take their clicks first.
+            if redistributionClick(message:message,x:input.mouse_x,y:input.mouse_y){return}
             if press{shellMouseDown=true}
             input.mouse_ae=shellMouseDown ? 1:0
             if message==0x202{input.mouse_af=shellMouseDown ? 1:0;shellMouseDown=false}
@@ -1366,6 +1371,35 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
             if press || input.mouse_ae != 0{input.clock_7c=macos_live_shell_click_clock(mode,input.clock_7c,press ? 1:0)}
             sendShell(input:input)
         }
+    }
+    /// Worker. "Redistribuir descobertas" (motor/include/rising_research.h): a
+    /// left press on a −/+ the engine shows on the briefing never reaches the
+    /// original shell, nor does its release; a release on the same button makes
+    /// the step (new shell generation, briefing repainted with the overlay).
+    /// false: the event belongs to the shell unchanged. The driver answers no
+    /// button unless the option is on, the engine has the extension and the
+    /// shell is in briefing 17 without a pending request.
+    func redistributionClick(message:Int,x:UInt32,y:UInt32)->Bool{
+        var ramo:UInt32=0,delta:Int32=0
+        if message==0x201 || message==0x203{
+            redistributionPress=nil
+            guard !shellMouseDown,macos_live_redistribution_target(driver,x,y,&ramo,&delta)==0,delta != 0 else{return false}
+            redistributionPress=(ramo,delta);return true
+        }
+        guard message==0x202,let pressed=redistributionPress else{return false}
+        redistributionPress=nil
+        guard macos_live_redistribution_target(driver,x,y,&ramo,&delta)==0,delta != 0,ramo==pressed.ramo,delta==pressed.delta else{return true}
+        var changed:UInt32=0
+        let code=macos_live_redistribution_step(driver,ramo,delta,&changed)
+        if code != 0{stoppedReason=saveError(code).localizedDescription;showShellPicture();deliver();return true}
+        if changed != 0{showShellPicture()}
+        return true
+    }
+    /// Worker. Hands the Options value to the driver; true when the briefing on
+    /// screen was copied again with (or without) the overlay (present it then).
+    @discardableResult func syncRedistribution(_ on:UInt32)->Bool{
+        var repainted:UInt32=0
+        return macos_live_redistribution_enable(driver,on,&repainted)==0 && repainted != 0
     }
     /// Worker. Captions of the modern saves posicao-1..10 for the original lists
     /// (save1.sav..save9.sav,save0.sav); the engine never reads save files here.
@@ -1690,6 +1724,7 @@ extension NativeLiveWindow {
         v.atalhos=NativeModernHotkeys.isEnabled() ? 1:0
         v.caminhos=Self.modernPathsEnabled ? 1:0
         v.wasd=NativeWasdScrolling.isEnabled() ? 1:0
+        v.redistribuir=NativeResearchRedistribution.isEnabled() ? 1:0
         v.dificuldade=min(campaignSelection.difficulty,2)
         v.velocidade=UInt32(NativeGameSpeed(frameRate:gameFPS)?.rawValue ?? speed.rawValue)
         v.disponivel=UInt32(RL_OPCOES_TODOS)
@@ -1701,7 +1736,8 @@ extension NativeLiveWindow {
     func syncOptions(){
         guard !validationMode else{return}
         let v=optionsValues()
-        let key=[v.atalhos,v.caminhos,v.wasd,v.dificuldade,v.velocidade]
+        syncRedistribution(v.redistribuir)
+        let key=[v.atalhos,v.caminhos,v.wasd,v.redistribuir,v.dificuldade,v.velocidade]
         guard key != optionsSynced else{return}
         if macos_live_options_sync(driver,[v])==0{optionsSynced=key}
     }
@@ -1775,7 +1811,11 @@ extension NativeLiveWindow {
         let v=event.values
         if event.kind==UInt32(RL_OPCOES_CONFIGURAR_TECLAS){DispatchQueue.main.async{self.showHotkeys()};return}
         guard event.kind==UInt32(RL_OPCOES_MUDOU) else{return}
-        optionsSynced=[v.atalhos,v.caminhos,v.wasd,v.dificuldade,v.velocidade]
+        optionsSynced=[v.atalhos,v.caminhos,v.wasd,v.redistribuir,v.dificuldade,v.velocidade]
+        if event.item==UInt32(RL_OPCOES_REDISTRIBUIR){
+            NativeResearchRedistribution.store(v.redistribuir != 0)
+            if syncRedistribution(v.redistribuir){showShellPicture()}
+        }
         let item=event.item
         DispatchQueue.main.async{ [weak self] in
             guard let self else{return}
