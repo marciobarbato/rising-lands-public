@@ -719,3 +719,15 @@ first with the Windows build only:
 
 Docs (`README.md`, `README.en.md`, `docs/ROADMAP.md`, `windows/README.md`, `docs/WINDOWS_CLIENT.md`): beta 4 is the
 current release; WASD scrolling is in it.
+
+### 2026-11-16 (fifth): docs only — the macOS dmg joins beta 4
+
+Previous synchronisation: public `ddee771`. No source changed.
+
+`RisingLands-macOS-8c9685c.dmg` was added to `v0.1.0-beta.4`: built on the MacBook from a fresh clone at `8c9685c`
+with `./build-macos.sh`, Developer ID (TF3GU6U7H8), hardened runtime, notarized and stapled (app `3a909b64-…`, dmg
+`f7921e2b-…`, both Accepted), SHA-256 `72ac650117c926a663463ee1195f902a7c1fb465165011d7290b35ba62e6996c`. On the
+MacBook: `cargo test` 104 passed / 11 ignored, `macos/tests/run.sh` all passed. On the Mac mini: downloaded again from
+the release, `stapler validate` and `spctl` accepted. The temporary draft that carried it was deleted.
+
+Docs: `README.md` and `README.en.md` no longer send Mac players to beta 3.

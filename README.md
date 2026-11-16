@@ -2,7 +2,7 @@
 
 [English version](README.en.md)
 
-> **Beta 4 — teste público.** A quarta beta saiu para macOS e Windows: baixe em **[Releases → v0.1.0-beta.4](https://github.com/marciobarbato/rising-lands-public/releases/tag/v0.1.0-beta.4)**, jogue e conte o que encontrou. Novidade: a opção **ROLAR COM WASD** na tela de Opções, para rolar o mapa com W, A, S e D (desde a beta 3, o cursor não some mais sobre a barra de baixo e o ícone de nível não pisca mais em campanhas antigas). **No Mac:** o `.dmg` da beta 4 entra nesta mesma release assim que for assinado; até lá, use o da beta 3. Como ajudar: [chamada de testes](https://github.com/marciobarbato/rising-lands-public/issues/10).
+> **Beta 4 — teste público.** A quarta beta saiu para macOS e Windows: baixe em **[Releases → v0.1.0-beta.4](https://github.com/marciobarbato/rising-lands-public/releases/tag/v0.1.0-beta.4)**, jogue e conte o que encontrou. Novidade: a opção **ROLAR COM WASD** na tela de Opções, para rolar o mapa com W, A, S e D (desde a beta 3, o cursor não some mais sobre a barra de baixo e o ícone de nível não pisca mais em campanhas antigas). Como ajudar: [chamada de testes](https://github.com/marciobarbato/rising-lands-public/issues/10).
 
 Este repositório contém uma reimplementação do motor do jogo **Rising Lands** (1997, Microïds) em Rust e aplicativos nativos que rodam o jogo sobre esse motor: o do macOS e o do Windows, hoje na **beta 4** (teste público). A lógica foi portada rotina por rotina do executável original e comparada com ele.
 
@@ -10,7 +10,7 @@ Este repositório contém uma reimplementação do motor do jogo **Rising Lands*
 
 ## Baixar e jogar (macOS)
 
-1. Baixe o `.dmg` da versão mais recente em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. A versão atual é a **beta 4** (`v0.1.0-beta.4`, teste público); se o `.dmg` ainda não estiver nela, use o da [beta 3](https://github.com/marciobarbato/rising-lands-public/releases/tag/v0.1.0-beta.3). O aplicativo é assinado com Developer ID e notarizado pela Apple.
+1. Baixe o `.dmg` da versão mais recente em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. A versão atual é a **beta 4** (`v0.1.0-beta.4`, teste público). O aplicativo é assinado com Developer ID e notarizado pela Apple.
 2. Abra o `.dmg` e arraste o **Rising Lands** para **Aplicativos**.
 3. Consiga a imagem do CD (veja "Onde conseguir o CD").
 4. Abra o aplicativo. Na janela **"Rising Lands — importar o CD original"**, clique em **Escolher o CD…** e selecione o arquivo **RISING_LANDS_BR_.BIN**. Também servem o .CUE, um .ISO ou a pasta com os arquivos do CD, mas a música só vem do .BIN.
