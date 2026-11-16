@@ -49,6 +49,18 @@ final class NativeHotkeyInputRouter {
     private let sink: @MainActor (KeyEvent) -> Void
     /// Off by default in the component; the app sets it from the stored preference.
     var modernEnabled = false
+    /// Opções > ROLAR COM WASD: W/A/S/D (by position: kVK_ANSI 13/0/1/2) act as
+    /// the arrow channels when the player bound them to nothing else.
+    var wasdEnabled = false
+    static func wasdAction(keyCode: UInt16) -> NativeHotkeyBindings.Action? {
+        switch keyCode {
+        case 13: return .up
+        case 0: return .left
+        case 1: return .down
+        case 2: return .right
+        default: return nil
+        }
+    }
     var modernSink: (@MainActor (ModernCommand) -> Void)?
     private let clock: @MainActor () -> TimeInterval
     private var lastDigitTap: (key: Int, time: TimeInterval)?
@@ -79,7 +91,9 @@ final class NativeHotkeyInputRouter {
         // Includes repeats arriving after focus loss or a successful rebind flush.
         guard !isRepeat else { return .unhandled }
         synchronizeModifiers(modifiers)
+        // The player's own bindings win; an unbound W/A/S/D is an arrow.
         let action = bindings.action(keyCode: keyCode, modifiers: modifiers)
+            ?? (wasdEnabled ? Self.wasdAction(keyCode: keyCode) : nil)
         if let action, action.isModern {
             guard modernEnabled, let command = Self.command(for: action) else {
                 presses[keyCode] = Press(action: nil)

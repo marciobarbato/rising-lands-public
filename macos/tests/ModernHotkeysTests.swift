@@ -407,7 +407,27 @@ struct ModernHotkeysTests {
         try check(NativeEngineRules.current(defaults) == 0, "Original game")
     }
 
+    static func wasdScrolling() throws {
+        // Off: W is nobody's. On: W/A/S/D are the arrow channels (37..40) and
+        // share the arrows' reference count; a player binding wins.
+        let (r, _, events, _) = router(enabled: true)
+        try check(r.keyDown(keyCode: 13, modifiers: []) == .unhandled, "W off")
+        r.keyUp(keyCode: 13, modifiers: [])
+        r.wasdEnabled = true
+        try check(r.keyDown(keyCode: 13, modifiers: []) == .handled, "W on")
+        try check(r.keyDown(keyCode: 126, modifiers: []) == .handled, "real Up while W held")
+        r.keyUp(keyCode: 13, modifiers: [])
+        r.keyUp(keyCode: 126, modifiers: [])
+        for code: UInt16 in [0, 1, 2] { r.keyDown(keyCode: code, modifiers: []); r.keyUp(keyCode: code, modifiers: []) }
+        try check(events() == ["38:d", "38:u", "37:d", "37:u", "40:d", "40:u", "39:d", "39:u"], "WASD channels \(events())")
+        let defaults = UserDefaults(suiteName: "wasd-\(UUID().uuidString)")!
+        try check(!NativeWasdScrolling.isEnabled(defaults), "off by default")
+        NativeWasdScrolling.store(true, defaults)
+        try check(NativeWasdScrolling.isEnabled(defaults), "stored")
+    }
+
     static func main() throws {
+        try wasdScrolling(); print("PASS WASD scrolling: unbound W/A/S/D are the arrows, off by default")
         try routerCommands(); print("PASS router: modern keys, exact defaults, double tap only for original groups 1-9")
         try fixedSteps(); print("PASS fixed steps: original Shift+N and X only, foreign channels refused")
         try snapshotGeometry(); print("PASS geometry: minimap_center replica, zone-0 click pixels, margin, hidden minimap")

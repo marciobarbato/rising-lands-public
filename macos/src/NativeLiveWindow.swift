@@ -121,6 +121,7 @@ final class NativeMetalGameView: NSView {
     lazy var hotkeys: NativeHotkeyInputRouter = {
         let router=NativeHotkeyInputRouter { [weak self] event in self?.inputEvent?(event.payload) }
         router.modernEnabled=NativeModernHotkeys.isEnabled()
+        router.wasdEnabled=NativeWasdScrolling.isEnabled()
         router.modernSink={ [weak self] command in self?.requestModern(command) }
         return router
     }()
@@ -1207,6 +1208,10 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         NativeModernHotkeys.store(enabled);metal.releaseKeys();metal.hotkeys.modernEnabled=enabled
         applyEngineRules()
     }
+    /// "Rolar com WASD": host key routing only (held keys are released first).
+    @MainActor func setWasdScrolling(_ enabled:Bool){
+        NativeWasdScrolling.store(enabled);metal.releaseKeys();metal.hotkeys.wasdEnabled=enabled
+    }
     /// "Caminhos melhores": the modern unit paths rule (bit 0 of regras).
     @MainActor func setModernPaths(_ enabled:Bool){
         NativeModernPaths.store(enabled)
@@ -1681,9 +1686,10 @@ extension NativeLiveWindow {
     /// Worker. The host's current preferences, in the engine's value layout.
     func optionsValues()->RlOpcoesValores{
         var v=RlOpcoesValores()
-        v.version=1
+        v.version=UInt32(RL_OPCOES_VERSION)
         v.atalhos=NativeModernHotkeys.isEnabled() ? 1:0
         v.caminhos=Self.modernPathsEnabled ? 1:0
+        v.wasd=NativeWasdScrolling.isEnabled() ? 1:0
         v.dificuldade=min(campaignSelection.difficulty,2)
         v.velocidade=UInt32(NativeGameSpeed(frameRate:gameFPS)?.rawValue ?? speed.rawValue)
         v.disponivel=UInt32(RL_OPCOES_TODOS)
@@ -1695,7 +1701,7 @@ extension NativeLiveWindow {
     func syncOptions(){
         guard !validationMode else{return}
         let v=optionsValues()
-        let key=[v.atalhos,v.caminhos,v.dificuldade,v.velocidade]
+        let key=[v.atalhos,v.caminhos,v.wasd,v.dificuldade,v.velocidade]
         guard key != optionsSynced else{return}
         if macos_live_options_sync(driver,[v])==0{optionsSynced=key}
     }
@@ -1769,7 +1775,7 @@ extension NativeLiveWindow {
         let v=event.values
         if event.kind==UInt32(RL_OPCOES_CONFIGURAR_TECLAS){DispatchQueue.main.async{self.showHotkeys()};return}
         guard event.kind==UInt32(RL_OPCOES_MUDOU) else{return}
-        optionsSynced=[v.atalhos,v.caminhos,v.dificuldade,v.velocidade]
+        optionsSynced=[v.atalhos,v.caminhos,v.wasd,v.dificuldade,v.velocidade]
         let item=event.item
         DispatchQueue.main.async{ [weak self] in
             guard let self else{return}
@@ -1777,6 +1783,7 @@ extension NativeLiveWindow {
                 switch item{
                 case UInt32(RL_OPCOES_ATALHOS):self.setModernHotkeys(v.atalhos != 0)
                 case UInt32(RL_OPCOES_CAMINHOS):if !Self.diagnosticRun{self.setModernPaths(v.caminhos != 0)}
+                case UInt32(RL_OPCOES_WASD):self.setWasdScrolling(v.wasd != 0)
                 case UInt32(RL_OPCOES_DIFICULDADE):if let d=NativeDifficulty(rawValue:v.dificuldade){self.setDifficulty(d)}
                 case UInt32(RL_OPCOES_VELOCIDADE):if let speed=NativeGameSpeed(rawValue:Int(v.velocidade)){self.setSpeed(speed)}
                 default:break

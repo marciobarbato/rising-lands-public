@@ -684,3 +684,23 @@ No game data is bundled.
 
 Docs (`README.md`, `README.en.md`, `docs/ROADMAP.md`, `windows/README.md`, `docs/WINDOWS_CLIENT.md`): beta 3 is the
 current release; the system arrow over the HUD and the level icon fix are in it.
+
+### 2026-11-16 (third): private `main` `ab0cbea6` — Opções v2, ROLAR COM WASD
+
+Previous synchronisation: public `3406f3b` (source identical to `9d477da`).
+
+Copied (path-mapped patch: `motor/` → `engine/`, `apps/macos-preview/src/native/` → `macos/src/`,
+`apps/macos-preview/testes/ModernHotkeysTests.swift` → `macos/tests/`, `apps/windows/` → `windows/`):
+
+| Private change | Public files |
+|---|---|
+| `f6d8f042` Options screen v2: item ROLAR COM WASD (`RL_OPCOES_WASD = 5`, VOLTAR 6, `RL_OPCOES_TODOS 0x7f`), `RlOpcoesValores.reserved` becomes `wasd` (same layout), `RL_OPCOES_VERSION 2`. The original scrolls the map on GetAsyncKeyState of the arrows (0x4296f1..0x42974c), so no game rule changes | `engine/crates/rl-core/src/options_screen.rs`, `engine/crates/rl-ffi/src/options_abi.rs`, `options_abi_tests.rs`, `engine/include/rising_options.h`, `options-screen.md` |
+| `d922b368` Windows: the key router sends an unbound W/A/S/D as the arrow channels while the option is on (`wasd=` in `opcoes.ini`, off by default); unit test | `windows/src/rlw_hotkeys.c/.h`, `rlw_main.c`, `windows/tests/test_hotkeys.c` |
+| `e962393b` macOS: the same in `NativeHotkeyInputRouter` (key positions kVK_ANSI W/A/S/D), preference `RisingLandsWasdScrolling`; the Options values use `RL_OPCOES_VERSION` instead of a literal 1; unit test | `macos/src/NativeHotkeyInputRouter.swift`, `NativeModernHotkeys.swift`, `NativeLiveWindow.swift`, `macos/tests/ModernHotkeysTests.swift` |
+
+Requested by a player (Reddit) through the user. No game data is added. Checked: in a scratch clone of this repository
+with these patches, `cargo test -p rl-core options`, `cargo test -p rl-ffi options`, `macos/tests/run.sh` (all
+passed) and `./build-macos.sh` (ad hoc); in the private repository `windows/build.sh test` (10 suites) and the mingw
+build, the macOS component tests and a Swift typecheck, and `workstream.py integrate` for maintenance, windows and macos.
+
+Docs: `README.md`, `README.en.md` (Controles / Controls, Options screen) and `windows/README.md` describe the option.

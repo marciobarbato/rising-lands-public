@@ -83,6 +83,31 @@ static void test_router(void) {
  CHECK(log_n == 2 && log_[0].a == 88 && log_[0].b == 1 && log_[1].a == 88 && log_[1].b == 0);
  CHECK(rlw_router_key_down(&r, 'X', 0, 1, 0.4) == 0 && log_n == 2); /* repeat after a reset/focus loss */
 
+ /* ROLAR COM WASD: off, W is nobody's; on, W/A/S/D are the arrow channels and
+  * share their reference count with the real arrows; a player binding wins. */
+ log_n = 0;
+ CHECK(rlw_router_key_down(&r, 'W', 0, 0, 0.5) == 0 && log_n == 0); rlw_router_key_up(&r, 'W');
+ r.wasd_enabled = 1;
+ CHECK(rlw_router_key_down(&r, 'W', 0, 0, 0.6) == 1 && log_n == 1 && log_[0].a == 38 && log_[0].b == 1);
+ CHECK(rlw_router_key_down(&r, 0x26, 0, 0, 0.6) == 1 && log_n == 1); /* the real Up while W is held */
+ CHECK(rlw_router_key_up(&r, 'W') == 1 && log_n == 1);
+ CHECK(rlw_router_key_up(&r, 0x26) == 1 && log_n == 2 && log_[1].a == 38 && log_[1].b == 0);
+ CHECK(rlw_router_key_down(&r, 'A', RLW_MOD_SHIFT, 0, 0.7) == 1 && log_[2].a == 37);
+ CHECK(rlw_router_key_down(&r, 'S', 0, 0, 0.7) == 1 && log_[3].a == 40);
+ CHECK(rlw_router_key_down(&r, 'D', 0, 0, 0.7) == 1 && log_[4].a == 39);
+ rlw_router_key_up(&r, 'A'); rlw_router_key_up(&r, 'S'); rlw_router_key_up(&r, 'D');
+ CHECK(log_n == 8);
+ {
+  RlwBindings custom; rlw_bindings_defaults(&custom); RlwBindError err;
+  RlwChord d = {'D', 0, 0};
+  CHECK(rlw_bindings_rebind(&custom, RLW_ACT_DELETE, &d, 1, &err) == RLW_BIND_OK);
+  RlwRouter c; rlw_router_init(&c, &custom, (RlwRouterSink){NULL, sink_emit, sink_modern}); c.wasd_enabled = 1;
+  log_n = 0;
+  CHECK(rlw_router_key_down(&c, 'D', 0, 0, 0.8) == 1 && log_n == 1 && log_[0].a == 46);
+  rlw_router_key_up(&c, 'D');
+ }
+ r.wasd_enabled = 0; rlw_router_reset(&r); log_n = 0;
+
  /* On: second tap of the same digit within 0.35 s centres on the group. */
  r.modern_enabled = 1; log_n = 0;
  CHECK(rlw_router_key_down(&r, '3', 0, 0, 1.0) == 1); CHECK(rlw_router_key_up(&r, '3') == 1);

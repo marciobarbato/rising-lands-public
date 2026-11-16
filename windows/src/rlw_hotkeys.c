@@ -300,12 +300,24 @@ static int modern_command(int action) {
  }
 }
 
+int rlw_wasd_action(uint32_t vk) {
+ switch (vk) {
+ case 'W': return RLW_ACT_UP;
+ case 'A': return RLW_ACT_LEFT;
+ case 'S': return RLW_ACT_DOWN;
+ case 'D': return RLW_ACT_RIGHT;
+ default: return -1;
+ }
+}
+
 int rlw_router_key_down(RlwRouter *r, uint32_t vk, uint32_t mods, int repeat, double now) {
  if (vk > 255) return 0;
  if (r->presses[vk].used) return r->presses[vk].action < 0 && !r->presses[vk].modern ? 0 : 1;
  /* Includes repeats arriving after focus loss or an installation. */
  if (repeat) return 0;
  int action = rlw_bindings_action(&r->bindings, vk, mods);
+ /* The player's own bindings win; an unbound W/A/S/D is an arrow. */
+ if (action < 0 && r->wasd_enabled) action = rlw_wasd_action(vk);
  if (rlw_action_is_modern(action)) {
   int command = modern_command(action);
   if (!r->modern_enabled || !command) { r->presses[vk].used = 1; r->presses[vk].action = -1; r->presses[vk].modern = 0; return 0; }

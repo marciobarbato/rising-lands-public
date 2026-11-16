@@ -115,6 +115,9 @@ typedef struct {
 typedef struct {
  RlwBindings bindings;
  int modern_enabled;
+ /* Opções > ROLAR COM WASD: W/A/S/D act as the arrow channels (the original
+  * scrolls the map on the arrows) when the player bound them to nothing else. */
+ int wasd_enabled;
  struct { int8_t action; uint8_t used, modern; } presses[256];
  uint16_t references[RLW_ACTION_COUNT];
  uint32_t last_digit; double last_digit_time;
@@ -122,6 +125,9 @@ typedef struct {
 } RlwRouter;
 
 void rlw_router_init(RlwRouter *r, const RlwBindings *bindings, RlwRouterSink sink);
+/* The arrow action W/A/S/D stand for with ROLAR COM WASD on (any modifiers,
+ * like the arrows' legacy chords), or -1. */
+int rlw_wasd_action(uint32_t vk);
 /* Non-modifier physical keys only (Shift/Control/Alt stay the host's channels).
  * Returns 1 when handled (the key is bound or consumed), 0 otherwise. A repeat
  * never emits. */

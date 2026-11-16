@@ -21,12 +21,14 @@ option (private research repository issue #7, `RlOpcoesValores.idioma`).
 
 ## Versioning
 
-`rl_opcoes_versao() == RL_OPCOES_VERSION == 1`. This is an additive extension
+`rl_opcoes_versao() == RL_OPCOES_VERSION == 2`. Version 2 (2026-11-16) adds the item ROLAR COM WASD
+(`RL_OPCOES_WASD = 5`, so `RL_OPCOES_VOLTAR` became 6 and `RL_OPCOES_TODOS` 0x7f) and turns the last field of
+`RlOpcoesValores`, formerly `reserved` (always 0), into `wasd`; the layout and sizes are unchanged. This is an additive extension
 with its own version, like the shell (`rl_shell_version`), mission and save
 extensions. `RL_ABI_VERSION` stays 1.6 and no existing function or structure
 changes: hosts that check `rl_versao()` (the macOS build script matches the
 exact `#define`) keep working, and a host uses the options only after
-`rl_opcoes_versao()==1`.
+`rl_opcoes_versao()==RL_OPCOES_VERSION`.
 
 ## Separation from the faithful shell
 
@@ -94,11 +96,11 @@ no button row and `rl_opcoes_botao` fails instead of guessing.
 `rl_opcoes_botao` returns the clickable rectangle (caption ± 8 px, 25 px tall):
 [363, 411, 437, 436] on the pt-BR main menu, [363, 436, 437, 461] on pause.
 
-On the main menu the button's row is also the open screen's VOLTAR row. When
-the button's click opens the screen, hover selects nothing until the pointer
-leaves the point where that click was released, so a still pointer does not
-select VOLTAR; the first move hovers again, as in the original menus. A new
-press and release on VOLTAR still closes the screen without a move.
+On the main menu the button's row is also the open screen's sixth row (ROLAR COM WASD since version 2; VOLTAR
+in version 1); on the pause menu it is VOLTAR's row since version 2. When the button's click opens the screen,
+hover selects nothing until the pointer leaves the point where that click was released, so a still pointer does
+not select that row; the first move hovers again, as in the original menus. A new press and release there
+activates the row without a move (on the main menu it toggles ROLAR COM WASD).
 `rl_opcoes_abrir` (no click) keeps hover active at once.
 
 ## Items and values
@@ -110,6 +112,7 @@ press and release on VOLTAR still closes the screen without a move.
 | CAMINHOS MELHORES: SIM/NÃO | `caminhos` | macOS `RisingLandsModernPaths` → rule bit 0 (`RULE_MODERN_PATHS`, modern unit paths); Windows: not offered yet |
 | DIFICULDADE: FÁCIL/NORMAL/DIFÍCIL | `dificuldade` | stage-start preset (next New game, Restart or Next stage) |
 | VELOCIDADE: 0,5x/1x/2x/4x | `velocidade` | host pace |
+| ROLAR COM WASD: SIM/NÃO | `wasd` | host key routing: W/A/S/D act as the arrow channels (the original scrolls the map on GetAsyncKeyState 0x25..0x28) unless the player bound that key to something else |
 | VOLTAR | closes | — |
 
 Unavailable items are engraved: AffText's layout in the item font with
@@ -120,7 +123,7 @@ them.
 
 ## Errors
 
-Null/misaligned pointers, out-of-range values, `reserved != 0`, input keys
+Null/misaligned pointers, out-of-range values (`wasd` above 1), an input `reserved != 0`, input keys
 above 63 → `RL_INVALID_ARGUMENT`; unknown options or shell handle →
 `RL_INVALID_HANDLE`; small buffers → `RL_BUFFER_TOO_SMALL`; drawing while
 closed, or opening over another screen or a pending request →

@@ -232,8 +232,10 @@ wooden floor of the main and pause menus opens it; only a click that starts on i
 the original shell unchanged. Up/Down/Enter/Escape and Left/Right (only while it is open) or the mouse choose:
 "Atalhos modernos" (the modern shortcuts below, and the Shift+click order queue rule, `RL_REGRA_FILA_ORDENS`, for
 worlds created afterwards), "Caminhos melhores" (the engine's modern unit paths,
-`RL_REGRA_CAMINHOS_MELHORES`, for worlds created afterwards), difficulty (next stage start) and speed (at once, like `+`/`-`). "Configurar teclas" opens the "Atalhos de teclado"
-window (below). The settings live in `opcoes.ini` beside `Dados` and `Partidas` (`atalhos`, `caminhos`,
+`RL_REGRA_CAMINHOS_MELHORES`, for worlds created afterwards), difficulty (next stage start), speed (at once, like `+`/`-`) and "Rolar com WASD" (since beta 4, off by default: the
+key router sends an unbound W/A/S/D as the arrow channels, which the original reads to scroll the map; a key the player
+bound in "Atalhos de teclado" keeps its binding). "Configurar teclas" opens the "Atalhos de teclado"
+window (below). The settings live in `opcoes.ini` beside `Dados` and `Partidas` (`atalhos`, `caminhos`, `wasd`,
 `dificuldade`, `velocidade`); `--difficulty`/`--speed` override them for one run. Defaults when a key is missing
 are the macOS app's: Atalhos modernos on, Caminhos melhores off, Normal, 1x (since 2026-11-12; before, Atalhos
 modernos was off on Windows). The two rule items work as on

@@ -34,6 +34,9 @@ pub struct Values {
     pub hotkeys: bool,
     /// Better paths (rule bit 0, owned by the pathing front).
     pub paths: bool,
+    /// W/A/S/D also scroll the map, as the original's arrow keys (host routing
+    /// only: the game still reads the arrows through GetAsyncKeyState).
+    pub wasd: bool,
     /// Stage-start difficulty preset 0 easy, 1 normal, 2 hard.
     pub difficulty: u8,
     /// Host pace 0 = 0.5x, 1 = 1x, 2 = 2x, 3 = 4x.
@@ -64,17 +67,19 @@ pub enum Item {
     Paths = 2,
     Difficulty = 3,
     Speed = 4,
-    Back = 5,
+    Wasd = 5,
+    Back = 6,
 }
-pub const ITEMS: [Item; 6] = [
+pub const ITEMS: [Item; 7] = [
     Item::Hotkeys,
     Item::ConfigureKeys,
     Item::Paths,
     Item::Difficulty,
     Item::Speed,
+    Item::Wasd,
     Item::Back,
 ];
-pub const ALL: u8 = 0x3f;
+pub const ALL: u8 = 0x7f;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Event {
@@ -225,6 +230,15 @@ fn text(language: Language, item: Item, values: &Values) -> String {
                 names[usize::from(values.speed.min(3))]
             )
         }
+        Item::Wasd => format!(
+            "{}: {}",
+            if pt {
+                "ROLAR COM WASD"
+            } else {
+                "WASD SCROLLING"
+            },
+            yes_no(values.wasd)
+        ),
         Item::Back => if pt { "VOLTAR" } else { "BACK" }.into(),
     }
 }
@@ -294,7 +308,9 @@ impl Options {
         ITEMS[index] == Item::Back || self.values.available & (1 << index) != 0
     }
     fn first_enabled(&self) -> usize {
-        (0..ITEMS.len()).find(|&i| self.enabled(i)).unwrap_or(5)
+        (0..ITEMS.len())
+            .find(|&i| self.enabled(i))
+            .unwrap_or(Item::Back as usize)
     }
     /// Opens over the current shell screen (main 2 or pause 16 only). The MENU.CMP
     /// animations continue from the shell's counter 0x508f84.
@@ -422,7 +438,7 @@ impl Options {
             let item = self.selected();
             if matches!(
                 item,
-                Item::Difficulty | Item::Speed | Item::Hotkeys | Item::Paths
+                Item::Difficulty | Item::Speed | Item::Hotkeys | Item::Paths | Item::Wasd
             ) {
                 return Ok((
                     true,
@@ -473,6 +489,7 @@ impl Options {
         match item {
             Item::Hotkeys => self.values.hotkeys = !self.values.hotkeys,
             Item::Paths => self.values.paths = !self.values.paths,
+            Item::Wasd => self.values.wasd = !self.values.wasd,
             Item::Difficulty => self.values.difficulty = cycle(self.values.difficulty, 3),
             Item::Speed => self.values.speed = cycle(self.values.speed, 4),
             _ => {}
@@ -672,6 +689,7 @@ mod tests {
         Values {
             hotkeys: true,
             paths: false,
+            wasd: false,
             difficulty: 1,
             speed: 1,
             available: ALL,
@@ -749,13 +767,15 @@ mod tests {
         o.draw(&look, &mut first).unwrap();
         still.x += 1;
         o.input(&look, &still).unwrap();
-        assert_eq!(o.selected(), Item::Back, "a move hovers again");
+        // On the main menu the button row is the open screen's sixth row (WASD).
+        assert_eq!(o.selected(), Item::Wasd, "a move hovers again");
         let mut lit = vec![0; PIXELS];
         o.draw(&look, &mut lit).unwrap();
         assert_ne!(lit, first);
         o.close();
         assert_eq!(click(&mut o, &look, button)[2], (true, Event::Opened));
-        // A deliberate click on VOLTAR, even without moving, still closes.
+        // A deliberate click on the sixth row (ROLAR COM WASD), even without
+        // moving, toggles it; a second one toggles it back.
         let mut press = Input {
             x: bx,
             y: by,
@@ -765,7 +785,20 @@ mod tests {
         o.input(&look, &press).unwrap();
         assert_eq!(o.selected(), Item::Hotkeys);
         press.released = true;
-        assert_eq!(o.input(&look, &press).unwrap(), (true, Event::Closed));
+        assert_eq!(
+            o.input(&look, &press).unwrap(),
+            (true, Event::Changed(Item::Wasd))
+        );
+        assert!(o.values.wasd);
+        press.released = false;
+        o.input(&look, &press).unwrap();
+        press.released = true;
+        assert_eq!(
+            o.input(&look, &press).unwrap(),
+            (true, Event::Changed(Item::Wasd))
+        );
+        assert!(!o.values.wasd);
+        o.close();
         assert_eq!(click(&mut o, &look, button)[2], (true, Event::Opened));
         // Keyboard navigation from a pointer clear of every item.
         o.input(&look, &Input::default()).unwrap();
@@ -826,8 +859,20 @@ mod tests {
         };
         o.input(&look, &left).unwrap();
         assert_eq!(o.values.speed, 0);
+        // ROLAR COM WASD: Enter and Right toggle it.
+        o.input(&look, &down).unwrap();
+        assert_eq!(
+            o.input(&look, &enter).unwrap(),
+            (true, Event::Changed(Item::Wasd))
+        );
+        assert!(o.values.wasd);
+        assert_eq!(
+            o.input(&look, &right).unwrap(),
+            (true, Event::Changed(Item::Wasd))
+        );
+        assert!(!o.values.wasd);
         // A mouse click on Back closes; Escape closes too.
-        let back = o.item_rect(&look, 5).unwrap();
+        let back = o.item_rect(&look, Item::Back as usize).unwrap();
         let clicked = click(&mut o, &look, back);
         assert_eq!(clicked[2], (true, Event::Closed));
         assert!(!o.is_open());

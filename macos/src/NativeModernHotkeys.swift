@@ -50,6 +50,19 @@ enum NativeModernHotkeys {
     static let lastAlert: [NativeModernStep] = [.key(vkey: 88, down: true), .waitConsumed, .key(vkey: 88, down: false)]
 }
 
+/// "Rolar com WASD" (Opções, engine options v2): W/A/S/D act as the arrow
+/// channels, which the original reads to scroll the map (GetAsyncKeyState
+/// 0x25..0x28). Host key routing only; off by default.
+enum NativeWasdScrolling {
+    static let preferenceKey = "RisingLandsWasdScrolling"
+    static func isEnabled(_ defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: preferenceKey)
+    }
+    static func store(_ enabled: Bool, _ defaults: UserDefaults = .standard) {
+        defaults.set(enabled, forKey: preferenceKey)
+    }
+}
+
 /// "Caminhos melhores": the engine's optional modern unit paths,
 /// `RL_REGRA_CAMINHOS_MELHORES` (bit 0 of regras). Off by default (user
 /// decision): with it off the game moves units exactly as the original.
