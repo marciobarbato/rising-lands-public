@@ -61,7 +61,7 @@ A imagem do CD original brasileiro pode ser encontrada no **Internet Archive**. 
 
 ## Estado atual
 
-- A campanha roda nas 25 fases. Um bot automático jogou todas elas, cada partida com até 72.000 quadros, sem nenhuma parada do motor. As primeiras missões também foram jogadas à mão sem problemas.
+- A campanha roda nas 25 fases. Um bot automático jogou todas elas, cada partida com até 72.000 quadros, sem nenhuma parada do motor. As missões 1 a 6 também foram jogadas à mão, até o fim, sem problemas.
 - Ninguém terminou a campanha inteira ainda. É aí que os testes de vocês ajudam.
 - Se o jogo chegar a um trecho ainda não portado, ele não trava em silêncio: mostra um **painel de parada** com o endereço da rotina do original. Esse texto é o que mais ajuda num relato.
 - macOS: beta 4 (`v0.1.0-beta.4`; a beta 1 era o mesmo app da alfa 3), com rolar com WASD, a seta do sistema sobre a barra do HUD, o volume a cada quadro, com a **tela de Opções**, os atalhos modernos e a fila de ordens com Shift+clique, os **caminhos melhores**, o menu **Áudio** e sons que antes não tocavam, o **gerenciador de partidas salvas** e o **salvamento automático** (veja "Controles").

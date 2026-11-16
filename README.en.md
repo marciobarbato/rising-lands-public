@@ -61,7 +61,7 @@ The original Brazilian CD image can be found on the **Internet Archive**. Downlo
 
 ## Current state
 
-- The campaign runs on all 25 stages. An automated bot played every one of them, each game up to 72,000 frames, with no engine stop. The first missions were also played by hand without problems.
+- The campaign runs on all 25 stages. An automated bot played every one of them, each game up to 72,000 frames, with no engine stop. Missions 1 to 6 were also played by hand, to the end, without problems.
 - Nobody has finished the whole campaign yet. That is where your testing helps.
 - If the game reaches something not ported yet, it does not freeze silently: it shows a **stop panel** with the original routine's address. That text is the most useful part of a report.
 - macOS: beta 4 (`v0.1.0-beta.4`; beta 1 was the same app as alpha 3), with WASD scrolling, the system arrow over the HUD bar, the per-frame volume, with the **Options screen**, the modern shortcuts and the Shift+click order queue, **better unit paths**, the **Áudio** menu and sounds that did not play before, the **saved-games manager** and the **periodic autosave** (see "Controls").

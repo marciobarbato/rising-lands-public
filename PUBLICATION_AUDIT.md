@@ -731,3 +731,8 @@ MacBook: `cargo test` 104 passed / 11 ignored, `macos/tests/run.sh` all passed. 
 the release, `stapler validate` and `spctl` accepted. The temporary draft that carried it was deleted.
 
 Docs: `README.md` and `README.en.md` no longer send Mac players to beta 3.
+
+### 2026-11-16 (sixth): docs only — missions 1 to 6 played by hand
+
+No source changed. `README.md` and `README.en.md` now say that missions 1 to 6 were played by hand to the end (the
+author's report), and the `v0.1.0-beta.4` notes say the same next to "nobody has finished the campaign by hand".
