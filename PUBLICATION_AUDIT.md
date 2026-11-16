@@ -704,3 +704,18 @@ passed) and `./build-macos.sh` (ad hoc); in the private repository `windows/buil
 build, the macOS component tests and a Swift typecheck, and `workstream.py integrate` for maintenance, windows and macos.
 
 Docs: `README.md`, `README.en.md` (Controles / Controls, Options screen) and `windows/README.md` describe the option.
+
+### 2026-11-16 (fourth): docs only — beta 4 (public test), Windows first
+
+Previous synchronisation: public `8c9685c`. No source changed (`engine/`, `macos/` and `windows/` are identical to
+`8c9685c`).
+
+The release `v0.1.0-beta.4` is tagged on the commit that carries this entry and, at the user's request, published
+first with the Windows build only:
+- `RisingLands-windows-x86_64.exe` (+ `.sha256`): public CI run 43909085692 (job `mingw-x64`) from `8c9685c`,
+  SHA-256 `96afe561005dbc8e771dcd1a895a8af5bafbd3ea11438af03f3e38e58e298517`.
+- The macOS `.dmg` (built on the MacBook from `8c9685c`, signed and notarized) is added to the same release when ready;
+  its hash will be recorded in a later entry. Until then the docs send Mac players to beta 3.
+
+Docs (`README.md`, `README.en.md`, `docs/ROADMAP.md`, `windows/README.md`, `docs/WINDOWS_CLIENT.md`): beta 4 is the
+current release; WASD scrolling is in it.
