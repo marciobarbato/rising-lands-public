@@ -1,4 +1,4 @@
-# Rising Lands for Windows (beta 2)
+# Rising Lands for Windows (beta 3)
 
 > **Resumo em português.** Cliente Windows sobre o mesmo motor em Rust e a mesma ABI em C (`engine/include`) do app
 > macOS. Este primeiro marco importa o CD brasileiro do jogador (imagem `.BIN`/`.CUE`, `.ISO` ou pasta), roda a
@@ -29,6 +29,8 @@
 > importação, primeira execução, desenho das bandeiras, DPI, áudio).
 > A beta 2 traz o volume que o jogo ajusta a cada quadro (PlaySnd_PostVolume, 0x45448a) e o som dos
 > filmes seguindo o volume e o silenciar da música do menu "Áudio".
+> A beta 3 mostra a seta do sistema fora da área do mapa (a barra de baixo com os ícones de construção), como no
+> original, em vez de o cursor sumir, e o ícone de nível não pisca mais em campanhas antigas.
 > Nenhum dado do jogo vai para o repositório: tudo vem do CD importado na primeira execução.
 
 ## Stack and why

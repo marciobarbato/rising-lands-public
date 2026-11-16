@@ -656,7 +656,7 @@ Copied (path-mapped patch: `motor/` → `engine/`, `apps/macos-preview/src/nativ
 
 | Private change | Public files |
 |---|---|
-| `1a9dd6cb` the player load (`rl_carregar_bytes` / `rl_carregar_arquivo`) clears unit byte `+0xba` in all 800 records: RISING.EXE never writes it (only the renderer reads it), and campaigns started before 2026-11-11 carried the old 0xa7 allocation fill through stages and saves, so recruits blinked their level icon (#4) | `engine/crates/rl-core/src/save.rs`, `engine/crates/rl-core/tests/app_allocation_fill.rs`, `engine/crates/rl-ffi/src/save_abi.rs`, `engine/include/rising_engine.h` |
+| `1a9dd6cb` the player load (`rl_carregar_bytes` / `rl_carregar_arquivo`) clears unit byte `+0xba` in all 800 records: RISING.EXE never writes it (only the renderer reads it), and campaigns started before 2026-11-11 carried the old 0xa7 allocation fill through stages and saves, so recruits blinked their level icon (private tracker issue #4; the public #4 is the Windows audio issue) | `engine/crates/rl-core/src/save.rs`, `engine/crates/rl-core/tests/app_allocation_fill.rs`, `engine/crates/rl-ffi/src/save_abi.rs`, `engine/include/rising_engine.h` |
 | `70df9894` AffGame 0x417db2..0x417e78 sets flag 0x49a054 and calls ShowCursor(TRUE) when the mouse leaves the map view (the bottom HUD with the building icons, or the view's edges) and stops drawing its own pointer; the Windows host hid the system arrow for all of play, so the pointer vanished over the HUD (player report). The host now reads the flag after pointer events and shows the arrow while it is 1 | `windows/src/rlw_main.c` |
 | `a80e40ed` the same in the macOS app (`stepSystemArrow`) | `macos/src/NativeLiveWindow.swift` |
 
@@ -664,3 +664,23 @@ No game data is added. Checked: in this clone `cargo test -p rl-core --test app_
 repository `windows/build.sh test` (10 suites) and the mingw build, a Swift typecheck of the macOS sources, MONDE01
 20 × 36,000 GATE_MATCH and `validate.sh` for `1a9dd6cb`, and `workstream.py integrate` for windows, macos and
 maintenance.
+
+### 2026-11-16 (second): docs only — beta 3 (public test)
+
+Previous synchronisation: public `9d477da`. No source changed (`engine/`, `macos/` and `windows/` are identical to
+`9d477da`).
+
+The release `v0.1.0-beta.3` is tagged on the commit that carries this entry. Assets:
+- `RisingLands-macOS-9d477da.dmg`: built on the MacBook from a fresh clone at `9d477da` with `./build-macos.sh`,
+  Developer ID (TF3GU6U7H8), hardened runtime, notarized and stapled (app `4b878eab-…`, dmg `b45b73e8-…`, both
+  Accepted), SHA-256 `3d013a342082571af548d98c884ae2d65fa15ac1978432d7ecae9320ea8950b8`. On the MacBook: `cargo test`
+  104 passed / 11 ignored, `macos/tests/run.sh` all passed. On the Mac mini: downloaded again, `stapler validate` and
+  `spctl` accepted, installed and checked (`RisingLandsSourceCommit=9d477da`).
+- `RisingLands-windows-x86_64.exe` (+ `.sha256`): public CI run 43890616771 (job `mingw-x64`) from `9d477da`,
+  SHA-256 `6b552919493318fab6405dea377d623138fab05d573b0f986e272ba38d4eecb8`.
+
+At the user's request the full candidate round (saves over 36,000 frames, UI smokes) was not rerun for this release.
+No game data is bundled.
+
+Docs (`README.md`, `README.en.md`, `docs/ROADMAP.md`, `windows/README.md`, `docs/WINDOWS_CLIENT.md`): beta 3 is the
+current release; the system arrow over the HUD and the level icon fix are in it.
