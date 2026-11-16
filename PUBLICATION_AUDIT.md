@@ -646,3 +646,21 @@ bundled.
 
 Docs (`README.md`, `README.en.md`, `docs/ROADMAP.md`, `windows/README.md`, `docs/WINDOWS_CLIENT.md`): beta 2 is the
 current release; the per-frame volume and the Windows movie audio are in it.
+
+### 2026-11-16: private `main` `7ac11bbe` — system arrow over the HUD, level icon blink in old saves
+
+Previous synchronisation: public `3d2bce3` (source identical to `5668ac5`).
+
+Copied (path-mapped patch: `motor/` → `engine/`, `apps/macos-preview/src/native/` → `macos/src/`, `apps/windows/` →
+`windows/`):
+
+| Private change | Public files |
+|---|---|
+| `1a9dd6cb` the player load (`rl_carregar_bytes` / `rl_carregar_arquivo`) clears unit byte `+0xba` in all 800 records: RISING.EXE never writes it (only the renderer reads it), and campaigns started before 2026-11-11 carried the old 0xa7 allocation fill through stages and saves, so recruits blinked their level icon (#4) | `engine/crates/rl-core/src/save.rs`, `engine/crates/rl-core/tests/app_allocation_fill.rs`, `engine/crates/rl-ffi/src/save_abi.rs`, `engine/include/rising_engine.h` |
+| `70df9894` AffGame 0x417db2..0x417e78 sets flag 0x49a054 and calls ShowCursor(TRUE) when the mouse leaves the map view (the bottom HUD with the building icons, or the view's edges) and stops drawing its own pointer; the Windows host hid the system arrow for all of play, so the pointer vanished over the HUD (player report). The host now reads the flag after pointer events and shows the arrow while it is 1 | `windows/src/rlw_main.c` |
+| `a80e40ed` the same in the macOS app (`stepSystemArrow`) | `macos/src/NativeLiveWindow.swift` |
+
+No game data is added. Checked: in this clone `cargo test -p rl-core --test app_allocation_fill`; in the private
+repository `windows/build.sh test` (10 suites) and the mingw build, a Swift typecheck of the macOS sources, MONDE01
+20 × 36,000 GATE_MATCH and `validate.sh` for `1a9dd6cb`, and `workstream.py integrate` for windows, macos and
+maintenance.

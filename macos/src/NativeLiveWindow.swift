@@ -452,6 +452,12 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     var driver:OpaquePointer?
     var running=false
     var stoppedReason:String?
+    /// AffGame's cursor handoff (0x417db2..0x417e78): outside the map view the
+    /// original stops drawing its pointer and calls ShowCursor(TRUE); back inside,
+    /// ShowCursor(FALSE). Work queue: the game's flag 0x49a054 as last read and
+    /// the frames left to read it after a pointer move. Main: the system arrow shows.
+    var cursorProbe=0,cursorArrowFlag=false,cursorWasShell=true
+    var gameShowsArrow=false
     var metalSeconds=0.0
     var playStarted=0.0,playEnded=0.0
     var startFrames:UInt64=0,startLogic:UInt64=0,startRender:UInt64=0,startProof:UInt64=0
@@ -738,6 +744,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                 let frame=max(129,Int(self.status().frames)+1)
                 if !self.validationMode {
                     let kind=event["kind"] as? String
+                    if kind=="mouse"{self.cursorProbe=3}
                     let code=macos_live_event(self.driver,kind=="mouse" ? 1:2,UInt32(event["msg"] as? Int ?? 0),Int32(event["x"] as? Int ?? 0),Int32(event["y"] as? Int ?? 0),UInt32(event["wParam"] as? Int ?? 0),UInt32(event["vkey"] as? Int ?? 0),(event["down"] as? Bool ?? false) ? 1:0)
                     if code != 0{self.running=false;self.stoppedReason="Entrada recusada: \(self.message(self.status()))";self.deliver()}
                 }
@@ -980,7 +987,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
             guard let self=self else{return};var value=value;value["native_window_visible"]=self.window.isVisible
             value["cd_music"]=self.cdMusic?.metrics
             self.button.title=isRunning ? "Pausar":"Executar"
-            self.metal.hidesSystemCursor=isRunning && !self.validationMode
+            self.metal.hidesSystemCursor=isRunning && !self.validationMode && !self.gameShowsArrow
             self.displayStop(detail,frame:s.frames+1,result:result,originalMode:originalMode)
             let fps=(value["native_metrics"] as? [String:Any])?["displayFPS"] as? Double ?? 0
             self.label.stringValue=caption+(isRunning && !value.isEmpty ? String(format:" · tela %.1f fps",fps):"")+(self.saveNotice.isEmpty ? "":" · \(self.saveNotice)")
@@ -1079,6 +1086,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
         advance()
         stepModern()
         stepOrderQueueMarkers()
+        stepSystemArrow()
         let finished=ProcessInfo.processInfo.systemUptime
         if finished-lastNotify>=0.1 || !running{lastNotify=finished;deliver(periodic:running)}
         if running{work.async{[weak self] in self?.pump(run)}}else{
@@ -1130,6 +1138,26 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
                              snapshot:{[unowned self] in self.modernSnapshot()},
                              pointer:{[unowned self] in self.metal.pointer.get()})
     }
+    /// Work queue. Reads the game's ShowCursor state (flag 0x49a054) for a few
+    /// frames after each pointer move and on return to play, so the system arrow
+    /// shows over the HUD strip and the view's edges as in the original.
+    func stepSystemArrow(){
+        if validationMode || macos_live_shell_mode(driver) != 0{cursorWasShell=true;return}
+        if cursorWasShell{cursorWasShell=false;cursorProbe=3}
+        guard cursorProbe>0 else{return}
+        cursorProbe-=1
+        var address:UInt32=0x49a054,size:UInt32=1,flag:UInt8=0
+        guard macos_live_peek(driver,&address,&size,1,&flag)==0 else{return}
+        let arrow=flag==1
+        guard arrow != cursorArrowFlag else{return}
+        cursorArrowFlag=arrow
+        let isRunning=running
+        DispatchQueue.main.async{[weak self] in
+            guard let self=self else{return}
+            self.gameShowsArrow=arrow
+            self.metal.hidesSystemCursor=isRunning && !self.validationMode && !arrow
+        }
+    }
     /// One read-only projection per call, between frames, on the work queue.
     /// Shift+click order queue markers (work queue only): refreshed every 4 frames,
     /// and read from the game only while some unit has waypoints.
@@ -1169,6 +1197,7 @@ final class NativeLiveWindow:NSObject,NSWindowDelegate {
     func deliverSynthetic(_ event:[String:Any])->Bool{
         guard modernAllowed() else{return false}
         let frame=max(129,Int(status().frames)+1),kind=event["kind"] as? String
+        if kind=="mouse"{cursorProbe=3}
         let code=macos_live_event(driver,kind=="mouse" ? 1:2,UInt32(event["msg"] as? Int ?? 0),Int32(event["x"] as? Int ?? 0),Int32(event["y"] as? Int ?? 0),UInt32(event["wParam"] as? Int ?? 0),UInt32(event["vkey"] as? Int ?? 0),(event["down"] as? Bool ?? false) ? 1:0)
         if code != 0{running=false;stoppedReason="Entrada recusada: \(message(status()))";deliver();return false}
         DispatchQueue.main.async{if self.recording{self.recordedEvent?(["frame":frame,"event":event])}}

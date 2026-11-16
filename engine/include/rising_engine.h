@@ -394,6 +394,9 @@ int32_t rl_fila_ordens(RlMundo world,uint32_t unit,uint16_t *cells,uint32_t capa
  * after rename is reported although the replacement has already occurred.
  * Limits: 64MiB per memory image/FIFO, 128MiB uncompressed, 160MiB complete
  * file, 65536 records/queued phases, 256 keys per phase. No pointers retained.
+ * rl_carregar_bytes/rl_carregar_arquivo are the player load: they clear unit
+ * byte +0xba (never written by RISING.EXE; saves from worlds made with the old
+ * 0xa7 allocation fill blinked every recruit's level icon). Renderer-only.
  */
 #define RL_SAVE_FORMAT_VERSION 1u
 #define RL_SAVE_STATE_SCHEMA 2u

@@ -87,6 +87,11 @@ static struct {
  char keys_path[4200];
  /* Shift+click order queue markers (rlw_markers.h) of markers_driver. */
  RlwMarkers markers; RlwDriver *markers_driver; unsigned marker_tick;
+ /* AffGame's cursor handoff (0x417db2..0x417e78): outside the map view the
+  * original stops drawing its pointer and calls ShowCursor(TRUE); back inside,
+  * ShowCursor(FALSE). system_arrow mirrors the game's flag 0x49a054, read for a
+  * few frames after each pointer move (cursor_probe) instead of every frame. */
+ int system_arrow, cursor_probe, was_menu;
 } G = {0};
 
 /* ---------- utilities ---------- */
@@ -206,6 +211,7 @@ static void report_stop(void) {
 
 static void send_event(uint32_t kind, uint32_t msg, int32_t x, int32_t y, uint32_t wp, uint32_t vk, uint32_t down) {
  if (!G.driver) return;
+ if (kind == 1) G.cursor_probe = 3; /* the flag follows this position after its frame */
  if (rlw_driver_event(G.driver, kind, msg, x, y, wp, vk, down)) report_stop();
 }
 
@@ -802,6 +808,21 @@ static void menu_mouse(uint32_t msg, LPARAM lp) {
  menu_result(rlw_menu_mouse(&G.menu, msg, (uint32_t)x, (uint32_t)y, now_seconds() * 1000));
 }
 
+/* Applies the game's ShowCursor state (flag 0x49a054) when it changes; the
+ * system arrow shows over the HUD strip and the view's edges, as in the original. */
+static void sync_system_arrow(void) {
+ if (G.cursor_probe <= 0 || !G.driver) return;
+ G.cursor_probe--;
+ uint32_t address = 0x49a054, size = 1; uint8_t flag = 0;
+ if (rlw_driver_peek(G.driver, &address, &size, 1, &flag)) return;
+ int arrow = flag == 1;
+ if (arrow == G.system_arrow) return;
+ G.system_arrow = arrow;
+ POINT p; RECT r;
+ if (GetCursorPos(&p) && WindowFromPoint(p) == G.hwnd && ScreenToClient(G.hwnd, &p) && GetClientRect(G.hwnd, &r) && PtInRect(&r, p))
+  SetCursor(arrow ? LoadCursor(NULL, IDC_ARROW) : NULL);
+}
+
 static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
  if (rlw_audio_ui_movie_message(msg, wp)) return 0; /* an original movie takes the input (front 2) */
  switch (msg) {
@@ -811,7 +832,7 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
  case WM_SETCURSOR:
   /* In play the game draws its own pointer into the surface; the menus keep
    * the system pointer, as the macOS host does (hidesSystemCursor only while running). */
-  if (LOWORD(lp) == HTCLIENT && G.driver && !in_menu()) { SetCursor(NULL); return TRUE; }
+  if (LOWORD(lp) == HTCLIENT && G.driver && !in_menu() && !G.system_arrow) { SetCursor(NULL); return TRUE; }
   break;
  case WM_MOUSEMOVE: if (in_menu()) menu_mouse(0x200, lp); else mouse(0x200, lp, G.left_held, 1); return 0;
  case WM_LBUTTONDOWN: SetCapture(hwnd); if (in_menu()) menu_mouse(0x201, lp); else mouse(0x201, lp, 0, 0); return 0;
@@ -1135,6 +1156,7 @@ int main_utf8(int argc, char **argv) {
   if (SV.retry_slot[0] && now_seconds() >= SV.retry_at) { char slot[32], name[RLW_SAVE_NAME_CAPACITY]; snprintf(slot, sizeof(slot), "%s", SV.retry_slot); snprintf(name, sizeof(name), "%s", SV.retry_name); save_attempt(slot, SV.retry_named, name, SV.retries); }
   if (G.menu_failed) { MsgWaitForMultipleObjects(0, NULL, FALSE, 50, QS_ALLINPUT); if (G.opt.frames) { rc = 2; break; } continue; }
   if (in_menu()) {
+   G.was_menu = 1;
    rlw_audio_ui_menu_tick(G.driver); /* credits stop the CD music (front 2) */
    if (rlw_audio_ui_movie_active()) { /* original movie (front 2): frames by the clock, then its completion */
     uint32_t done = 0; int step = rlw_audio_ui_movie_step(&done);
@@ -1155,6 +1177,7 @@ int main_utf8(int argc, char **argv) {
    MsgWaitForMultipleObjects(0, NULL, FALSE, (DWORD)(until > 0 ? until * 1000 : 0), QS_ALLINPUT);
    continue;
   }
+  if (G.was_menu) { G.was_menu = 0; G.cursor_probe = 3; } /* back in play: read the flag again */
   RlwStatus s; rlw_driver_status(G.driver, &s);
   int smoke = G.opt.frames != 0;
   if (s.stopped || G.paused) { report_stop(); MsgWaitForMultipleObjects(0, NULL, FALSE, 50, QS_ALLINPUT); if (smoke && s.stopped) { rc = 2; break; } continue; }
@@ -1169,6 +1192,7 @@ int main_utf8(int argc, char **argv) {
   rlw_audio_ui_attach(G.driver);
   if (rlw_driver_advance(G.driver)) { report_stop(); present_now(); continue; }
   rlw_audio_ui_pump(G.driver);
+  sync_system_arrow();
   if (stage_start) stage_autosave();
   step_modern();
   step_markers();

@@ -467,6 +467,44 @@ pub fn encode(world: &World, resume: &ResumeState) -> SaveResult<Vec<u8>> {
 
 /// Builds and validates a replacement. No running world is mutated on failure.
 pub fn decode(bytes: &[u8]) -> SaveResult<(World, ResumeState)> {
+    decode_with(bytes, false)
+}
+
+/// The player apps' load (`rl_carregar_bytes`/`rl_carregar_arquivo`): `decode`
+/// plus [`clear_unit_highlight`]. Proofs and round trips keep `decode`.
+pub fn decode_for_play(bytes: &[u8]) -> SaveResult<(World, ResumeState)> {
+    decode_with(bytes, true)
+}
+
+/// Unit byte `+0xba` is never written by RISING.EXE (CreerEngin 0x457e6c sets
+/// +0xbc..+0xbe only), so in the original it keeps EnginAlloc's zeroed memory
+/// for the whole run; AffDeplaceEngin 0x413655 blinks a unit's level icon when
+/// it is not zero. Worlds the apps created before 2026-11-11 used the gates'
+/// 0xa7 allocation fill, and campaign stages keep the unit table, so saves
+/// from those campaigns carried 0xa7 in every unused slot and each recruit's
+/// icon blinked (issue #4, still seen in beta 2). Only the renderer reads the
+/// byte, so clearing it changes no game logic. Returns how many were set.
+pub fn clear_unit_highlight(memory: &mut crate::MemoriaJogo) -> u32 {
+    const UNIT_TABLE: u32 = 0x4e19a0;
+    const RECORD: u32 = 276;
+    const SLOTS: u32 = 0x35e80 / RECORD;
+    let Ok(base) = memory.u32(UNIT_TABLE) else {
+        return 0;
+    };
+    if base == 0 {
+        return 0;
+    }
+    let mut cleared = 0;
+    for i in 0..SLOTS {
+        let a = base + i * RECORD + 0xba;
+        if matches!(memory.u8(a), Ok(v) if v != 0) && memory.set_u8(a, 0).is_ok() {
+            cleared += 1;
+        }
+    }
+    cleared
+}
+
+fn decode_with(bytes: &[u8], play: bool) -> SaveResult<(World, ResumeState)> {
     if bytes.len() > MAX_SAVE_BYTES {
         return Err(SaveError::Limit);
     }
@@ -518,8 +556,11 @@ pub fn decode(bytes: &[u8]) -> SaveResult<(World, ResumeState)> {
     }
     r.finish()?;
     let mut m = Reader::new(sections[0]);
-    let memory = m.memory()?;
+    let mut memory = m.memory()?;
     m.finish()?;
+    if play {
+        clear_unit_highlight(&mut memory);
+    }
     let mut m = Reader::new(sections[1]);
     let generation = m.u64()?;
     let phase = m.u32()?;
@@ -722,12 +763,19 @@ pub fn save_file(path: &Path, world: &World, resume: &ResumeState) -> SaveResult
     write_file(path, &encode(world, resume)?)
 }
 pub fn load_file(path: &Path) -> SaveResult<(World, ResumeState)> {
+    decode(&read_file(path)?)
+}
+/// `load_file` with the player apps' [`decode_for_play`].
+pub fn load_file_for_play(path: &Path) -> SaveResult<(World, ResumeState)> {
+    decode_for_play(&read_file(path)?)
+}
+fn read_file(path: &Path) -> SaveResult<Vec<u8>> {
     use std::io::Read;
     let mut bytes = Vec::new();
     fs::File::open(path)?
         .take(MAX_SAVE_BYTES as u64 + 1)
         .read_to_end(&mut bytes)?;
-    decode(&bytes)
+    Ok(bytes)
 }
 
 /// One engine-owned stage-start slot. The stage loader calls capture after load-tail

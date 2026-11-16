@@ -116,7 +116,7 @@ pub unsafe extern "C" fn rl_carregar_bytes(
             return Err(AbiError::ResourceLimit);
         }
         let bytes = unsafe { slice::from_raw_parts(bytes, length as usize) };
-        let (world, resume) = save::decode(bytes)?;
+        let (world, resume) = save::decode_for_play(bytes)?;
         let (handle, input) = publish(world, resume)?;
         unsafe {
             handle_out.write(handle);
@@ -160,7 +160,7 @@ pub unsafe extern "C" fn rl_carregar_arquivo(
             return Err(AbiError::InvalidArgument);
         }
         let path = unsafe { path(path_bytes, path_length) }?;
-        let (world, resume) = save::load_file(path)?;
+        let (world, resume) = save::load_file_for_play(path)?;
         let (handle, input) = publish(world, resume)?;
         unsafe {
             handle_out.write(handle);

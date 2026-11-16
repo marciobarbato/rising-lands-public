@@ -52,3 +52,54 @@ fn app_fill_zero_leaves_every_unit_highlight_byte_clear() {
     assert!(gate.iter().filter(|&&b| b == 0xa7).count() > 0);
     assert!(gate.contains(&0), "ETA units should keep +0xba = 0");
 }
+
+/// Saves from campaigns the apps started with the old 0xa7 fill keep it in
+/// every unused slot (stages reuse the unit table). The apps' load path
+/// (`decode_for_play`, behind rl_carregar_*) clears +0xba; plain `decode`, used
+/// by proofs and round trips, keeps the saved bytes.
+#[test]
+fn play_load_clears_the_highlight_byte_of_old_fill_saves() {
+    use rl_core::{
+        save::{self, ResumeState},
+        TickClock, World,
+    };
+    let Some(cd) = std::env::var_os("RL_CD_ROOT").map(PathBuf::from) else {
+        eprintln!("RL_CD_ROOT unset: old-fill save check skipped");
+        return;
+    };
+    let memory = Files::read(&cd)
+        .unwrap()
+        .stage(
+            &cd,
+            "MONDE01.ETA",
+            StartupInput {
+                allocation_fill: 0xa7,
+                ai_clock_ms: 0x123456,
+                thread_id: 1,
+            },
+        )
+        .unwrap();
+    let world = World::load(memory, TickClock::new(20, 0).unwrap()).unwrap();
+    let bytes = save::encode(&world, &ResumeState::default()).unwrap();
+    let ba = |w: &World| -> Vec<u8> {
+        let m = w.project().unwrap();
+        let base = m.u32(UNIT_TABLE).unwrap();
+        (0..SLOTS)
+            .map(|i| m.u8(base + i * RECORD + 0xba).unwrap())
+            .collect()
+    };
+    let (kept, _) = save::decode(&bytes).unwrap();
+    assert!(
+        ba(&kept).contains(&0xa7),
+        "decode must keep the saved bytes"
+    );
+    let (played, _) = save::decode_for_play(&bytes).unwrap();
+    assert!(
+        ba(&played).iter().all(|&b| b == 0),
+        "play load left +0xba set"
+    );
+    // Nothing else changes: clearing the byte in the kept world gives the same memory.
+    let mut expected = kept.project().unwrap();
+    assert!(save::clear_unit_highlight(&mut expected) > 0);
+    assert_eq!(expected, played.project().unwrap());
+}
