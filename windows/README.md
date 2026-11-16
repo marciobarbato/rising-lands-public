@@ -1,4 +1,4 @@
-# Rising Lands for Windows (beta 4)
+# Rising Lands for Windows (beta 5)
 
 > **Resumo em português.** Cliente Windows sobre o mesmo motor em Rust e a mesma ABI em C (`engine/include`) do app
 > macOS. Este primeiro marco importa o CD brasileiro do jogador (imagem `.BIN`/`.CUE`, `.ISO` ou pasta), roda a
@@ -32,6 +32,8 @@
 > A beta 3 mostra a seta do sistema fora da área do mapa (a barra de baixo com os ícones de construção), como no
 > original, em vez de o cursor sumir, e o ícone de nível não pisca mais em campanhas antigas.
 > A beta 4 traz a opção "Rolar com WASD" na tela de Opções: W, A, S e D rolam o mapa como as setas.
+> A beta 5 traz "Redistribuir descobertas" (−/+ nos pilares de pesquisa do briefing) e o clique no claque de cinema
+> das descobertas, que agora abre a animação.
 > Nenhum dado do jogo vai para o repositório: tudo vem do CD importado na primeira execução.
 
 ## Stack and why

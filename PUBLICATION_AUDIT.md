@@ -757,3 +757,20 @@ test), `macos/tests/run.sh`, `./build-macos.sh` (ad hoc), `windows/build.sh test
 Windows parity run (ticks, menus, saves, rules identical), the macOS options world test with the CD.
 
 Docs: `README.md`, `README.en.md` (Controles / Controls) and `windows/README.md` describe the option.
+
+### 2026-11-16 (eighth): docs only — beta 5 (public test)
+
+Previous synchronisation: public `320cd6a`. No source changed (`engine/`, `macos/` and `windows/` are identical to
+`320cd6a`).
+
+The release `v0.1.0-beta.5` is tagged on the commit that carries this entry. Assets:
+- `RisingLands-macOS-320cd6a.dmg`: built on the MacBook from a fresh clone at `320cd6a` with `./build-macos.sh`,
+  Developer ID (TF3GU6U7H8), hardened runtime, notarized and stapled (app `a57d160d-…`, dmg `e57f6d5c-…`, both
+  Accepted), SHA-256 `0b7fbf7e483aec631b9e0d9506145feaa314778d0c514f02139274fcb61c4c89`. On the MacBook: `cargo test`
+  111 passed / 11 ignored, `macos/tests/run.sh` all passed. On the Mac mini: downloaded again, `stapler validate` and
+  `spctl` accepted.
+- `RisingLands-windows-x86_64.exe` (+ `.sha256`): public CI run 43935191931 (job `mingw-x64`) from `320cd6a`,
+  SHA-256 `68979b0042a80c3044896a646b0364075673a217c939f1c572147b2769d52869`.
+
+Docs (`README.md`, `README.en.md`, `docs/ROADMAP.md`, `windows/README.md`, `docs/WINDOWS_CLIENT.md`): beta 5 is the
+current release; discovery redistribution and the clapperboard click are in it.
