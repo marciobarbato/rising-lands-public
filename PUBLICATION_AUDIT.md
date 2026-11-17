@@ -774,3 +774,16 @@ The release `v0.1.0-beta.5` is tagged on the commit that carries this entry. Ass
 
 Docs (`README.md`, `README.en.md`, `docs/ROADMAP.md`, `windows/README.md`, `docs/WINDOWS_CLIENT.md`): beta 5 is the
 current release; discovery redistribution and the clapperboard click are in it.
+
+### 2026-11-17 (first): private `main` `72d669f0` — AI group-list loops past a cyclic list
+
+Previous synchronisation: public `4270ec6` (source identical to `320cd6a`).
+
+Copied (path-mapped: `motor/` → `engine/`):
+
+| Private change | Public files |
+|---|---|
+| `74a899a1` Player report (Windows beta 5): "iagWarAffecteEnnemy invalid group list" at 0x488003 when archers shot AI units. AI group lists can be cyclic in the original, and iagWarAffecteEnnemy 0x487eef also ends when the assigned damage reaches the target's health; the port stopped on the first revisit. Both ports of the routine (`chain_battle`, and `ai_war_enemy` on the city message path) now continue after a revisit that assigned new damage and stop only on a revisit without new damage (the original's endless loop). iagUnitReturnGroupToPool 0x482f34 stops only when a lap leaves the source count unchanged (was a 10000-lap bound); iagUnitDeleteAllGroups 0x483e11 is bounded by max(800, initial count). The other list/nonprogress stops were audited against the original asm: their only exits are the list end or reads, so a cycle freezes the original too | `engine/crates/rl-core/src/chain_battle.rs`, `ai_war_enemy.rs`, `ai_stage25_reserve.rs`, `mission_ai.rs` (regression tests in the first two) |
+
+No game data is added. Checked in this repository's tree: engine tests, `windows/build.sh` (mingw x64). In the private
+repository: MONDE01 gate `a27c55cb…` GATE_MATCH, `validate.sh` (in `workstream.py integrate` for maintenance).

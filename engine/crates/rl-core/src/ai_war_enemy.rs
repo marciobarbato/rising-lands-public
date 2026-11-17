@@ -119,20 +119,23 @@ pub fn assign(m: &mut MemoriaJogo, battle: u32, index: u32) -> Result<()> {
     let mut assigned = u32::from(m.u16(e.wrapping_add(2))?);
     let target = m.u16(e)?;
     let hp = health(m, target)?;
-    let mut traversals = 0;
     for near in [true, false] {
         if (assigned as i32) >= hp {
             break;
         }
+        // A cyclic group list still ends on the health test when damage was
+        // assigned since the member's previous visit (see
+        // chain_battle::assign). A revisit with no new damage repeats forever
+        // in the original: nothing in between wrote memory.
+        let mut last_visit = std::collections::HashMap::<u16, u32>::new();
         let mut member = m.u16(g.wrapping_add(16))?;
         while member != 0xffff && (assigned as i32) < hp {
-            if traversals == 10000 {
+            if last_visit.insert(member, assigned) == Some(assigned) {
                 return Err(EngineError::UnportedCallee {
-                    name: "iagWarAffecteEnnemy bounded list traversal",
+                    name: "iagWarAffecteEnnemy cyclic group list without progress",
                     address: 0x488003,
                 });
             }
-            traversals += 1;
             let r = unit(m, u32::from(member))?;
             if m.u16(r.wrapping_add(0xb8))? == 0xffff && (!near || in_range(m, member, target)?) {
                 let source = u32::from(m.u8(r.wrapping_add(1))?);
@@ -232,4 +235,70 @@ pub fn send(m: &mut MemoriaJogo, structure: u16, message: u8, argument: u32) -> 
 }
 pub fn descriptor(m: &mut MemoriaJogo, message: CityMessage) -> Result<()> {
     send(m, message.structure, message.message, 0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const UNITS: u32 = 0x0100_0000;
+    const DAMAGE_ROWS: u32 = 0x0200_0000;
+    const BATTLE: u32 = 0x51bd24;
+    const GROUP: u32 = 7;
+
+    /// Monster-owned type5 members 1 -> 2 -> 1 (SetAttaqueEngin leaves +0xb8
+    /// free) against unit 3 with `hp` health; `damage` per visit.
+    fn cyclic_world(hp: u16, damage: u8) -> MemoriaJogo {
+        let mut m = MemoriaJogo::from_blocks([
+            (0x494000, vec![0; 0x9c000]),
+            (UNITS, vec![0; 800 * 276]),
+            (DAMAGE_ROWS, vec![0; 0x1000]),
+        ])
+        .unwrap();
+        m.set_u32(0x4e19a0, UNITS).unwrap();
+        m.set_u32(0x4e199c, DAMAGE_ROWS).unwrap();
+        m.set_u32(DAMAGE_ROWS + 4 * 5, DAMAGE_ROWS + 0x100).unwrap();
+        m.set_u8(DAMAGE_ROWS + 0x100 + 2, damage).unwrap();
+        m.set_u16(0x496304, 0xffff).unwrap();
+        for (member, next) in [(1u32, 2u16), (2, 1)] {
+            let r = UNITS + 276 * member;
+            m.set_u8(r, 4).unwrap();
+            m.set_u8(r + 1, 5).unwrap();
+            m.set_u8(r + 2, 7).unwrap();
+            m.set_u8(r + 0x78, 1).unwrap();
+            m.set_u8(r + 0xb0, 255).unwrap();
+            m.set_u16(r + 0xb8, 0xffff).unwrap();
+            m.set_u16(r + 0xc0, 0xffff).unwrap();
+            m.set_u16(r + 0x108, next).unwrap();
+            m.set_u32(r + 0x10c, GROUP).unwrap();
+        }
+        let target = UNITS + 276 * 3;
+        m.set_u8(target, 1).unwrap();
+        m.set_u8(target + 1, 2).unwrap();
+        m.set_u16(target + 0x9a, hp).unwrap();
+        let g = 0x51a9e0 + 32 * GROUP;
+        m.set_u16(g + 0x10, 1).unwrap();
+        m.set_u16(g + 0x12, 2).unwrap();
+        m.set_u32(BATTLE, GROUP).unwrap();
+        m.set_u16(BATTLE + 16, 3).unwrap();
+        m
+    }
+
+    #[test]
+    fn progressing_cycle_runs_past_the_old_10000_visit_bound() {
+        // 12,000 visits of 1 damage: the original ends on the health test.
+        let mut m = cyclic_world(12_000, 1);
+        assign(&mut m, BATTLE, 0).unwrap();
+        assert_eq!(m.u16(BATTLE + 16 + 2).unwrap(), 12_000);
+    }
+
+    #[test]
+    fn cycle_without_progress_is_the_original_endless_loop() {
+        let mut m = cyclic_world(10, 0);
+        let error = assign(&mut m, BATTLE, 0).unwrap_err();
+        assert!(
+            format!("{error:?}").contains("without progress"),
+            "{error:?}"
+        );
+    }
 }

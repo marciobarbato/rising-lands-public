@@ -126,11 +126,21 @@ pub(crate) fn delete_all_groups(m: &mut MemoriaJogo, p: u32) -> Result<()> {
                 0x483eba,
             )?;
             let a = group(g);
+            // Each pass removes the head unit (found at step 0), so the count
+            // drops by one unless g is list 0's head group g0 (remove then
+            // re-add): the original ends after at most the initial count
+            // passes even on a cyclic unit list, and loops forever only for
+            // g == g0.
+            let limit = if a != 0 {
+                800.max(u32::from(m.u16(a + 0x12)?))
+            } else {
+                800
+            };
             let mut moved = 0;
             while a != 0 && m.u16(a + 0x12)? != 0 {
                 moved += 1;
                 require(
-                    moved <= 800,
+                    moved <= limit,
                     "iagUnitDeleteAllGroups cyclic unit group",
                     0x483e11,
                 )?;

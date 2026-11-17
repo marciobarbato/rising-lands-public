@@ -90,8 +90,16 @@ fn to_pool(m: &mut MemoriaJogo, player: u32, source: u32) -> Result<u32> {
     if g == 0 {
         return Ok(0x1a1a0010);
     }
-    let mut transferred = 0;
-    while m.u16(g.wrapping_add(0x12))? != 0 {
+    // Each lap removes the head (found at step 0), so the count drops by one
+    // (wrapping, as the original's unchecked decrement) even on a cyclic unit
+    // list; the original then ends on count 0 within 65535 laps. A lap that
+    // leaves the count unchanged re-added the head to the source itself
+    // (pool == source): the same state again, the original's endless loop.
+    loop {
+        let count = m.u16(g.wrapping_add(0x12))?;
+        if count == 0 {
+            break;
+        }
         let member = crate::frame_raid::first_unit(m, source)?;
         if member == u16::MAX {
             break;
@@ -101,8 +109,7 @@ fn to_pool(m: &mut MemoriaJogo, player: u32, source: u32) -> Result<u32> {
         if destination != u32::MAX {
             crate::frame_raid::add_unit(m, destination, member)?;
         }
-        transferred += 1;
-        if transferred > 10000 {
+        if m.u16(g.wrapping_add(0x12))? == count {
             return stop("iagUnitReturnGroupToPool nonprogress transfer", 0x482f64);
         }
     }

@@ -118,6 +118,17 @@ pub(crate) fn in_range(m: &mut MemoriaJogo, member: u16, encoded: u16) -> Result
     Ok((dx * dx + dy * dy) as u32 <= (u32::from(m.u8(r + 0xb0)?).wrapping_add(bonus) & 65535))
 }
 /// iagWarAffecteEnnemy0x487eef: near pass followed by unrestricted pass.
+///
+/// The original walks the +0x108 links until 0xffff or until the assigned
+/// damage reaches the target's health, with no cycle check. AI group lists can
+/// become cyclic in the original (a unit prepended to a group it is still
+/// linked in). A revisit is then harmless when damage was assigned since the
+/// member's previous visit: members whose SetAttaqueEngin leaves +0xb8 free
+/// (types 5/6/7/9/10/13) stay eligible and keep adding damage, so the native
+/// loop ends on the health test. Only a revisit with no damage assigned since
+/// the previous one is the original's endless loop: nothing between the two
+/// visits wrote memory (in_range, damage and health are reads), so every later
+/// lap repeats it. That case, and an index outside the 800-unit table, stop.
 fn assign(m: &mut MemoriaJogo, battle: u32, index: u32) -> Result<()> {
     let g = group(m.u32(battle)?);
     if g == 0 || m.u16(g + 0x12)? == 0 || m.u16(g + 0x10)? == 65535 {
@@ -132,12 +143,20 @@ fn assign(m: &mut MemoriaJogo, battle: u32, index: u32) -> Result<()> {
             break;
         }
         let mut member = m.u16(g + 0x10)?;
-        let mut visited = [false; 800];
+        // Assigned damage at each member's previous visit in this pass.
+        let mut last_visit: [Option<u32>; 800] = [None; 800];
         while member != 65535 && (assigned as i32) < hp {
-            if member >= 800 || visited[usize::from(member)] {
+            if member >= 800 {
                 return stop("iagWarAffecteEnnemy invalid group list", 0x488003);
             }
-            visited[usize::from(member)] = true;
+            let slot = &mut last_visit[usize::from(member)];
+            if *slot == Some(assigned) {
+                return stop(
+                    "iagWarAffecteEnnemy cyclic group list without progress",
+                    0x488003,
+                );
+            }
+            *slot = Some(assigned);
             let r = unit(m, u32::from(member))?;
             if m.u16(r + 0xb8)? == 65535 && (!near || in_range(m, member, encoded)?) {
                 let amount = damage(m, member, encoded)?;
@@ -453,4 +472,70 @@ pub(crate) fn ended_notification(m: &mut MemoriaJogo, member: u16) -> Result<()>
         wake_battle(m, m.u8(r)?, conflict, 1)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const UNITS: u32 = 0x0100_0000;
+    const DAMAGE_ROWS: u32 = 0x0200_0000;
+    const BATTLE: u32 = 0x51bd24;
+    const GROUP: u32 = 7;
+
+    /// Two monster-owned type5 members (SetAttaqueEngin leaves +0xb8 free)
+    /// linked in a cycle 1 -> 2 -> 1, attacking unit 3 with `hp` health.
+    fn cyclic_world(hp: u16, damage: u8) -> MemoriaJogo {
+        let mut m = MemoriaJogo::from_blocks([
+            (0x494000, vec![0; 0x9c000]),
+            (UNITS, vec![0; 800 * 276]),
+            (DAMAGE_ROWS, vec![0; 0x1000]),
+        ])
+        .unwrap();
+        m.set_u32(0x4e19a0, UNITS).unwrap();
+        m.set_u32(0x4e199c, DAMAGE_ROWS).unwrap();
+        m.set_u32(DAMAGE_ROWS + 4 * 5, DAMAGE_ROWS + 0x100).unwrap();
+        m.set_u8(DAMAGE_ROWS + 0x100 + 2, damage).unwrap();
+        m.set_u16(0x496304, 0xffff).unwrap();
+        for (member, next) in [(1u32, 2u16), (2, 1)] {
+            let r = UNITS + 276 * member;
+            m.set_u8(r, 4).unwrap();
+            m.set_u8(r + 1, 5).unwrap();
+            m.set_u8(r + 2, 7).unwrap();
+            m.set_u8(r + 0x78, 1).unwrap();
+            m.set_u8(r + 0xb0, 255).unwrap();
+            m.set_u16(r + 0xb8, 0xffff).unwrap();
+            m.set_u16(r + 0xc0, 0xffff).unwrap();
+            m.set_u16(r + 0x108, next).unwrap();
+            m.set_u32(r + 0x10c, GROUP).unwrap();
+        }
+        let target = UNITS + 276 * 3;
+        m.set_u8(target, 1).unwrap();
+        m.set_u8(target + 1, 2).unwrap();
+        m.set_u16(target + 0x9a, hp).unwrap();
+        let g = group(GROUP);
+        m.set_u16(g + 0x10, 1).unwrap();
+        m.set_u16(g + 0x12, 2).unwrap();
+        m.set_u32(BATTLE, GROUP).unwrap();
+        m.set_u16(BATTLE + 16, 3).unwrap();
+        m
+    }
+
+    #[test]
+    fn cyclic_list_with_progress_ends_on_health_like_the_original() {
+        let mut m = cyclic_world(10, 3);
+        assign(&mut m, BATTLE, 0).unwrap();
+        // 1, 2, 1, 2: four visits of 3 damage reach the 10 health.
+        assert_eq!(m.u16(BATTLE + 16 + 2).unwrap(), 12);
+    }
+
+    #[test]
+    fn cyclic_list_without_progress_is_the_original_endless_loop() {
+        let mut m = cyclic_world(10, 0);
+        let error = assign(&mut m, BATTLE, 0).unwrap_err();
+        assert!(
+            format!("{error:?}").contains("without progress"),
+            "{error:?}"
+        );
+    }
 }
