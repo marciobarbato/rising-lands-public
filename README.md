@@ -2,15 +2,15 @@
 
 [English version](README.en.md)
 
-> **Beta 5 — teste público.** A quinta beta saiu para macOS e Windows: baixe em **[Releases → v0.1.0-beta.5](https://github.com/marciobarbato/rising-lands-public/releases/tag/v0.1.0-beta.5)**, jogue e conte o que encontrou. Novidades: **redistribuir descobertas** no briefing (−/+ nos pilares de pesquisa) e o clique no claque de cinema de uma descoberta volta a abrir a animação. Desde a beta 4: **ROLAR COM WASD**. Como ajudar: [chamada de testes](https://github.com/marciobarbato/rising-lands-public/issues/10).
+> **Beta 6 — teste público.** A sexta beta saiu para macOS e Windows: baixe em **[Releases → v0.1.0-beta.6](https://github.com/marciobarbato/rising-lands-public/releases/tag/v0.1.0-beta.6)**, jogue e conte o que encontrou. Correção: o jogo não para mais com "iagWarAffecteEnnemy invalid group list" quando arqueiros atacam unidades da IA (e outras três paradas da IA do mesmo tipo). Desde a beta 5: **redistribuir descobertas** no briefing (−/+ nos pilares de pesquisa) e o clique no claque de cinema de uma descoberta volta a abrir a animação. Desde a beta 4: **ROLAR COM WASD**. Como ajudar: [chamada de testes](https://github.com/marciobarbato/rising-lands-public/issues/10).
 
-Este repositório contém uma reimplementação do motor do jogo **Rising Lands** (1997, Microïds) em Rust e aplicativos nativos que rodam o jogo sobre esse motor: o do macOS e o do Windows, hoje na **beta 5** (teste público). A lógica foi portada rotina por rotina do executável original e comparada com ele.
+Este repositório contém uma reimplementação do motor do jogo **Rising Lands** (1997, Microïds) em Rust e aplicativos nativos que rodam o jogo sobre esse motor: o do macOS e o do Windows, hoje na **beta 6** (teste público). A lógica foi portada rotina por rotina do executável original e comparada com ele.
 
 **O jogo não vem junto.** Para jogar, você precisa da imagem do **CD original brasileiro** do Rising Lands. Na primeira execução, o aplicativo lê todos os dados do jogo desse CD: gráficos, paleta, sons, música, textos, fases e filmes. Nenhum dado do jogo é distribuído aqui, nem dentro do aplicativo.
 
 ## Baixar e jogar (macOS)
 
-1. Baixe o `.dmg` da versão mais recente em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. A versão atual é a **beta 5** (`v0.1.0-beta.5`, teste público). O aplicativo é assinado com Developer ID e notarizado pela Apple.
+1. Baixe o `.dmg` da versão mais recente em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. A versão atual é a **beta 6** (`v0.1.0-beta.6`, teste público). O aplicativo é assinado com Developer ID e notarizado pela Apple.
 2. Abra o `.dmg` e arraste o **Rising Lands** para **Aplicativos**.
 3. Consiga a imagem do CD (veja "Onde conseguir o CD").
 4. Abra o aplicativo. Na janela **"Rising Lands — importar o CD original"**, clique em **Escolher o CD…** e selecione o arquivo **RISING_LANDS_BR_.BIN**. Também servem o .CUE, um .ISO ou a pasta com os arquivos do CD, mas a música só vem do .BIN.
@@ -20,9 +20,9 @@ Requisitos para jogar: Mac com **Apple Silicon** e **macOS 13** ou mais recente.
 
 ## Windows (beta)
 
-O cliente Windows fica no diretório [`windows/`](windows/README.md) e está na **beta 5**, com as mesmas funções do macOS. **O teste num PC com Windows de verdade fica com a comunidade** ([#10](https://github.com/marciobarbato/rising-lands-public/issues/10)): o autor não vai testar no Windows.
+O cliente Windows fica no diretório [`windows/`](windows/README.md) e está na **beta 6**, com as mesmas funções do macOS. **O teste num PC com Windows de verdade fica com a comunidade** ([#10](https://github.com/marciobarbato/rising-lands-public/issues/10)): o autor não vai testar no Windows.
 
-1. Baixe o `RisingLands-windows-x86_64.exe` da versão mais recente (hoje a beta 5, `v0.1.0-beta.5`, a mesma release do macOS) em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. Desde a pré-alfa 4 o cliente é só x86-64: um PC com processador ARM pode rodar esse `.exe` pela emulação do próprio Windows, sem suporte (as pré-alfas 1 a 3 também traziam um `.exe` ARM64). Confira o SHA-256 publicado nas notas da release. O `.exe` foi compilado pelo próprio GitHub Actions a partir deste código (workflow `windows-client`).
+1. Baixe o `RisingLands-windows-x86_64.exe` da versão mais recente (hoje a beta 6, `v0.1.0-beta.6`, a mesma release do macOS) em **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. Desde a pré-alfa 4 o cliente é só x86-64: um PC com processador ARM pode rodar esse `.exe` pela emulação do próprio Windows, sem suporte (as pré-alfas 1 a 3 também traziam um `.exe` ARM64). Confira o SHA-256 publicado nas notas da release. O `.exe` foi compilado pelo próprio GitHub Actions a partir deste código (workflow `windows-client`).
 2. **Aviso do SmartScreen:** o `.exe` **não é assinado**, então o Windows mostra "O Windows protegeu o computador". Clique em **Mais informações** e depois em **Executar assim mesmo**. Não há plano de assinar o executável; se preferir, compile você mesmo (veja abaixo).
 3. Na primeira execução, uma janela pede o CD: escolha o **RISING_LANDS_BR_.BIN** (ou o .CUE, ou um .ISO). Os arquivos são conferidos por SHA-256 e copiados para `%LOCALAPPDATA%\RisingLands-ptbr\Dados`. Depois o jogo abre no menu original, com o ícone original do jogo (a abóbora, lido do `RISING.EXE` importado: nenhum byte do jogo vem no download). **Quem vem das pré-alfas 1 a 3:** o CD importado antes não tem os sons nem a música; use **Jogo → Importar o CD novamente…** (o jogo avisa uma vez).
 
@@ -55,6 +55,8 @@ Novidade da beta 4: a opção **ROLAR COM WASD** na tela de Opções (desligada 
 
 Novidades da beta 5: a opção **REDISTRIBUIR DESCOBERTAS** (−/+ nos pilares de pesquisa do briefing; veja "Controles") e o clique no claque de cinema de uma descoberta, que agora abre a animação como no original. Vale também para o macOS.
 
+Correção da beta 6: o jogo não para mais com "iagWarAffecteEnnemy invalid group list" quando a IA manda as unidades de um grupo contra quem a atacou (relato de jogador: arqueiros atacando unidades dos verdes). O original percorre a lista do grupo até cobrir a vida do alvo, mesmo quando a lista dá a volta; o port parava na primeira volta. Na mesma revisão, outras três rotinas da IA que percorrem listas de grupo (`iagWarAffecteEnnemy` pelo caminho da cidade, `iagUnitDeleteAllGroups` e `iagUnitReturnGroupToPool`) também deixaram de parar antes do original: uma lista que dá a volta só para o jogo onde o próprio original travaria. Vale também para o macOS.
+
 Importante: a paridade foi verificada no macOS, compilando o driver do Windows contra o mesmo motor. No Windows de verdade, o CI testa a compilação, os testes unitários e o próprio `.exe` sem dados do jogo (autoteste do motor, as recusas da importação, a primeira execução com o diálogo do CD, o desenho das bandeirinhas, o DPI e o áudio). **Ainda ninguém jogou essa build num PC com Windows.** Quem tiver Windows e o CD pode ajudar muito: conte na [#10](https://github.com/marciobarbato/rising-lands-public/issues/10) o que funcionou e o que não funcionou, ou abra uma issue pelo modelo **Problema no jogo** e diga que é o Windows.
 
 ## Onde conseguir o CD
@@ -66,8 +68,8 @@ A imagem do CD original brasileiro pode ser encontrada no **Internet Archive**. 
 - A campanha roda nas 25 fases. Um bot automático jogou todas elas, cada partida com até 72.000 quadros, sem nenhuma parada do motor. As missões 1 a 6 também foram jogadas à mão, até o fim, sem problemas.
 - Ninguém terminou a campanha inteira ainda. É aí que os testes de vocês ajudam.
 - Se o jogo chegar a um trecho ainda não portado, ele não trava em silêncio: mostra um **painel de parada** com o endereço da rotina do original. Esse texto é o que mais ajuda num relato.
-- macOS: beta 5 (`v0.1.0-beta.5`; a beta 1 era o mesmo app da alfa 3), com redistribuir descobertas, a animação das descobertas, rolar com WASD, a seta do sistema sobre a barra do HUD, o volume a cada quadro, com a **tela de Opções**, os atalhos modernos e a fila de ordens com Shift+clique, os **caminhos melhores**, o menu **Áudio** e sons que antes não tocavam, o **gerenciador de partidas salvas** e o **salvamento automático** (veja "Controles").
-- Windows: beta 5 (`v0.1.0-beta.5`), só x86-64; redistribuir descobertas; a animação das descobertas; rolar com WASD; a seta do sistema sobre a barra do HUD; o volume a cada quadro e o som dos filmes no volume da música; jogo, menus, saves, tela de Opções, atalhos modernos, configurar teclas, caminhos melhores, áudio, música do CD, figuras de evento, filmes, o menu Jogo, o gerenciador de partidas salvas e o salvamento automático (veja "Windows (beta)").
+- macOS: beta 6 (`v0.1.0-beta.6`; a beta 1 era o mesmo app da alfa 3), com a correção das paradas da IA em listas de grupo, redistribuir descobertas, a animação das descobertas, rolar com WASD, a seta do sistema sobre a barra do HUD, o volume a cada quadro, com a **tela de Opções**, os atalhos modernos e a fila de ordens com Shift+clique, os **caminhos melhores**, o menu **Áudio** e sons que antes não tocavam, o **gerenciador de partidas salvas** e o **salvamento automático** (veja "Controles").
+- Windows: beta 6 (`v0.1.0-beta.6`), só x86-64; a correção das paradas da IA em listas de grupo; redistribuir descobertas; a animação das descobertas; rolar com WASD; a seta do sistema sobre a barra do HUD; o volume a cada quadro e o som dos filmes no volume da música; jogo, menus, saves, tela de Opções, atalhos modernos, configurar teclas, caminhos melhores, áudio, música do CD, figuras de evento, filmes, o menu Jogo, o gerenciador de partidas salvas e o salvamento automático (veja "Windows (beta)").
 - Só a versão brasileira do jogo, em português, é suportada.
 
 ## Controles
@@ -136,7 +138,7 @@ Os testes que precisam dos arquivos originais do jogo pulam quando eles não est
 
 ## Frentes de trabalho
 
-O que está sendo feito, o estado de cada frente e onde alguém de fora pode ajudar: **[docs/ROADMAP.md](docs/ROADMAP.md)**. A beta 1 (teste público, macOS e Windows) saiu em 2026-11-14, a beta 2 no mesmo dia a beta 3, a beta 4 e a beta 5 em 2026-11-16. O cliente Windows ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)) e o áudio e os filmes no Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) estão feitos. Os relatos da beta (Windows num PC de verdade, testes em jogo, outros CDs) ficam todos na [#10](https://github.com/marciobarbato/rising-lands-public/issues/10). Antes de começar algo grande, comente lá.
+O que está sendo feito, o estado de cada frente e onde alguém de fora pode ajudar: **[docs/ROADMAP.md](docs/ROADMAP.md)**. A beta 1 (teste público, macOS e Windows) saiu em 2026-11-14, a beta 2 no mesmo dia a beta 3, a beta 4 e a beta 5 em 2026-11-16, a beta 6 em 2026-11-17. O cliente Windows ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)) e o áudio e os filmes no Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) estão feitos. Os relatos da beta (Windows num PC de verdade, testes em jogo, outros CDs) ficam todos na [#10](https://github.com/marciobarbato/rising-lands-public/issues/10). Antes de começar algo grande, comente lá.
 
 ## Ajuda bem-vinda
 

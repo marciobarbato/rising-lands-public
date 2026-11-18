@@ -8,13 +8,14 @@ Estado em 2026-11-14. / State on 2026-11-14.
 |---|---|---|---|
 | Cliente Windows: jogo, menus, saves, Opções / Windows client: game, menus, saves, Options | Feito; na beta 1 / Done; in beta 1 | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) (fechada / closed) | — |
 | Windows: build MSVC x64 / MSVC x64 build | Feito; só x86-64 desde 2026-11-14 (as pré-alfas 1 a 3 tinham ARM64); sem assinatura de código, por decisão / Done; x86-64 only since 2026-11-14 (pre-alphas 1 to 3 had ARM64); no code signing, by decision | — | — |
-| Beta: teste público (macOS e Windows; beta 5 atual) / Beta: public test (macOS and Windows; beta 5 current) | Aberto desde 2026-11-14 / Open since 2026-11-14 | [#10](https://github.com/marciobarbato/rising-lands-public/issues/10) | **Bem-vinda: jogar, Windows num PC de verdade, outros CDs / Welcome: play, Windows on a real PC, other CDs** |
+| Beta: teste público (macOS e Windows; beta 6 atual) / Beta: public test (macOS and Windows; beta 6 current) | Aberto desde 2026-11-14 / Open since 2026-11-14 | [#10](https://github.com/marciobarbato/rising-lands-public/issues/10) | **Bem-vinda: jogar, Windows num PC de verdade, outros CDs / Welcome: play, Windows on a real PC, other CDs** |
 | Windows: teste num PC de verdade / test on a real PC | Fica com a comunidade / Left to the community | [#10](https://github.com/marciobarbato/rising-lands-public/issues/10) (#6 fechada / closed) | **Bem-vinda / Welcome** |
 | Windows: áudio, música do CD, FLC, filmes / audio, CD music, FLC, movies | Feito; na beta 1 / Done; in beta 1 | [#4](https://github.com/marciobarbato/rising-lands-public/issues/4) (fechada / closed) | Testar num PC / Test on a PC (#10) |
 | Volume a cada quadro (PostVolume 0x45448a), som dos filmes no volume da música (Windows) / Per-frame volume (PostVolume 0x45448a), movie sound at the music level (Windows) | Feito; na beta 2 / Done; in beta 2 | — | — |
 | Seta do sistema sobre a barra do HUD (ShowCursor 0x49a054), ícone de nível sem piscar em saves antigos / System arrow over the HUD bar (ShowCursor 0x49a054), level icon no longer blinking in old saves | Feito; na beta 3 / Done; in beta 3 | — | — |
 | Rolar o mapa com WASD (opção na tela de Opções) / Scroll the map with WASD (Options screen) | Feito; na beta 4 / Done; in beta 4 | — | — |
 | Redistribuir descobertas no briefing; clique no claque de cinema das descobertas / Redistribute discoveries on the briefing; discovery clapperboard click | Feito; na beta 5 / Done; in beta 5 | — | — |
+| Paradas da IA em listas de grupo que dão a volta (iagWarAffecteEnnemy e outras três) / AI stops on group lists that loop back (iagWarAffecteEnnemy and three more) | Feito; na beta 6 / Done; in beta 6 | — | — |
 | Windows: menu Jogo, gerenciador de partidas salvas, salvamento automático, bandeirinhas da fila, DPI, ícone original, reimportar o CD / Jogo menu, saved-games manager, periodic autosave, order queue flags, DPI, original icon, CD re-import | Feito; na beta 1 / Done; in beta 1 | [#1](https://github.com/marciobarbato/rising-lands-public/issues/1) (fechada / closed) | — |
 | Host Windows: atalhos modernos, configurar teclas, caminhos melhores / Windows host: modern shortcuts, key setup, better paths | Feito; na pré-alfa 3 / Done; in pre-alpha 3 | [#7](https://github.com/marciobarbato/rising-lands-public/issues/7) (fechada / closed) | — |
 | Atalhos modernos e fila de ordens / Modern shortcuts and order queue | Feito (macOS e Windows) / Done (macOS and Windows) | — | — |
@@ -64,11 +65,14 @@ macOS.
   setas do original, a menos que o jogador tenha dado outra função a essas teclas. Também no macOS.
 - **Na beta 5:** a opção REDISTRIBUIR DESCOBERTAS (−/+ nos pilares de pesquisa do briefing, ligada por padrão) e o
   clique no claque de cinema de uma descoberta, que agora abre a animação. Também no macOS.
+- **Na beta 6:** o jogo não para mais com "iagWarAffecteEnnemy invalid group list" quando a IA manda um grupo contra
+  quem a atacou (relato de jogador), nem em outras três rotinas da IA que percorrem listas de grupo: uma lista que dá
+  a volta só para o jogo onde o original travaria. Também no macOS.
 - **Sem assinatura de código:** decisão do projeto. O SmartScreen avisa na primeira execução; o SHA-256 e o commit de
   cada build estão no CI e nas notas da release.
 - **Testar num PC com Windows real ([#10](https://github.com/marciobarbato/rising-lands-public/issues/10)):** o autor
   não vai testar no Windows, então isso fica com a comunidade. O CI só compila e roda testes sem o CD; ninguém jogou a
-  build num PC com Windows ainda. Baixe a beta 5 em
+  build num PC com Windows ainda. Baixe a beta 6 em
   [Releases](https://github.com/marciobarbato/rising-lands-public/releases) e conte na issue o que funcionou.
 - **Atalhos modernos, configurar teclas e caminhos melhores no host
   ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), fechada):** feitos, com os
@@ -145,11 +149,14 @@ The client is in [`windows/`](../windows/README.md): Win32 + GDI in C, with the 
   the original's arrows, unless the player gave those keys another job. On macOS too.
 - **In beta 5:** the REDISTRIBUIR DESCOBERTAS option (−/+ on the briefing's research pillars, on by default) and the
   discovery clapperboard click, which now opens the animation. On macOS too.
+- **In beta 6:** the game no longer stops with "iagWarAffecteEnnemy invalid group list" when the AI sends a group
+  against whoever attacked it (player report), nor in three more AI routines that walk group lists: a list that loops
+  back only stops the game where the original would freeze. On macOS too.
 - **No code signing:** a project decision. SmartScreen warns on the first run; each build's SHA-256 and commit are in
   CI and in the release notes.
 - **Test on a real Windows PC ([#10](https://github.com/marciobarbato/rising-lands-public/issues/10)):** the author will
   not test on Windows, so this is left to the community. CI only builds and runs tests without the CD; nobody has played
-  the build on a Windows PC yet. Download beta 5 from
+  the build on a Windows PC yet. Download beta 6 from
   [Releases](https://github.com/marciobarbato/rising-lands-public/releases) and say on the issue what worked.
 - **Modern shortcuts, key dialog and better paths in the host
   ([#7](https://github.com/marciobarbato/rising-lands-public/issues/7), closed):** done, with the

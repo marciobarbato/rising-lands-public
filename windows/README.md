@@ -1,4 +1,4 @@
-# Rising Lands for Windows (beta 5)
+# Rising Lands for Windows (beta 6)
 
 > **Resumo em português.** Cliente Windows sobre o mesmo motor em Rust e a mesma ABI em C (`engine/include`) do app
 > macOS. Este primeiro marco importa o CD brasileiro do jogador (imagem `.BIN`/`.CUE`, `.ISO` ou pasta), roda a
@@ -34,6 +34,8 @@
 > A beta 4 traz a opção "Rolar com WASD" na tela de Opções: W, A, S e D rolam o mapa como as setas.
 > A beta 5 traz "Redistribuir descobertas" (−/+ nos pilares de pesquisa do briefing) e o clique no claque de cinema
 > das descobertas, que agora abre a animação.
+> A beta 6 corrige a parada "iagWarAffecteEnnemy invalid group list" (arqueiros atacando unidades da IA) e outras
+> três paradas da IA em listas de grupo que davam a volta.
 > Nenhum dado do jogo vai para o repositório: tudo vem do CD importado na primeira execução.
 
 ## Stack and why

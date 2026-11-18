@@ -787,3 +787,19 @@ Copied (path-mapped: `motor/` → `engine/`):
 
 No game data is added. Checked in this repository's tree: engine tests, `windows/build.sh` (mingw x64). In the private
 repository: MONDE01 gate `a27c55cb…` GATE_MATCH, `validate.sh` (in `workstream.py integrate` for maintenance).
+
+### 2026-11-18 (first): docs only — beta 6 (public test)
+
+Previous synchronisation: public `cbd9cb9`. No source changed (`engine/`, `macos/` and `windows/` are identical to
+`cbd9cb9`).
+
+The release `v0.1.0-beta.6` is tagged on the commit that carries this entry. Assets:
+- `RisingLands-macOS-cbd9cb9.dmg`: built on the MacBook from `cbd9cb9` with `./build-macos.sh`, Developer ID
+  (TF3GU6U7H8), notarized and stapled, SHA-256 `e6f383133c03df385177e927b35060d72ec935246a4bd5a19cf3156ab051de4a`
+  (staging draft `macos-staging-beta6`, deleted after the copy). On the Mac mini: downloaded again, `stapler validate`
+  and `spctl` accepted (Notarized Developer ID).
+- `RisingLands-windows-x86_64.exe` (+ `.sha256`): public CI run 44152828049 (job `mingw-x64`) from `cbd9cb9`,
+  SHA-256 `1a7a62bc19fe1a0da642c10d36ea89ab94e7be8e855ee736adc427065363e3a8`.
+
+Docs (`README.md`, `README.en.md`, `docs/ROADMAP.md`, `windows/README.md`, `docs/WINDOWS_CLIENT.md`): beta 6 is the
+current release; the AI group-list stop fixes are in it.
