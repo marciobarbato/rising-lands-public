@@ -2,15 +2,15 @@
 
 [Versão em português](README.md)
 
-> **Beta 6 — public test.** The sixth beta is out for macOS and Windows: download it from **[Releases → v0.1.0-beta.6](https://github.com/marciobarbato/rising-lands-public/releases/tag/v0.1.0-beta.6)**, play and tell us what you find. Fix: the game no longer stops with "iagWarAffecteEnnemy invalid group list" when archers attack AI units (and three more AI stops of the same kind). Since beta 5: **redistribute discoveries** on the briefing (−/+ on the research pillars), and clicking a discovery's clapperboard opens its animation again. Since beta 4: **ROLAR COM WASD**. How to help: [call for testers](https://github.com/marciobarbato/rising-lands-public/issues/10).
+> **Beta 7 — public test.** The seventh beta is out for macOS and Windows: download it from **[Releases → v0.1.0-beta.7](https://github.com/marciobarbato/rising-lands-public/releases/tag/v0.1.0-beta.7)**, play and tell us what you find. Fix: the game no longer stops with "iagWarAffecteEnnemy cyclic group list without progress" when archers attack AI units; an AI unit is never in two groups at once. Since beta 5: **redistribute discoveries** on the briefing (−/+ on the research pillars), and clicking a discovery's clapperboard opens its animation again. Since beta 4: **ROLAR COM WASD**. How to help: [call for testers](https://github.com/marciobarbato/rising-lands-public/issues/10).
 
-This repository holds a reimplementation of the **Rising Lands** (1997, Microïds) game engine in Rust and native apps that run the game on top of it: the macOS app and the Windows client, now in **beta 6** (public test). The logic was ported routine by routine from the original executable and compared against it.
+This repository holds a reimplementation of the **Rising Lands** (1997, Microïds) game engine in Rust and native apps that run the game on top of it: the macOS app and the Windows client, now in **beta 7** (public test). The logic was ported routine by routine from the original executable and compared against it.
 
 **The game is not included.** To play, you need the image of the **original Brazilian CD** of Rising Lands. On first launch the app reads all game data from that CD: graphics, palette, sounds, music, texts, stages and movies. No game data is distributed here, not even inside the app.
 
 ## Download and play (macOS)
 
-1. Download the `.dmg` of the latest version from **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. The current one is **beta 6** (`v0.1.0-beta.6`, public test). The app is signed with Developer ID and notarized by Apple.
+1. Download the `.dmg` of the latest version from **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. The current one is **beta 7** (`v0.1.0-beta.7`, public test). The app is signed with Developer ID and notarized by Apple.
 2. Open the `.dmg` and drag **Rising Lands** to **Applications**.
 3. Get the CD image (see "Where to get the CD").
 4. Open the app. In the **"Rising Lands — importar o CD original"** window, click **Escolher o CD…** and select **RISING_LANDS_BR_.BIN**. The .CUE, an .ISO or the folder with the CD files also work, but music comes only from the .BIN.
@@ -20,9 +20,9 @@ Requirements to play: a Mac with **Apple Silicon** and **macOS 13** or later. Th
 
 ## Windows (beta)
 
-The Windows client lives in [`windows/`](windows/README.md) and is in **beta 6**, with the same features as the macOS app. **Testing on a real Windows PC is left to the community** ([#10](https://github.com/marciobarbato/rising-lands-public/issues/10)): the author will not test on Windows.
+The Windows client lives in [`windows/`](windows/README.md) and is in **beta 7**, with the same features as the macOS app. **Testing on a real Windows PC is left to the community** ([#10](https://github.com/marciobarbato/rising-lands-public/issues/10)): the author will not test on Windows.
 
-1. Download `RisingLands-windows-x86_64.exe` from the latest release (currently beta 6, `v0.1.0-beta.6`, the same release as macOS) on **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. Since pre-alpha 4 the client is x86-64 only: a PC with an ARM processor may run that `.exe` under Windows' own emulation, unsupported (pre-alphas 1 to 3 also carried an ARM64 `.exe`). Check it against the SHA-256 in the release notes. The `.exe` was built by GitHub Actions from this source (the `windows-client` workflow).
+1. Download `RisingLands-windows-x86_64.exe` from the latest release (currently beta 7, `v0.1.0-beta.7`, the same release as macOS) on **[Releases](https://github.com/marciobarbato/rising-lands-public/releases)**. Since pre-alpha 4 the client is x86-64 only: a PC with an ARM processor may run that `.exe` under Windows' own emulation, unsupported (pre-alphas 1 to 3 also carried an ARM64 `.exe`). Check it against the SHA-256 in the release notes. The `.exe` was built by GitHub Actions from this source (the `windows-client` workflow).
 2. **SmartScreen warning:** the `.exe` is **not signed**, so Windows shows "Windows protected your PC". Click **More info**, then **Run anyway**. There is no plan to sign it; if you would rather not, build it yourself (see below).
 3. On first launch a window asks for the CD: pick **RISING_LANDS_BR_.BIN** (or the .CUE, or an .ISO). The files are checked by SHA-256 and copied to `%LOCALAPPDATA%\RisingLands-ptbr\Dados`. Then the game opens in the original menu, with the game's original icon (the pumpkin, read from the imported `RISING.EXE`: no game bytes come with the download). **Coming from pre-alphas 1 to 3:** the CD imported back then has no sounds or music; use **Jogo → Importar o CD novamente…** (the game tells you once).
 
@@ -57,6 +57,8 @@ New in beta 5: the **REDISTRIBUIR DESCOBERTAS** option (−/+ on the briefing's 
 
 Fix in beta 6: the game no longer stops with "iagWarAffecteEnnemy invalid group list" when the AI sends a group's units against whoever attacked it (player report: archers attacking green units). The original walks the group's list until the target's health is covered, even when the list loops back; the port stopped on the first loop. In the same review, three more AI routines that walk group lists (`iagWarAffecteEnnemy` through the city path, `iagUnitDeleteAllGroups` and `iagUnitReturnGroupToPool`) no longer stop earlier than the original: a list that loops back only stops the game where the original itself would freeze. On macOS too.
 
+Fix in beta 7: beta 6 still stopped with "iagWarAffecteEnnemy cyclic group list without progress" when archers attacked AI units (player report). The cause is in the original itself: an AI colonist that enters a building can leave it before the AI has moved it to another group, and ends up linked into two groups at once; the two lists merge and loop forever. The unit now leaves its old group before joining the new one, and a list that still loops without progress only ends that pass instead of stopping the game (the original would freeze). In the same review: an AI group no longer takes another player's units (a deleted group number could be reused by another player), and an invalid group number from the AI rules (`RISING.RUL`) counts as "no group". On macOS too.
+
 Note: parity was checked on macOS, by building the Windows driver against the same engine. On real Windows, CI checks the build, the unit tests and the `.exe` itself without game data (engine self-test, the importer's refusals, the first start with the CD dialog, the drawing of the flags, the DPI handling and the audio). **Nobody has played this build on a Windows PC yet.** If you have Windows and the CD, you can help a lot: say on [#10](https://github.com/marciobarbato/rising-lands-public/issues/10) what worked and what did not, or open an issue with the **Problema no jogo / Game problem** template and say it is Windows.
 
 ## Where to get the CD
@@ -68,8 +70,8 @@ The original Brazilian CD image can be found on the **Internet Archive**. Downlo
 - The campaign runs on all 25 stages. An automated bot played every one of them, each game up to 72,000 frames, with no engine stop. Missions 1 to 6 were also played by hand, to the end, without problems.
 - Nobody has finished the whole campaign yet. That is where your testing helps.
 - If the game reaches something not ported yet, it does not freeze silently: it shows a **stop panel** with the original routine's address. That text is the most useful part of a report.
-- macOS: beta 6 (`v0.1.0-beta.6`; beta 1 was the same app as alpha 3), with the AI group-list stop fixes, discovery redistribution, the discovery animations, WASD scrolling, the system arrow over the HUD bar, the per-frame volume, with the **Options screen**, the modern shortcuts and the Shift+click order queue, **better unit paths**, the **Áudio** menu and sounds that did not play before, the **saved-games manager** and the **periodic autosave** (see "Controls").
-- Windows: beta 6 (`v0.1.0-beta.6`), x86-64 only; the AI group-list stop fixes; discovery redistribution; the discovery animations; WASD scrolling; the system arrow over the HUD bar; the per-frame volume and movie sound at the music level; game, menus, saves, the Options screen, modern shortcuts, the key dialog, better unit paths, audio, CD music, event pictures, movies, the Jogo menu, the saved-games manager and the periodic autosave (see "Windows (beta)").
+- macOS: beta 7 (`v0.1.0-beta.7`; beta 1 was the same app as alpha 3), with the AI group-list stop fixes (a unit in two groups), discovery redistribution, the discovery animations, WASD scrolling, the system arrow over the HUD bar, the per-frame volume, with the **Options screen**, the modern shortcuts and the Shift+click order queue, **better unit paths**, the **Áudio** menu and sounds that did not play before, the **saved-games manager** and the **periodic autosave** (see "Controls").
+- Windows: beta 7 (`v0.1.0-beta.7`), x86-64 only; the AI group-list stop fixes (a unit in two groups); discovery redistribution; the discovery animations; WASD scrolling; the system arrow over the HUD bar; the per-frame volume and movie sound at the music level; game, menus, saves, the Options screen, modern shortcuts, the key dialog, better unit paths, audio, CD music, event pictures, movies, the Jogo menu, the saved-games manager and the periodic autosave (see "Windows (beta)").
 - Only the Brazilian Portuguese release of the game is supported.
 
 ## Controls
@@ -138,7 +140,7 @@ Tests that need the original game files are skipped when the files are absent. W
 
 ## Work fronts
 
-What is being worked on, the state of each front and where outside help fits: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Beta 1 (public test, macOS and Windows) came out on 2026-11-14, and beta 2 the same day. The Windows client ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)) and audio and movies on Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) are done. Beta reports (Windows on a real PC, in-game checks, other CDs) all go to [#10](https://github.com/marciobarbato/rising-lands-public/issues/10). Before starting anything large, comment there.
+What is being worked on, the state of each front and where outside help fits: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Beta 1 (public test, macOS and Windows) came out on 2026-11-14, and beta 2 the same day; betas 3 to 5 on 2026-11-16, beta 6 on 2026-11-17 and beta 7 on 2026-11-24. The Windows client ([#1](https://github.com/marciobarbato/rising-lands-public/issues/1)) and audio and movies on Windows ([#4](https://github.com/marciobarbato/rising-lands-public/issues/4)) are done. Beta reports (Windows on a real PC, in-game checks, other CDs) all go to [#10](https://github.com/marciobarbato/rising-lands-public/issues/10). Before starting anything large, comment there.
 
 ## Help wanted
 

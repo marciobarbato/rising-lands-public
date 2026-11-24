@@ -1,4 +1,4 @@
-# Rising Lands for Windows (beta 6)
+# Rising Lands for Windows (beta 7)
 
 > **Resumo em português.** Cliente Windows sobre o mesmo motor em Rust e a mesma ABI em C (`engine/include`) do app
 > macOS. Este primeiro marco importa o CD brasileiro do jogador (imagem `.BIN`/`.CUE`, `.ISO` ou pasta), roda a
@@ -36,6 +36,8 @@
 > das descobertas, que agora abre a animação.
 > A beta 6 corrige a parada "iagWarAffecteEnnemy invalid group list" (arqueiros atacando unidades da IA) e outras
 > três paradas da IA em listas de grupo que davam a volta.
+> A beta 7 corrige a parada "iagWarAffecteEnnemy cyclic group list without progress" (arqueiros): uma unidade da IA
+> não fica mais em dois grupos ao mesmo tempo, e um grupo da IA não recebe mais unidades de outro jogador.
 > Nenhum dado do jogo vai para o repositório: tudo vem do CD importado na primeira execução.
 
 ## Stack and why

@@ -841,3 +841,21 @@ The CI run of `95c7d67` failed to link `RisingLands.exe` on both jobs (`WaitOnAd
 `windows/build-msvc.ps1` adds `synchronization.lib` (both present since Windows 8; harmless with 1.99.1). Checked:
 `windows/build.sh` (mingw x64, Rust 1.99.1) on the MacBook, then the public CI run of this commit. The private
 `apps/windows` copies get the same line.
+
+### 2026-11-24 (third): docs only — beta 7 (public test)
+
+Previous synchronisation: public `3a06da0`. No engine or macOS source changed since `95c7d67`; `windows/` changed only
+in `3a06da0` (link line).
+
+The release `v0.1.0-beta.7` is tagged on the commit that carries this entry. Assets:
+- `RisingLands-macOS-95c7d67.dmg`: built on the MacBook from `95c7d67` with `./build-macos.sh`, Developer ID
+  (TF3GU6U7H8), hardened runtime; app notarized (`122e746c-…`, Accepted) and stapled, dmg signed, notarized
+  (`17be55d5-…`, Accepted) and stapled; `stapler validate` and `spctl` accepted (Notarized Developer ID), SHA-256
+  `b2dd8f3a971ef9e5b770024c1849b6b7dd31fb30e2736d3891cc36dd753c3d34`.
+- `RisingLands-windows-x86_64.exe` (+ `.sha256`): public CI run 45382636705 (job `mingw-x64`) from `3a06da0`,
+  SHA-256 `8d10f857c121d21834ef4ef9d27e4583067904ad97291d1c74a407493a21045a`.
+
+Docs (`README.md`, `README.en.md`, `docs/ROADMAP.md`, `windows/README.md`, `docs/WINDOWS_CLIENT.md`): beta 7 is the
+current release; the fix for an AI unit linked into two groups (the beta 6 archer stop), group ownership and wild
+group numbers are in it. The release notes name the open `AffGame` stop (an AI cave under construction on screen,
+seen by the private bot after about two hours of play).
