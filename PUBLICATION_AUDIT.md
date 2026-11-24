@@ -832,3 +832,12 @@ No game data is added. Checked in this repository's tree: `cargo fmt --all --che
 private repository: `validate.sh` (in `workstream.py integrate` for maintenance) and bot replays of the stopping games
 (victory_bot MONDE17 seed 3, MONDE16 seed 3, MONDE24 seed 1; play_bot runs) with an AI group-list checker: no
 double-linked unit, no mixed-owner group, no stop.
+
+### 2026-11-24 (second): public-only — Windows link with the new stable Rust
+
+The CI run of `95c7d67` failed to link `RisingLands.exe` on both jobs (`WaitOnAddress`, `WakeByAddressSingle`,
+`WakeByAddressAll` unresolved): `windows-latest` installed a stable Rust newer than 1.99.1 (the beta 6 build), whose
+`std` futex no longer brings its own import of `synchronization`. `windows/build.sh` adds `-lsynchronization` and
+`windows/build-msvc.ps1` adds `synchronization.lib` (both present since Windows 8; harmless with 1.99.1). Checked:
+`windows/build.sh` (mingw x64, Rust 1.99.1) on the MacBook, then the public CI run of this commit. The private
+`apps/windows` copies get the same line.

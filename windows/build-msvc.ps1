@@ -132,7 +132,7 @@ $Sources += Join-Path $Mac 'macos_audio_mapper.c'
 # Win32 libraries of the host, then what the Rust std needs on windows-msvc
 # (rustc --print native-static-libs).
 $Libs = @('user32.lib', 'gdi32.lib', 'comdlg32.lib', 'comctl32.lib', 'shell32.lib', 'ole32.lib', 'uuid.lib', 'winmm.lib',
-  'kernel32.lib', 'advapi32.lib', 'ntdll.lib', 'userenv.lib', 'ws2_32.lib', 'dbghelp.lib', 'bcrypt.lib')
+  'kernel32.lib', 'advapi32.lib', 'ntdll.lib', 'userenv.lib', 'ws2_32.lib', 'dbghelp.lib', 'bcrypt.lib', 'synchronization.lib')
 $Exe = Join-Path $Out 'RisingLands.exe'
 Invoke-Checked 'cl.exe' ($Common + @('/O2', "/I$Inc", "/I$Src", "/I$Mac") + $Sources + @($Lib) + $Libs +
   @("/Fe$Exe", '/link', '/SUBSYSTEM:WINDOWS', '/INCREMENTAL:NO')) $obj

@@ -83,6 +83,6 @@ echo "== host ($CC)"
   "$REPO/macos/src/macos_audio_mapper.c" "$LIB" \
   -static -static-libgcc \
   -lgdi32 -lcomdlg32 -lcomctl32 -lshell32 -lole32 -luuid -lwinmm \
-  -lkernel32 -lntdll -luserenv -lws2_32 -ldbghelp \
+  -lkernel32 -lntdll -luserenv -lws2_32 -ldbghelp -lsynchronization \
   -o "$OUT/RisingLands.exe"
 echo "== $OUT/RisingLands.exe"
