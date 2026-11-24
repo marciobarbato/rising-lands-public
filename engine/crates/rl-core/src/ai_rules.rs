@@ -441,7 +441,44 @@ fn find_member(m: &MemoriaJogo, g: u32, kind: u32) -> Result<u16> {
     }
     Err(stop("iagUnitTransfert cyclic unit list", 0x483490))
 }
+/// Port deviation (2026-11-23): whether group `index` is allocated and linked
+/// in `player`'s list for its kind (head 0x51b664 + 96 * player + 4 * kind,
+/// next at +0, as iaGroupNew/iaGroupDelete keep them). The walk is bounded by
+/// the 100-entry table.
+pub(crate) fn group_is_players(m: &MemoriaJogo, player: u32, index: u32) -> Result<bool> {
+    if index >= 100 || player >= 5 {
+        return Ok(false);
+    }
+    let g = group(index);
+    if m.u8(g.wrapping_add(0x18))? == 0 {
+        return Ok(false);
+    }
+    let kind = u32::from(m.u8(g.wrapping_add(0x19))?);
+    if kind >= 24 {
+        return Ok(false);
+    }
+    let mut current = m.u32(0x51b664 + 96 * player + 4 * kind)?;
+    for _ in 0..100 {
+        if current == index {
+            return Ok(true);
+        }
+        if current >= 100 {
+            return Ok(false);
+        }
+        current = m.u32(group(current))?;
+    }
+    Ok(false)
+}
+
 /// iagUnitTransfert 0x483358. Pool first, then destination-kind priorities.
+///
+/// Port deviation (2026-11-23): a destination that is not one of `player`'s
+/// groups transfers nothing (the "no unit" result). A task keeps a group
+/// number after iaGroupDelete frees it, and iaGroupNew hands the number to
+/// any player; a private research bot, MONDE16 seed 3 (human), frame
+/// 190,399: player 1's B_CompleteGroupe 0x481c75 filled group 18, then player
+/// 3's kind-8 group, with player 1's unit 28, so player 3's AI ordered player
+/// 1's unit.
 pub(crate) fn transfer_unit(
     m: &mut MemoriaJogo,
     player: u32,
@@ -450,6 +487,9 @@ pub(crate) fn transfer_unit(
 ) -> Result<u32> {
     let dest = group(destination);
     if dest == 0 {
+        return Ok(u32::MAX);
+    }
+    if !group_is_players(m, player, destination)? {
         return Ok(u32::MAX);
     }
     let head = 0x51b664u32.wrapping_add(player.wrapping_mul(96));
@@ -1794,4 +1834,57 @@ pub fn entry(m: &mut MemoriaJogo, name: &str, mut r: R) -> Result<R> {
     };
     r.esp = r.esp.wrapping_add(4);
     Ok(r)
+}
+
+#[cfg(test)]
+mod ownership_tests {
+    use super::*;
+
+    const UNITS: u32 = 0x0100_0000;
+
+    fn world() -> MemoriaJogo {
+        let mut m =
+            MemoriaJogo::from_blocks([(0x494000, vec![0; 0x9c000]), (UNITS, vec![0; 800 * 276])])
+                .unwrap();
+        m.set_u32(0x4e19a0, UNITS).unwrap();
+        for u in 0..800u32 {
+            m.set_u32(UNITS + 276 * u + 0x10c, u32::MAX).unwrap();
+        }
+        for a in (0x51b664..0x51b664 + 96 * 5).step_by(4) {
+            m.set_u32(a, u32::MAX).unwrap();
+        }
+        m
+    }
+
+    #[test]
+    fn a_task_cannot_fill_a_group_number_now_owned_by_another_player() {
+        // MONDE16 seed 3 shape: player 1 still holds group 18's number after
+        // deleting it; player 3 allocated it again.
+        let mut m = world();
+        let pool = crate::frame_raid::new_group(&mut m, 1, 0).unwrap();
+        m.set_u8(UNITS + 276 * 5 + 1, 9).unwrap();
+        crate::frame_raid::add_unit(&mut m, pool, 5).unwrap();
+        let foreign = crate::frame_raid::new_group(&mut m, 3, 8).unwrap();
+        assert!(group_is_players(&m, 3, foreign).unwrap());
+        assert!(!group_is_players(&m, 1, foreign).unwrap());
+        assert_eq!(transfer_unit(&mut m, 1, foreign, 9).unwrap(), u32::MAX);
+        assert_eq!(m.u16(group(foreign) + 0x12).unwrap(), 0);
+        assert_eq!(m.u16(group(pool) + 0x10).unwrap(), 5);
+        // Its own group still fills from its pool, as in the original.
+        let own = crate::frame_raid::new_group(&mut m, 1, 8).unwrap();
+        assert_eq!(transfer_unit(&mut m, 1, own, 9).unwrap(), 1);
+        assert_eq!(m.u16(group(own) + 0x10).unwrap(), 5);
+        assert_eq!(m.u16(group(pool) + 0x12).unwrap(), 0);
+    }
+
+    #[test]
+    fn a_freed_or_out_of_table_group_is_nobodys() {
+        let mut m = world();
+        let g = crate::frame_raid::new_group(&mut m, 2, 8).unwrap();
+        assert!(group_is_players(&m, 2, g).unwrap());
+        delete_group(&mut m, 2, g).unwrap();
+        assert!(!group_is_players(&m, 2, g).unwrap());
+        assert!(!group_is_players(&m, 2, u32::MAX).unwrap());
+        assert!(!group_is_players(&m, 2, 100).unwrap());
+    }
 }

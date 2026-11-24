@@ -10,7 +10,21 @@ const ITER_UNIT: u32 = 0x51b848;
 fn err(name: &'static str, address: u32) -> EngineError {
     EngineError::UnportedCallee { name, address }
 }
+/// Group record address, tested for zero by the callers like the original's
+/// wrapping computation (index -1 keeps the original's pseudo-group 0x51a9c0).
+///
+/// Port deviation (2026-11-23): any other index outside the 100-entry table
+/// (iaGroupNew's 0xc80 bound) is "no group" (0). RISING.RUL can pass a task
+/// variable it never wrote on that path; task records are reused across
+/// players without clearing, so the value can be anything. Private research bot, MONDE24
+/// seed 1 (rusher), frame 58,902: player 3's task 11, pc 850 -> 853 -> 860,
+/// called B_AttenteConflit 0x47ff4d with var14 = 0xb54e, a cell a player-1
+/// task had stored in that slot; the original reads and writes through
+/// 0x51a9e0 + 32 * 0xb54e, outside its image (0x52e000).
 fn group(index: u32) -> u32 {
+    if index >= 100 && index != u32::MAX {
+        return 0;
+    }
     GROUPS.wrapping_add(index.wrapping_shl(5))
 }
 fn unit(m: &MemoriaJogo, index: u16) -> Result<u32> {
@@ -76,12 +90,15 @@ pub fn new_group(m: &mut MemoriaJogo, player: u32, kind: u32) -> Result<u32> {
     m.set_u32(group(index), previous)?;
     Ok(index)
 }
+/// iagUnitAddToGroup 0x482939, with one deliberate port deviation: the unit is
+/// first unlinked from the group its +0x10c records ([`detach`]).
 pub fn add_unit(m: &mut MemoriaJogo, index: u32, member: u16) -> Result<u32> {
     let r = unit(m, member)?;
     let g = group(index);
     if g == 0 {
         return Ok(0x1a1a0010);
     }
+    detach(m, member)?;
     m.set_u16(r.wrapping_add(0x108), m.u16(g.wrapping_add(0x10))?)?;
     m.set_u32(r.wrapping_add(0x10c), index)?;
     m.set_u16(g.wrapping_add(0x10), member)?;
@@ -105,7 +122,39 @@ pub fn next_unit(m: &mut MemoriaJogo) -> Result<u16> {
     m.set_u16(ITER_UNIT, m.u16(unit(m, current)?.wrapping_add(0x108))?)?;
     m.u16(ITER_UNIT)
 }
+/// Port deviation (player report, beta 6: "iagWarAffecteEnnemy cyclic group
+/// list without progress" at 0x488003 when archers fight the AI). The original
+/// prepends a unit to a group without unlinking it from the group it is still
+/// in at several places: message 0x42 (0x482ae5) and 0x46 (0x482d31) only
+/// remove from the owner's housed group, 0x45 (0x482cbb) removes from none.
+/// Seen with a private research bot (MONDE17 seed 3, chaotic, frame 80,001): a colonist
+/// moved into a kind-8 group enters a building, and V_BatimentSortColon
+/// 0x480712 withdraws it before the group descriptor's message 0x41 has moved
+/// it to the housed group; 0x42 then links it in a second group. The two
+/// lists merge and can close a cycle, which freezes the original
+/// (iagWarAffecteEnnemy, iaGroupDelete, iagUnitTransfert...).
+///
+/// Every insertion goes through [`add_unit`] or message 0x43, so unlinking the
+/// unit from its recorded group first keeps each unit in at most one list.
+/// +0x10c is never cleared by the original, so it may name a group the unit
+/// already left; [`remove_unit`] then finds nothing and changes nothing. Only
+/// an index inside the 100-entry table (iaGroupNew's 0xc80 bound) naming an
+/// allocated group (+0x18) is walked; -1 (no group) and any other value are
+/// skipped without further reads. On lists that are already sound this
+/// changes nothing, so original behaviour is kept wherever it is sound.
+pub(crate) fn detach(m: &mut MemoriaJogo, member: u16) -> Result<()> {
+    let current = m.u32(unit(m, member)?.wrapping_add(0x10c))?;
+    if current < 100 && m.u8(group(current).wrapping_add(0x18))? != 0 {
+        remove_unit(m, current, member)?;
+    }
+    Ok(())
+}
 /// iagUnitRemoveFromGroup 0x4832b1. The removed node keeps its own link.
+///
+/// Port deviation: the original walks until the member or 0xffff, so on a
+/// cyclic list without the member it never returns (the game freezes). The
+/// walk is bounded by the 800-unit table; past it the member is reported
+/// absent (0x1a1a0012, the original's not-found value), and nothing is written.
 pub(crate) fn remove_unit(m: &mut MemoriaJogo, index: u32, member: u16) -> Result<u32> {
     let g = group(index);
     if g == 0 {
@@ -113,7 +162,12 @@ pub(crate) fn remove_unit(m: &mut MemoriaJogo, index: u32, member: u16) -> Resul
     }
     let mut previous = None;
     let mut current = m.u16(g + 0x10)?;
+    let mut steps = 0u32;
     while current != 65535 {
+        steps += 1;
+        if steps > 800 {
+            return Ok(0x1a1a0012);
+        }
         let r = unit(m, current)?;
         let next = m.u16(r + 0x108)?;
         if current == member {
@@ -547,7 +601,11 @@ pub fn rule(m: &mut MemoriaJogo, address: u32, a: &[u32], player: u32, index: u3
             )
         }
         0x47ff4d => {
+            // B_AttenteConflit. With a wild group number (see `group`) the
+            // original's address is still non-zero, so it still sleeps the
+            // task; only its stores through that address are left out.
             let g = group(a[0]);
+            let wild = g == 0 && GROUPS.wrapping_add(a[0].wrapping_shl(5)) != 0;
             if g != 0 {
                 let b = m.u32(g.wrapping_add(12))?;
                 m.set_u32(
@@ -557,9 +615,9 @@ pub fn rule(m: &mut MemoriaJogo, address: u32, a: &[u32], player: u32, index: u3
                     index,
                 )?;
                 m.set_u32(g.wrapping_add(8), index)?;
-                if index != u32::MAX {
-                    crate::frame_tasks::sleep(m, index, a[1])?;
-                }
+            }
+            if (g != 0 || wild) && index != u32::MAX {
+                crate::frame_tasks::sleep(m, index, a[1])?;
             }
             Ok(1)
         }
@@ -683,5 +741,119 @@ pub fn call(m: &mut MemoriaJogo, name: &str, a: &[u32]) -> Result<u32> {
         "StockeAction" => stock_action(m, a[0], a[1], a[2] as u16, a[3] as u16),
         "ConstruitGroupeMonstre" => spawn_group(m, a[0] as u16, a[1] as u8),
         _ => Err(err("unknown raid provider", 0x47b283)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const UNITS: u32 = 0x0100_0000;
+
+    fn world() -> MemoriaJogo {
+        let mut m =
+            MemoriaJogo::from_blocks([(0x494000, vec![0; 0x9c000]), (UNITS, vec![0; 800 * 276])])
+                .unwrap();
+        m.set_u32(0x4e19a0, UNITS).unwrap();
+        for u in 0..800u32 {
+            m.set_u32(UNITS + 276 * u + 0x10c, u32::MAX).unwrap();
+        }
+        for g in 0..100 {
+            m.set_u16(GROUPS + 32 * g + 0x10, 0xffff).unwrap();
+            m.set_u8(GROUPS + 32 * g + 0x18, 1).unwrap();
+        }
+        m
+    }
+    fn members(m: &MemoriaJogo, index: u32) -> Vec<u16> {
+        let mut out = Vec::new();
+        let mut u = m.u16(group(index) + 0x10).unwrap();
+        while u != 0xffff && out.len() < 10 {
+            out.push(u);
+            u = m.u16(unit(m, u).unwrap() + 0x108).unwrap();
+        }
+        out
+    }
+
+    #[test]
+    fn adding_a_unit_still_linked_elsewhere_moves_it_instead_of_linking_it_twice() {
+        // MONDE17 seed 3 shape: unit 1 is in group 57 when message 0x42's
+        // fallback adds it to group 6 (the original links it in both).
+        let mut m = world();
+        add_unit(&mut m, 57, 2).unwrap();
+        add_unit(&mut m, 57, 1).unwrap();
+        add_unit(&mut m, 6, 3).unwrap();
+        add_unit(&mut m, 6, 1).unwrap();
+        assert_eq!(members(&m, 57), [2]);
+        assert_eq!(m.u16(group(57) + 0x12).unwrap(), 1);
+        assert_eq!(members(&m, 6), [1, 3]);
+        assert_eq!(m.u16(group(6) + 0x12).unwrap(), 2);
+        assert_eq!(m.u32(unit(&m, 1).unwrap() + 0x10c).unwrap(), 6);
+    }
+
+    #[test]
+    fn re_adding_a_member_to_its_own_group_does_not_close_a_cycle() {
+        let mut m = world();
+        add_unit(&mut m, 4, 2).unwrap();
+        add_unit(&mut m, 4, 1).unwrap();
+        add_unit(&mut m, 4, 2).unwrap();
+        assert_eq!(members(&m, 4), [2, 1]);
+        assert_eq!(m.u16(group(4) + 0x12).unwrap(), 2);
+    }
+
+    #[test]
+    fn a_stale_group_index_is_harmless() {
+        // remove_unit leaves +0x10c behind, as in the original: the later add
+        // finds nothing to unlink in the old group and changes nothing there.
+        let mut m = world();
+        add_unit(&mut m, 3, 5).unwrap();
+        add_unit(&mut m, 3, 1).unwrap();
+        remove_unit(&mut m, 3, 1).unwrap();
+        add_unit(&mut m, 8, 1).unwrap();
+        assert_eq!(members(&m, 3), [5]);
+        assert_eq!(m.u16(group(3) + 0x12).unwrap(), 1);
+        assert_eq!(members(&m, 8), [1]);
+    }
+
+    #[test]
+    fn a_recorded_group_outside_the_table_or_unallocated_is_not_walked() {
+        let mut m = world();
+        m.set_u32(unit(&m, 1).unwrap() + 0x10c, 0x1234_5678)
+            .unwrap();
+        add_unit(&mut m, 5, 1).unwrap();
+        assert_eq!(members(&m, 5), [1]);
+        // Group 9 lists unit 2 but is free (+0x18 = 0): left as it is.
+        m.set_u8(group(9) + 0x18, 0).unwrap();
+        m.set_u16(group(9) + 0x10, 2).unwrap();
+        m.set_u32(unit(&m, 2).unwrap() + 0x10c, 9).unwrap();
+        add_unit(&mut m, 5, 2).unwrap();
+        assert_eq!(m.u16(group(9) + 0x10).unwrap(), 2);
+        assert_eq!(members(&m, 5), [2, 1]);
+    }
+
+    #[test]
+    fn a_wild_group_number_from_a_rule_program_is_no_group() {
+        // MONDE24 seed 1 shape: B_AttenteConflit (and the following
+        // emptiness test) with a never-written task variable (a cell).
+        let mut m = world();
+        assert_eq!(rule(&mut m, 0x47ff4d, &[0xb54e, 0xc8], 3, 11).unwrap(), 1);
+        // The task still sleeps 200 frames, as the original's non-zero
+        // address makes it; nothing is stored through the wild address.
+        assert_eq!(m.u8(0x512320 + 96 * 11 + 0x5e).unwrap(), 1);
+        assert_eq!(m.u32(0x512320 + 96 * 11 + 0x14).unwrap(), 0xc8);
+        assert_eq!(rule(&mut m, 0x48232f, &[0xb54e], 3, 11).unwrap(), 1);
+        assert_eq!(first_unit(&mut m, 0xb54e).unwrap(), 0xffff);
+        assert_eq!(group(u32::MAX), GROUPS.wrapping_sub(32));
+    }
+
+    #[test]
+    fn removing_from_a_cyclic_list_without_the_member_returns_not_found() {
+        // The original never returns here; the port reports the member absent.
+        let mut m = world();
+        m.set_u16(group(2) + 0x10, 1).unwrap();
+        m.set_u16(group(2) + 0x12, 2).unwrap();
+        m.set_u16(unit(&m, 1).unwrap() + 0x108, 2).unwrap();
+        m.set_u16(unit(&m, 2).unwrap() + 0x108, 1).unwrap();
+        assert_eq!(remove_unit(&mut m, 2, 9).unwrap(), 0x1a1a0012);
+        assert_eq!(m.u16(group(2) + 0x12).unwrap(), 2);
     }
 }

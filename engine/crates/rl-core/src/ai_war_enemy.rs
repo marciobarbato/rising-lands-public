@@ -1,9 +1,7 @@
 //! Intact iagWarAddEnnemyToBattle 0x487b78 and iagWarAffecteEnnemy 0x487eef.
 //! Effects/AL API: full EAX player, EDX battle, EBX encoded reference.
 //! Upper EBX participates in duplicate comparison; only low16 is stored.
-use crate::{
-    ai_group_message::CityMessage, ai_war_position::WarEnemy, EngineError, MemoriaJogo, Result,
-};
+use crate::{ai_group_message::CityMessage, ai_war_position::WarEnemy, MemoriaJogo, Result};
 
 fn unit(m: &MemoriaJogo, index: u32) -> Result<u32> {
     Ok(m.u32(0x4e19a0)?.wrapping_add(index.wrapping_mul(276)))
@@ -126,15 +124,13 @@ pub fn assign(m: &mut MemoriaJogo, battle: u32, index: u32) -> Result<()> {
         // A cyclic group list still ends on the health test when damage was
         // assigned since the member's previous visit (see
         // chain_battle::assign). A revisit with no new damage repeats forever
-        // in the original: nothing in between wrote memory.
+        // in the original: nothing in between wrote memory. Port deviation:
+        // the pass ends there instead, as at the list end.
         let mut last_visit = std::collections::HashMap::<u16, u32>::new();
         let mut member = m.u16(g.wrapping_add(16))?;
         while member != 0xffff && (assigned as i32) < hp {
             if last_visit.insert(member, assigned) == Some(assigned) {
-                return Err(EngineError::UnportedCallee {
-                    name: "iagWarAffecteEnnemy cyclic group list without progress",
-                    address: 0x488003,
-                });
+                break;
             }
             let r = unit(m, u32::from(member))?;
             if m.u16(r.wrapping_add(0xb8))? == 0xffff && (!near || in_range(m, member, target)?) {
@@ -293,12 +289,11 @@ mod tests {
     }
 
     #[test]
-    fn cycle_without_progress_is_the_original_endless_loop() {
+    fn cycle_without_progress_ends_the_pass_instead_of_freezing() {
+        // The original loops forever here (no member adds damage); the port
+        // ends the near and the unrestricted pass at the first revisit.
         let mut m = cyclic_world(10, 0);
-        let error = assign(&mut m, BATTLE, 0).unwrap_err();
-        assert!(
-            format!("{error:?}").contains("without progress"),
-            "{error:?}"
-        );
+        assign(&mut m, BATTLE, 0).unwrap();
+        assert_eq!(m.u16(BATTLE + 16 + 2).unwrap(), 0);
     }
 }

@@ -255,6 +255,8 @@ fn reserve_message(m: &mut MemoriaJogo, unit: u16, record: u32) -> Result<u32> {
     let reserve = m.u32(0x51b68cu32.wrapping_add(owner.wrapping_mul(96)))?;
     let g = 0x51a9e0u32.wrapping_add(reserve.wrapping_shl(5));
     if g != 0 {
+        // Port deviation: unlink from the recorded group first (frame_raid::detach).
+        crate::frame_raid::detach(m, unit)?;
         m.set_u16(record + 0x108, m.u16(g + 0x10)?)?;
         m.set_u32(record + 0x10c, reserve)?;
         let count = m.u16(g + 0x12)?;

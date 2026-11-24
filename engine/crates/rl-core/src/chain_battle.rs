@@ -128,7 +128,11 @@ pub(crate) fn in_range(m: &mut MemoriaJogo, member: u16, encoded: u16) -> Result
 /// loop ends on the health test. Only a revisit with no damage assigned since
 /// the previous one is the original's endless loop: nothing between the two
 /// visits wrote memory (in_range, damage and health are reads), so every later
-/// lap repeats it. That case, and an index outside the 800-unit table, stop.
+/// lap repeats it. Port deviation (beta-6 player report, 0x488003): instead of
+/// freezing, that pass ends there, as at the list end, since every further lap
+/// would assign nothing. An index outside the 800-unit table still stops.
+/// frame_raid::detach keeps new cycles from forming; this covers saves and
+/// worlds whose lists are already cyclic.
 fn assign(m: &mut MemoriaJogo, battle: u32, index: u32) -> Result<()> {
     let g = group(m.u32(battle)?);
     if g == 0 || m.u16(g + 0x12)? == 0 || m.u16(g + 0x10)? == 65535 {
@@ -151,10 +155,7 @@ fn assign(m: &mut MemoriaJogo, battle: u32, index: u32) -> Result<()> {
             }
             let slot = &mut last_visit[usize::from(member)];
             if *slot == Some(assigned) {
-                return stop(
-                    "iagWarAffecteEnnemy cyclic group list without progress",
-                    0x488003,
-                );
+                break;
             }
             *slot = Some(assigned);
             let r = unit(m, u32::from(member))?;
@@ -530,12 +531,11 @@ mod tests {
     }
 
     #[test]
-    fn cyclic_list_without_progress_is_the_original_endless_loop() {
+    fn cyclic_list_without_progress_ends_the_pass_instead_of_freezing() {
+        // The original loops forever here (no member adds damage); the port
+        // ends the near and the unrestricted pass at the first revisit.
         let mut m = cyclic_world(10, 0);
-        let error = assign(&mut m, BATTLE, 0).unwrap_err();
-        assert!(
-            format!("{error:?}").contains("without progress"),
-            "{error:?}"
-        );
+        assign(&mut m, BATTLE, 0).unwrap();
+        assert_eq!(m.u16(BATTLE + 16 + 2).unwrap(), 0);
     }
 }

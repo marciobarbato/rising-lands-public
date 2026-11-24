@@ -803,3 +803,32 @@ The release `v0.1.0-beta.6` is tagged on the commit that carries this entry. Ass
 
 Docs (`README.md`, `README.en.md`, `docs/ROADMAP.md`, `windows/README.md`, `docs/WINDOWS_CLIENT.md`): beta 6 is the
 current release; the AI group-list stop fixes are in it.
+
+### 2026-11-24 (first): private `main` `dbc03787` — AI group lists never link a unit twice, group ownership, wild group numbers
+
+Previous synchronisation: public `cbcd2a4` (source identical to `cbd9cb9`).
+
+Copied (path-mapped: `motor/` → `engine/`):
+
+| Private change | Public files |
+|---|---|
+| `8ff59f9d` Player report (Windows beta 6): "iagWarAffecteEnnemy cyclic group list without progress" at 0x488003 with archers. Root cause, an original-game race: V_BatimentSortColon 0x480712 withdraws a lodged colonist before the group descriptor's message 0x41 has moved it to the housed group, so message 0x42 links it into a second group while it is still in the first; the two lists merge into a cycle that iagWarAffecteEnnemy walks. iagGroupAddUnit (`frame_raid::add_unit`) and message 0x43 (`frame_ai`) now detach the unit from its recorded group first; iagGroupRemoveUnit gives up after 800 steps; a cyclic list without progress ends the pass in `chain_battle` and `ai_war_enemy` instead of stopping the game. This deviates from the original, which would freeze | `engine/crates/rl-core/src/frame_raid.rs`, `frame_ai.rs`, `chain_battle.rs`, `ai_war_enemy.rs` (regression tests in `frame_raid`, `chain_battle`, `ai_war_enemy`) |
+| `e17aa803` iagUnitTransfert (`ai_rules::transfer_unit`) fills only groups of the executing player: a task can keep a group number after iaGroupDelete, and iaGroupNew hands it to another player, whose AI then ordered someone else's units | `engine/crates/rl-core/src/ai_rules.rs` (`group_is_players`, `ownership_tests`) |
+| `83ed9ea9` A group number outside the table that RISING.RUL passes from a task variable it never wrote is "no group" in the `frame_raid` rules; B_AttenteConflit still sleeps the task, as the original does | `engine/crates/rl-core/src/frame_raid.rs` |
+| `dcfea822` `event_flc::declare_from_cd`, the event FLC table the hosts already declare, for headless drivers | `engine/crates/rl-core/src/event_flc.rs` |
+
+Comments that named the private bot now say "private research bot". The `frame_raid.rs` patch applied with offsets
+over the public file, which lacks the two `validation-trace` hooks (2026-11-12).
+
+Left out, and why:
+
+| Left out | Reason |
+|---|---|
+| `motor/crates/rl-core/src/bin/play_bot.rs`, `victory_bot.rs` (call `declare_from_cd`) | Private tools (section 2) |
+| `motor/HANDOFF.md`, `motor/research/ai-war-enemy.md` | Internal notes (section 2) |
+
+No game data is added. Checked in this repository's tree: `cargo fmt --all --check`, `cargo test --release` in
+`engine/` with `RL_CD_ROOT` (123 passed, 11 ignored), `macos/tests/run.sh`, `windows/build.sh test` (mingw x64). In the
+private repository: `validate.sh` (in `workstream.py integrate` for maintenance) and bot replays of the stopping games
+(victory_bot MONDE17 seed 3, MONDE16 seed 3, MONDE24 seed 1; play_bot runs) with an AI group-list checker: no
+double-linked unit, no mixed-owner group, no stop.

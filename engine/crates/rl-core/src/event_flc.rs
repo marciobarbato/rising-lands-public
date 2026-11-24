@@ -80,6 +80,58 @@ pub fn install_table(m: &mut MemoriaJogo, entries: &[Declared<'_>]) -> Result<()
     }
     m.declare(TABLE, bytes)
 }
+/// Host helper for headless drivers (bots, tools): the same table the Windows
+/// host (`event_flc_declare`, rlw_driver.c) and the macOS host declare, read
+/// from an original CD tree: the distinct `[EVENEMENT]` values of
+/// INSTALHD/EVENTS.INI, upper-cased and sorted, each with the first 128 bytes
+/// of EVENTS/NAME.FLC when that file opens. No values: nothing is declared.
+pub fn declare_from_cd(m: &mut MemoriaJogo, cd: &std::path::Path) -> Result<()> {
+    let io = |_| invalid("EvenementInit FLC table: EVENTS.INI unreadable");
+    let ini = std::fs::read(cd.join("INSTALHD/EVENTS.INI")).map_err(io)?;
+    let mut names: Vec<Vec<u8>> = Vec::new();
+    let mut section = false;
+    for line in ini.split(|&c| c == b'\n' || c == b'\r') {
+        let line = line.trim_ascii();
+        if line.starts_with(b"[") {
+            section = line.eq_ignore_ascii_case(b"[EVENEMENT]");
+            continue;
+        }
+        let Some(eq) = line.iter().position(|&c| c == b'=') else {
+            continue;
+        };
+        if !section {
+            continue;
+        }
+        let value = line[eq + 1..].trim_ascii().to_ascii_uppercase();
+        if !names.contains(&value) {
+            names.push(value);
+        }
+    }
+    if names.is_empty() {
+        return Ok(());
+    }
+    names.sort();
+    let headers: Vec<Option<Vec<u8>>> = names
+        .iter()
+        .map(|n| {
+            let mut file = cd.join("EVENTS");
+            file.push(format!("{}.FLC", String::from_utf8_lossy(n)));
+            std::fs::read(file)
+                .ok()
+                .filter(|b| b.len() >= 128)
+                .map(|b| b[..128].to_vec())
+        })
+        .collect();
+    let entries: Vec<Declared<'_>> = names
+        .iter()
+        .zip(&headers)
+        .map(|(name, header)| Declared {
+            name,
+            header: header.as_deref(),
+        })
+        .collect();
+    install_table(m, &entries)
+}
 impl World {
     /// Declare the CD root's `Events\*.FLC` table before the first frame.
     pub fn load_event_flc(&mut self, entries: &[Declared<'_>]) -> Result<()> {
